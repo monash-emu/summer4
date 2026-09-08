@@ -1,0 +1,6 @@
+#!/bin/sh
+# Persist plan files from a merged branch into plans/.
+# Installed via `pixi run setup` (git config core.hooksPath .githooks).
+set -e
+ROOT="$(git rev-parse --show-toplevel)"
+python "$ROOT/scripts/copy_merged_plans.py"

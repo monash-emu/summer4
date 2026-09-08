@@ -43,12 +43,23 @@ pm.partition(age)
 
 ## Development
 
+Read [AGENTS.md](AGENTS.md) before changing the code: work on a feature branch,
+copy the plan into `plans/`, and land tests plus a runnable example notebook.
+
 ```bash
 pixi install
+pixi run setup
+pixi run register-kernel
 pixi run test
 pixi run lint
+pixi run check-branch
 pixi run bench
 ```
 
-Environments: `default` (JAX 0.6.x), `latest` (current JAX), `nb` (notebooks).
+The default environment includes `ipykernel` so example notebooks run in VS Code/Cursor.
+Select the interpreter at `.pixi/envs/default/bin/python`, or run `pixi run register-kernel`
+and choose the **Python (summer4)** kernel.
+
+Environments: `default` (JAX 0.6.x + notebook kernel), `latest` (current JAX), `nb` (JupyterLab).
 The package is also pip-installable via hatchling (`pip install .`).
+Example notebooks in `examples/notebooks/` are executed as smoke tests.
