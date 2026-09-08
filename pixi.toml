@@ -1,0 +1,55 @@
+[workspace]
+channels = ["conda-forge"]
+name = "summer4"
+platforms = ["osx-arm64", "linux-64"]
+version = "0.1.0"
+
+[pypi-dependencies]
+summer4 = { path = ".", editable = true }
+
+[feature.jax06.dependencies]
+python = "3.13.*"
+
+[feature.jax06.pypi-dependencies]
+jax = ">=0.6,<0.7"
+jaxlib = ">=0.6,<0.7"
+diffrax = ">=0.7.2,<0.8"
+numpyro = ">=0.16.0,<0.17"
+optax = ">=0.2.0"
+
+[feature.jaxlatest.dependencies]
+python = "3.13.*"
+
+[feature.jaxlatest.pypi-dependencies]
+jax = "*"
+jaxlib = "*"
+diffrax = "*"
+numpyro = "*"
+optax = "*"
+
+[feature.dev.dependencies]
+pytest = ">=8.0"
+pytest-benchmark = "*"
+hypothesis = "*"
+ruff = "*"
+mypy = "*"
+
+[feature.notebooks.dependencies]
+ipykernel = ">=6.29"
+jupyterlab = ">=4.0"
+matplotlib = ">=3.8"
+
+[environments]
+default = ["jax06", "dev"]
+latest = ["jaxlatest", "dev"]
+nb = ["jax06", "notebooks", "dev"]
+
+[tasks]
+test = { cmd = "pytest tests/ -v", description = "Run unit and property tests" }
+test-all = { cmd = "pixi run --environment default test && pixi run --environment latest test", description = "Run tests in every JAX environment" }
+lint = { cmd = "ruff check src tests benchmarks scripts && mypy src/summer4", description = "Lint and type-check" }
+format = { cmd = "ruff format src tests benchmarks scripts", description = "Format code with ruff" }
+format-check = { cmd = "ruff format --check src tests benchmarks scripts", description = "Check formatting" }
+bench = { cmd = "pytest benchmarks/ --benchmark-only -v --benchmark-columns=min,max,median,ops", description = "Run taxonomy benchmarks in the current env" }
+bench-json = { cmd = "python scripts/bench_json.py", description = "Write benchmark JSON keyed by JAX version" }
+notebook = { cmd = "jupyter lab", description = "Launch JupyterLab" }

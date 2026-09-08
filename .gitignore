@@ -1,0 +1,41 @@
+# pixi environments
+.pixi/*
+!.pixi/config.toml
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+build/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+.hypothesis/
+
+# Environments
+.venv/
+venv/
+.env
+
+# IDE
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.swp
+
+# Cursor — track plans, ignore other local IDE state
+.cursor/*
+!.cursor/plans/
+!.cursor/plans/**
+
+# Benchmark outputs
+benchmarks/results/
+
+# Jupyter
+.ipynb_checkpoints/
