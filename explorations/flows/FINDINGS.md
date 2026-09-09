@@ -67,3 +67,51 @@ Drafted on the `explore-flows` branch, 2026-09-09. The spike lives in
   PropertyData) covers unequal band widths on one flow.
 - `FieldRef` lookup on a NamedTuple works under `jax.jit`. A public API
   should still validate paths at compile time against that schema.
+
+## Refine-flows follow-up (2026-09-09)
+
+Drafted on `refine-flows`. Still no `src/summer4` changes.
+
+### What worked
+
+- **Nested `derived_refs`.** A NamedTuple field whose annotation is another
+  NamedTuple becomes a nested ref tree (`D.migration.baseline`). Non-NamedTuple
+  annotations stay leaf `FieldRef`s. Passing “all this” as one argument is
+  either the already-combined `D.migration_rates` matrix or ordinary arithmetic
+  on the nested proxy (`D.migration.baseline * D.migration.seasonal`). Auto-
+  multiplying a looked-up bundle was not needed; a later `__rate__` protocol
+  is optional sugar, not required for compactness.
+- **Static topology + dynamic dest×source rates.** `TraitMatrix` still
+  actualizes edges once. A 2-D `(n_traits, n_traits)` rate gathers
+  `rate[dest_code, src_code]` per edge. Time-varying migration is
+  `baseline * seasonal(t)` in `compute_derived_params`. Changing sparsity
+  after compile would break `jit`.
+- **`adjust=` pipeline.** Sequential Multiply (default for a bare value),
+  Overwrite, and Transform on the aligned rate (after pairing `scale`, before
+  `* y[src]`). Optional `where=Selector` is a static mask on gather indices.
+  `Transform(fn, *args)` takes the previous numeric rate plus any `RateOps`
+  (including `FlowRef`s; topo walks `adjust`). `*` on the rate expression
+  remains the baked-in multiply; `adjust=` is the ordered / masked / prev-
+  valued layer.
+- **Minimal Euler.** NumPy loop and JAX `lax.scan` share one `euler(...)`.
+  `jax.jit` around the scan stepper matches NumPy over 8 steps. A time-varying
+  derived rate changes the final `y` versus `amp=0`. Replacement births keep
+  `sum(y)` constant. `Transform` callables on the jitted path must be
+  JAX-traceable (`jnp.minimum`, not Python branching over edges).
+
+### What to promote later
+
+10. Recurse public `derived_refs` into nested schemas. Do not auto-unpack a
+    bundle into a rate.
+11. Align dest×source matrices onto `TraitMatrix` edges; keep topology static.
+12. Flow-owned `adjust=` (Multiply / Overwrite / Transform) with selector
+    `where`. Keep it off `Stratification`.
+13. A tiny `lax.scan` Euler is enough to prove jit of the compiled field.
+    Diffrax can wrap the same `vf` later.
+
+### Still open
+
+- Mass-level limiting (`min(mass, y[src])`) is not the same as a rate
+  Transform. It would run after `* y[src]`.
+- A `__rate__` protocol on derived bundles vs always writing `baseline * seasonal`.
+- `Present` / `Absent` binding (unchanged from the first spike).

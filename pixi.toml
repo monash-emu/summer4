@@ -37,6 +37,9 @@ black = "*"
 ipykernel = ">=6.29"
 ipywidgets = ">=8.1"
 matplotlib = ">=3.8"
+polars = ">=1.0"
+pyarrow = ">=17.0"
+plotly = ">=5.24"
 nbformat = ">=5.10"
 
 [feature.notebooks.dependencies]

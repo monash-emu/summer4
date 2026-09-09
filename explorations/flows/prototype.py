@@ -6,10 +6,11 @@ can prove the join / rate / vector-field story before a public API is frozen.
 
 from __future__ import annotations
 
+import sys
 from collections import defaultdict
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Literal, NamedTuple, TypeVar, cast
+from typing import Any, Literal, NamedTuple, cast, get_type_hints
 
 import numpy as np
 from numpy.typing import NDArray
@@ -26,8 +27,8 @@ type BackendName = Literal["numpy", "jax"]
 type DerivedFn = Callable[..., Any]
 type FlowLike = TransitionFlow | ExitFlow | EntryFlow
 type FlowReduce = Literal["identity", "sum"] | tuple[Literal["sum_over"], str]
-
-_NamedTupleT = TypeVar("_NamedTupleT", bound=NamedTuple)
+type Adjustment = Multiply | Overwrite | Transform
+type AdjustSpec = Sequence[object] | None
 
 
 # ---------------------------------------------------------------------------
@@ -409,6 +410,49 @@ class BinOp(RateOps):
 
 
 @dataclass(frozen=True, slots=True)
+class Multiply:
+    """Multiply the previous aligned rate by ``value`` (optional ``where`` mask)."""
+
+    value: RateOps
+    where: Selector | None = None
+
+    def __init__(self, value: object, where: Selector | None = None) -> None:
+        object.__setattr__(self, "value", as_rate(value))
+        object.__setattr__(self, "where", where)
+
+
+@dataclass(frozen=True, slots=True)
+class Overwrite:
+    """Replace the previous aligned rate with ``value`` (optional ``where`` mask)."""
+
+    value: RateOps
+    where: Selector | None = None
+
+    def __init__(self, value: object, where: Selector | None = None) -> None:
+        object.__setattr__(self, "value", as_rate(value))
+        object.__setattr__(self, "where", where)
+
+
+@dataclass(frozen=True, slots=True)
+class Transform:
+    """Call ``fn(prev, *args)`` on the previous aligned rate."""
+
+    fn: Callable[..., Any]
+    args: tuple[RateOps, ...]
+    where: Selector | None = None
+
+    def __init__(
+        self,
+        fn: Callable[..., Any],
+        *args: object,
+        where: Selector | None = None,
+    ) -> None:
+        object.__setattr__(self, "fn", fn)
+        object.__setattr__(self, "args", tuple(as_rate(arg) for arg in args))
+        object.__setattr__(self, "where", where)
+
+
+@dataclass(frozen=True, slots=True)
 class _SubmapRate:
     """Rate whose last axis is aligned to one or more property trait maps."""
 
@@ -424,16 +468,50 @@ def _is_namedtuple_class(schema: type) -> bool:
     )
 
 
-def derived_refs(schema: type[_NamedTupleT]) -> _NamedTupleT:
+def _field_annotations(schema: type) -> dict[str, Any]:
+    try:
+        return get_type_hints(schema)
+    except (NameError, TypeError, AttributeError):
+        return dict(getattr(schema, "__annotations__", {}))
+
+
+def _nested_schema(schema: type, field: str) -> type | None:
+    """Return the NamedTuple class annotated on ``field``, if any."""
+    raw = _field_annotations(schema).get(field)
+    if raw is None:
+        raw = getattr(schema, "__annotations__", {}).get(field)
+    if isinstance(raw, str):
+        module = sys.modules.get(getattr(schema, "__module__", ""))
+        if module is not None:
+            raw = getattr(module, raw, raw)
+    if _is_namedtuple_class(raw):
+        return raw
+    return None
+
+
+def _field_ref_tree(schema: type, prefix: tuple[str, ...]) -> Any:
+    values: list[Any] = []
+    for name in schema._fields:
+        path = (*prefix, name)
+        nested = _nested_schema(schema, name)
+        if nested is not None:
+            values.append(_field_ref_tree(nested, path))
+        else:
+            values.append(FieldRef(path))
+    return schema(*values)
+
+
+def derived_refs[T: NamedTuple](schema: type[T]) -> T:
     """Build a NamedTuple of :class:`FieldRef`s named after ``schema`` fields.
 
-    The return is annotated as ``schema`` so IDEs complete only those fields.
-    Runtime values are ``FieldRef`` paths, not the schema's declared types.
+    Nested NamedTuple field annotations become nested ref trees so a bundle
+    like ``D.migration.baseline`` is one path. The return is annotated as
+    ``schema`` so IDEs complete only those fields. Runtime values are
+    ``FieldRef`` paths (or nested schemas of them), not the declared types.
     """
     if not _is_namedtuple_class(schema):
         raise TypeError(f"derived_refs expects a NamedTuple class, got {schema!r}.")
-    refs = (FieldRef((name,)) for name in schema._fields)
-    return schema(*refs)  # type: ignore[arg-type]
+    return cast(T, _field_ref_tree(schema, ()))
 
 
 def as_rate(value: object) -> RateOps:
@@ -445,6 +523,19 @@ def as_rate(value: object) -> RateOps:
     raise TypeError(f"Cannot use {type(value).__name__} as a flow rate.")
 
 
+def as_adjust(value: object) -> Adjustment:
+    """Coerce a bare rate or explicit adjustment into an :class:`Adjustment`."""
+    if isinstance(value, (Multiply, Overwrite, Transform)):
+        return value
+    return Multiply(as_rate(value))
+
+
+def _normalize_adjust(adjust: AdjustSpec) -> tuple[Adjustment, ...]:
+    if not adjust:
+        return ()
+    return tuple(as_adjust(item) for item in adjust)
+
+
 def _flow_refs(expr: RateOps) -> set[str]:
     match expr:
         case FlowRef(name=name):
@@ -453,6 +544,22 @@ def _flow_refs(expr: RateOps) -> set[str]:
             return _flow_refs(left) | _flow_refs(right)
         case _:
             return set()
+
+
+def _adjust_flow_refs(adj: Adjustment) -> set[str]:
+    if isinstance(adj, Transform):
+        refs: set[str] = set()
+        for arg in adj.args:
+            refs |= _flow_refs(arg)
+        return refs
+    return _flow_refs(adj.value)
+
+
+def _flow_rate_refs(rate: RateOps, adjust: Sequence[Adjustment]) -> set[str]:
+    refs = _flow_refs(rate)
+    for adj in adjust:
+        refs |= _adjust_flow_refs(adj)
+    return refs
 
 
 def _lookup_path(root: Any, path: tuple[str, ...]) -> Any:
@@ -595,6 +702,7 @@ class TransitionFlow:
     pairing: TraitChain | TraitMatrix | None = None
     split: NormalizedSplit | None = None
     absolute: bool = False
+    adjust: tuple[Adjustment, ...] = ()
 
     def __init__(
         self,
@@ -606,6 +714,7 @@ class TransitionFlow:
         pairing: TraitChain | TraitMatrix | None = None,
         split: SplitSpec | None = None,
         absolute: bool = False,
+        adjust: AdjustSpec = None,
     ) -> None:
         object.__setattr__(self, "name", name)
         object.__setattr__(self, "source", _as_selector(source))
@@ -614,6 +723,7 @@ class TransitionFlow:
         object.__setattr__(self, "pairing", pairing)
         object.__setattr__(self, "split", _normalize_split(split))
         object.__setattr__(self, "absolute", absolute)
+        object.__setattr__(self, "adjust", _normalize_adjust(adjust))
 
 
 @dataclass(frozen=True, slots=True)
@@ -624,6 +734,7 @@ class ExitFlow:
     source: Selector
     rate: RateOps
     absolute: bool = False
+    adjust: tuple[Adjustment, ...] = ()
 
     def __init__(
         self,
@@ -632,11 +743,13 @@ class ExitFlow:
         rate: object,
         *,
         absolute: bool = False,
+        adjust: AdjustSpec = None,
     ) -> None:
         object.__setattr__(self, "name", name)
         object.__setattr__(self, "source", _as_selector(source))
         object.__setattr__(self, "rate", as_rate(rate))
         object.__setattr__(self, "absolute", absolute)
+        object.__setattr__(self, "adjust", _normalize_adjust(adjust))
 
 
 @dataclass(frozen=True, slots=True)
@@ -647,6 +760,7 @@ class EntryFlow:
     dest: Selector
     rate: RateOps
     split: NormalizedSplit | None = None
+    adjust: tuple[Adjustment, ...] = ()
 
     def __init__(
         self,
@@ -655,11 +769,13 @@ class EntryFlow:
         rate: object,
         *,
         split: SplitSpec | None = None,
+        adjust: AdjustSpec = None,
     ) -> None:
         object.__setattr__(self, "name", name)
         object.__setattr__(self, "dest", _as_selector(dest))
         object.__setattr__(self, "rate", as_rate(rate))
         object.__setattr__(self, "split", _normalize_split(split))
+        object.__setattr__(self, "adjust", _normalize_adjust(adjust))
 
 
 @dataclass(frozen=True, slots=True)
@@ -674,10 +790,44 @@ class ActualizedFlow:
     scale: NDArray[np.float64]
     rate: RateOps
     absolute: bool
+    adjust: tuple[Adjustment, ...] = ()
+    adjust_masks: tuple[NDArray[np.bool_] | None, ...] = ()
+    pair_src_codes: NDArray[np.int32] | None = None
+    pair_dest_codes: NDArray[np.int32] | None = None
+    pair_n_traits: int | None = None
 
     @property
     def n_edges(self) -> int:
         return int(self.weight.size)
+
+
+def _pairing_codes(
+    pmap: PropertyMap,
+    pairing: TraitChain | TraitMatrix | None,
+    src_idx: NDArray[np.int32] | None,
+    dest_idx: NDArray[np.int32] | None,
+) -> tuple[NDArray[np.int32] | None, NDArray[np.int32] | None, int | None]:
+    if not isinstance(pairing, TraitMatrix) or src_idx is None or dest_idx is None:
+        return None, None, None
+    col = pmap._prop_index[pairing.property.name]
+    src_codes = np.asarray(pmap.codes[src_idx, col], dtype=np.int32)
+    dest_codes = np.asarray(pmap.codes[dest_idx, col], dtype=np.int32)
+    return src_codes, dest_codes, len(pairing.property.traits)
+
+
+def _bind_adjust_masks(
+    adjust: tuple[Adjustment, ...],
+    gather_idx: NDArray[np.int32],
+    pmap: PropertyMap,
+) -> tuple[NDArray[np.bool_] | None, ...]:
+    masks: list[NDArray[np.bool_] | None] = []
+    for adj in adjust:
+        if adj.where is None:
+            masks.append(None)
+            continue
+        selected = pmap.select(adj.where)
+        masks.append(np.isin(gather_idx, selected))
+    return tuple(masks)
 
 
 def _sum_over_property_name(expr: RateOps) -> str | None:
@@ -725,11 +875,40 @@ def _entry_edges(
     )
 
 
+def _finish_actualized(
+    resolved: ActualizedFlow,
+    pmap: PropertyMap,
+    pairing: TraitChain | TraitMatrix | None,
+    adjust: tuple[Adjustment, ...],
+) -> ActualizedFlow:
+    gather = resolved.src_idx if resolved.kind != "entry" else resolved.dest_idx
+    if gather is None:
+        raise RuntimeError(f"Flow {resolved.name!r} is missing gather indices.")
+    src_codes, dest_codes, n_traits = _pairing_codes(
+        pmap, pairing, resolved.src_idx, resolved.dest_idx
+    )
+    return ActualizedFlow(
+        name=resolved.name,
+        kind=resolved.kind,
+        src_idx=resolved.src_idx,
+        dest_idx=resolved.dest_idx,
+        weight=resolved.weight,
+        scale=resolved.scale,
+        rate=resolved.rate,
+        absolute=resolved.absolute,
+        adjust=adjust,
+        adjust_masks=_bind_adjust_masks(adjust, gather, pmap),
+        pair_src_codes=src_codes,
+        pair_dest_codes=dest_codes,
+        pair_n_traits=n_traits,
+    )
+
+
 def actualize(flow: FlowLike, pmap: PropertyMap) -> ActualizedFlow:
     """Resolve ``flow`` to index arrays against ``pmap``."""
     if isinstance(flow, TransitionFlow):
         edges = _join_with_pairing(pmap, flow.source, flow.dest, flow.pairing, flow.split)
-        return ActualizedFlow(
+        base = ActualizedFlow(
             name=flow.name,
             kind="transition",
             src_idx=edges.src_idx,
@@ -739,12 +918,13 @@ def actualize(flow: FlowLike, pmap: PropertyMap) -> ActualizedFlow:
             rate=flow.rate,
             absolute=flow.absolute,
         )
+        return _finish_actualized(base, pmap, flow.pairing, flow.adjust)
     if isinstance(flow, ExitFlow):
         src_idx = pmap.select(flow.source)
         if src_idx.size == 0:
             raise ValueError("Source selector matched no compartments.")
         n = int(src_idx.size)
-        return ActualizedFlow(
+        base = ActualizedFlow(
             name=flow.name,
             kind="exit",
             src_idx=src_idx,
@@ -754,8 +934,9 @@ def actualize(flow: FlowLike, pmap: PropertyMap) -> ActualizedFlow:
             rate=flow.rate,
             absolute=flow.absolute,
         )
+        return _finish_actualized(base, pmap, None, flow.adjust)
     edges = _entry_edges(pmap, flow.dest, flow.split, group_by=_sum_over_property_name(flow.rate))
-    return ActualizedFlow(
+    base = ActualizedFlow(
         name=flow.name,
         kind="entry",
         src_idx=None,
@@ -765,11 +946,12 @@ def actualize(flow: FlowLike, pmap: PropertyMap) -> ActualizedFlow:
         rate=flow.rate,
         absolute=True,
     )
+    return _finish_actualized(base, pmap, None, flow.adjust)
 
 
 def _topo_sort(flows: Sequence[ActualizedFlow]) -> list[ActualizedFlow]:
     by_name = {flow.name: flow for flow in flows}
-    pending = {flow.name: _flow_refs(flow.rate) for flow in flows}
+    pending = {flow.name: _flow_rate_refs(flow.rate, flow.adjust) for flow in flows}
     for name, deps in pending.items():
         unknown = deps - by_name.keys()
         if unknown:
@@ -821,12 +1003,24 @@ def _align_rate(
     n_edges: int,
     pmap: PropertyMap,
     xp: Any,
+    pair_src_codes: NDArray[np.int32] | None = None,
+    pair_dest_codes: NDArray[np.int32] | None = None,
+    pair_n_traits: int | None = None,
 ) -> Any:
     if isinstance(rate, _SubmapRate):
         return _align_submap_rate(rate, gather_idx, pmap, xp)
     arr = _as_array(rate, xp)
     shape = getattr(arr, "shape", ())
     pmap_size = pmap.size
+    if (
+        pair_n_traits is not None
+        and pair_src_codes is not None
+        and pair_dest_codes is not None
+        and len(shape) >= 2
+        and shape[-2] == pair_n_traits
+        and shape[-1] == pair_n_traits
+    ):
+        return arr[..., pair_dest_codes, pair_src_codes]
     if shape == () or shape == (1,):
         return arr
     if shape[-1] == pmap_size:
@@ -837,6 +1031,81 @@ def _align_rate(
         f"Rate last axis {shape[-1]} matches neither pmap.size {pmap_size} "
         f"nor n_edges {n_edges}."
     )
+
+
+def _eval_aligned(
+    expr: RateOps,
+    *,
+    flow: ActualizedFlow,
+    derived: Any,
+    flow_values: Mapping[str, Any],
+    flow_meta: Mapping[str, ActualizedFlow],
+    pmap: PropertyMap,
+    xp: Any,
+    gather_idx: NDArray[np.int32],
+) -> Any:
+    raw = _eval_rate(
+        expr,
+        derived=derived,
+        flow_values=flow_values,
+        flow_meta=flow_meta,
+        pmap=pmap,
+        xp=xp,
+    )
+    return _align_rate(
+        raw,
+        gather_idx=gather_idx,
+        n_edges=int(flow.weight.size),
+        pmap=pmap,
+        xp=xp,
+        pair_src_codes=flow.pair_src_codes,
+        pair_dest_codes=flow.pair_dest_codes,
+        pair_n_traits=flow.pair_n_traits,
+    )
+
+
+def _apply_adjustments(
+    rate: Any,
+    flow: ActualizedFlow,
+    *,
+    derived: Any,
+    flow_values: Mapping[str, Any],
+    flow_meta: Mapping[str, ActualizedFlow],
+    pmap: PropertyMap,
+    xp: Any,
+    gather_idx: NDArray[np.int32],
+) -> Any:
+    prev = rate
+    for adj, mask in zip(flow.adjust, flow.adjust_masks, strict=True):
+        if isinstance(adj, Transform):
+            args = [
+                _eval_aligned(
+                    arg,
+                    flow=flow,
+                    derived=derived,
+                    flow_values=flow_values,
+                    flow_meta=flow_meta,
+                    pmap=pmap,
+                    xp=xp,
+                    gather_idx=gather_idx,
+                )
+                for arg in adj.args
+            ]
+            new = adj.fn(prev, *args)
+        else:
+            value = _eval_aligned(
+                adj.value,
+                flow=flow,
+                derived=derived,
+                flow_values=flow_values,
+                flow_meta=flow_meta,
+                pmap=pmap,
+                xp=xp,
+                gather_idx=gather_idx,
+            )
+            new = value if isinstance(adj, Overwrite) else prev * value
+        prev = xp.where(xp.asarray(mask), new, prev) if mask is not None else new
+    return prev
 
 
 def _backend_module(backend: BackendName) -> Any:
@@ -893,31 +1162,36 @@ class FlowModel:
                 gather = flow.src_idx if flow.kind != "entry" else flow.dest_idx
                 if gather is None:
                     raise RuntimeError(f"Flow {flow.name!r} is missing gather indices.")
-                raw = _eval_rate(
+                rate = _eval_aligned(
                     flow.rate,
+                    flow=flow,
                     derived=derived,
                     flow_values=flow_values,
                     flow_meta=flow_meta,
                     pmap=pmap,
                     xp=xp,
-                )
-                rate = _align_rate(
-                    raw,
                     gather_idx=gather,
-                    n_edges=int(flow.weight.size),
+                )
+                rate = rate * xp.asarray(flow.scale)
+                rate = _apply_adjustments(
+                    rate,
+                    flow,
+                    derived=derived,
+                    flow_values=flow_values,
+                    flow_meta=flow_meta,
                     pmap=pmap,
                     xp=xp,
+                    gather_idx=gather,
                 )
-                scale = xp.asarray(flow.scale)
                 weight = xp.asarray(flow.weight)
                 if flow.kind == "entry":
-                    mass = rate * scale * weight
+                    mass = rate * weight
                     dy = _scatter_add(dy, flow.dest_idx, mass, xp)
                     flow_values[flow.name] = mass
                     continue
                 src_idx = cast(NDArray[np.int32], flow.src_idx)
                 src_y = y_arr[..., src_idx]
-                contrib = rate * scale if flow.absolute else rate * scale * src_y
+                contrib = rate if flow.absolute else rate * src_y
                 mass = contrib * weight
                 dy = _scatter_add(dy, src_idx, -mass, xp)
                 if flow.kind == "transition":
@@ -938,3 +1212,74 @@ def _scatter_add(target: Any, indices: NDArray[np.int32] | None, values: Any, xp
         np.add.at(out, (..., indices) if out.ndim > 1 else indices, values)
         return out
     return target.at[..., indices].add(values)
+
+
+def _is_jax_value(value: object) -> bool:
+    if _is_property_data(value):
+        return _is_jax_value(value.data)
+    module = getattr(type(value), "__module__", "")
+    return module.startswith("jax")
+
+
+def _euler_add(y: Any, dy: Any, dt: Any) -> Any:
+    if _is_property_data(y):
+        dy_data = dy.data if _is_property_data(dy) else dy
+        return y._with_data(y.data + dt * dy_data)
+    return y + dt * dy
+
+
+def _euler_jax(
+    vf: Callable[..., Any],
+    t0: Any,
+    y0: Any,
+    params: Any,
+    dt: float,
+    steps: int,
+) -> Any:
+    import jax
+    import jax.numpy as jnp
+
+    wrapped = _is_property_data(y0)
+    y_arr = y0.data if wrapped else y0
+    t0_j = jnp.asarray(t0)
+    dt_j = jnp.asarray(dt)
+
+    def body(carry: tuple[Any, Any], unused: Any) -> tuple[tuple[Any, Any], None]:
+        del unused
+        t, y = carry
+        y_in = y0._with_data(y) if wrapped else y
+        dy = vf(t, y_in, params)
+        dy_arr = dy.data if _is_property_data(dy) else dy
+        return (t + dt_j, y + dt_j * dy_arr), None
+
+    (_t_final, y_final), _ = jax.lax.scan(body, (t0_j, y_arr), xs=None, length=int(steps))
+    if wrapped:
+        return y0._with_data(y_final)
+    return y_final
+
+
+def euler(
+    vf: Callable[..., Any],
+    t0: Any,
+    y0: Any,
+    params: Any,
+    *,
+    dt: float,
+    steps: int,
+) -> Any:
+    """Forward Euler: ``y <- y + dt * vf(t, y, params)``, ``steps`` times.
+
+    NumPy ``y0`` uses a Python loop. JAX arrays (or ``PropertyData`` wrapping
+    them) use ``lax.scan`` so the stepper itself can be ``jax.jit``-ed.
+    Returns the final state only.
+    """
+    if steps < 0:
+        raise ValueError(f"steps must be >= 0, got {steps}.")
+    if _is_jax_value(y0):
+        return _euler_jax(vf, t0, y0, params, dt, steps)
+    y = y0
+    t = t0
+    for _ in range(int(steps)):
+        y = _euler_add(y, vf(t, y, params), dt)
+        t = t + dt
+    return y

@@ -14,19 +14,26 @@ from explorations.flows.prototype import (
     FieldRef,
     FlowModel,
     FlowRef,
+    Multiply,
+    Overwrite,
     TraitChain,
     TraitMatrix,
+    Transform,
     TransitionFlow,
     actualize,
+    as_adjust,
     as_rate,
     derived_refs,
+    euler,
     identity_join,
     selector_properties,
 )
 
 from summer4 import Everything, Property, PropertyMap
 
-NOTEBOOK = Path(__file__).resolve().parents[1] / "explorations" / "flows" / "01-flows.ipynb"
+FLOWS_DIR = Path(__file__).resolve().parents[1] / "explorations" / "flows"
+NOTEBOOK = FLOWS_DIR / "01-flows.ipynb"
+NOTEBOOK_02 = FLOWS_DIR / "02-flows.ipynb"
 
 
 def _sir_age() -> tuple[Property, Property, PropertyMap]:
@@ -349,8 +356,8 @@ def _cell_source(cell: dict[str, object]) -> str:
     raise TypeError(f"Unexpected notebook source type: {type(source)}")
 
 
-def test_explore_flows_notebook_executes() -> None:
-    notebook = json.loads(NOTEBOOK.read_text(encoding="utf-8"))
+def _exec_notebook(path: Path) -> None:
+    notebook = json.loads(path.read_text(encoding="utf-8"))
     namespace: dict[str, object] = {"__name__": "__main__"}
     code_cells = 0
     for index, cell in enumerate(notebook["cells"]):
@@ -361,10 +368,253 @@ def test_explore_flows_notebook_executes() -> None:
         if not stripped:
             continue
         if stripped.startswith("%") or stripped.startswith("!"):
-            raise AssertionError(f"01-flows.ipynb cell {index} uses a magic.")
+            raise AssertionError(f"{path.name} cell {index} uses a magic.")
         code_cells += 1
         try:
-            exec(compile(source, str(NOTEBOOK), "exec"), namespace)
+            exec(compile(source, str(path), "exec"), namespace)
         except Exception as exc:
-            raise AssertionError(f"01-flows.ipynb cell {index} failed: {exc}") from exc
+            raise AssertionError(f"{path.name} cell {index} failed: {exc}") from exc
     assert code_cells > 0
+
+
+def test_explore_flows_notebook_executes() -> None:
+    _exec_notebook(NOTEBOOK)
+
+
+class _MigBundle(NamedTuple):
+    baseline: object
+    seasonal: float
+
+
+class _NestedDerived(NamedTuple):
+    foi: float
+    migration: _MigBundle
+
+
+class _LeafRates(NamedTuple):
+    rates: object
+
+
+class _MigRates(NamedTuple):
+    mig: object
+
+
+class _Seasonal(NamedTuple):
+    seasonal: float
+
+
+class _Cap(NamedTuple):
+    foi_cap: float
+
+
+def test_derived_refs_recurses_into_nested_namedtuple() -> None:
+    refs = derived_refs(_NestedDerived)
+    assert refs.foi == FieldRef(("foi",))
+    assert refs.migration.baseline == FieldRef(("migration", "baseline"))
+    assert refs.migration.seasonal == FieldRef(("migration", "seasonal"))
+    with pytest.raises(AttributeError):
+        _ = refs.migration.unknown  # type: ignore[attr-defined]
+
+
+def test_derived_refs_non_namedtuple_field_stays_leaf() -> None:
+    refs = derived_refs(_LeafRates)
+    assert refs.rates == FieldRef(("rates",))
+
+
+def test_matrix_rate_gathers_dest_source_by_time() -> None:
+    state = Property("state", ("S", "I"))
+    loc = Property("location", ("north", "south"))
+    pm = PropertyMap.from_property(state).stratify(loc)
+    mask = np.array([[0.0, 1.0], [1.0, 0.0]])
+    refs = derived_refs(_MigRates)
+    model = FlowModel(pm)
+    model.add_flow(
+        TransitionFlow(
+            "migration",
+            loc.present(),
+            loc.present(),
+            refs.mig,
+            pairing=TraitMatrix(loc, mask),
+        )
+    )
+
+    def derived_fn(params: object, y: object = None, t: float = 0.0) -> _MigRates:
+        del params, y
+        time = float(t)
+        return _MigRates(mig=np.array([[0.0, time], [2.0 * time, 0.0]]))
+
+    y = np.array([10.0, 100.0, 0.0, 0.0])
+    vf = model.compile(derived_fn=derived_fn)
+    s_north, s_south = pm.select(state["S"])
+    dy = vf(1.0, y, {})
+    np.testing.assert_allclose(dy[s_north], 80.0)
+    np.testing.assert_allclose(dy[s_south], -80.0)
+    np.testing.assert_allclose(dy.sum(), 0.0)
+    dy2 = vf(2.0, y, {})
+    np.testing.assert_allclose(dy2[s_north], 160.0)
+    np.testing.assert_allclose(dy2[s_south], -160.0)
+
+
+def test_nested_proxy_matrix_matches_combined_field() -> None:
+    state = Property("state", ("S", "I"))
+    loc = Property("location", ("north", "south"))
+    pm = PropertyMap.from_property(state).stratify(loc)
+    mask = np.array([[0.0, 1.0], [1.0, 0.0]])
+    baseline = np.array([[0.0, 0.1], [0.2, 0.0]])
+    refs = derived_refs(_NestedDerived)
+    model = FlowModel(pm)
+    model.add_flow(
+        TransitionFlow(
+            "migration",
+            loc.present(),
+            loc.present(),
+            refs.migration.baseline * refs.migration.seasonal,
+            pairing=TraitMatrix(loc, mask),
+        )
+    )
+
+    def derived_fn(params: object, y: object = None, t: float = 0.0) -> _NestedDerived:
+        del params, y
+        return _NestedDerived(
+            foi=0.0,
+            migration=_MigBundle(baseline=baseline, seasonal=1.0 + float(t)),
+        )
+
+    y = np.array([10.0, 40.0, 0.0, 0.0])
+    dy = model.compile(derived_fn=derived_fn)(1.0, y, {})
+    # seasonal=2: south->north 0.2, north->south 0.4
+    s_north, s_south = pm.select(state["S"])
+    np.testing.assert_allclose(dy[s_north], -0.4 * 10.0 + 0.2 * 40.0)
+    np.testing.assert_allclose(dy[s_south], -0.2 * 40.0 + 0.4 * 10.0)
+
+
+def test_as_adjust_defaults_to_multiply() -> None:
+    adj = as_adjust(0.5)
+    assert isinstance(adj, Multiply)
+    assert adj.value == as_rate(0.5)
+
+
+def test_adjust_multiply_default() -> None:
+    state = Property("state", ("S", "I"))
+    pm = PropertyMap.from_property(state)
+    refs = derived_refs(_Seasonal)
+    model = FlowModel(pm)
+    model.add_flow(TransitionFlow("inf", state["S"], state["I"], 0.2, adjust=[refs.seasonal]))
+    dy = model.compile()(0.0, np.array([100.0, 0.0]), _Seasonal(seasonal=0.5))
+    np.testing.assert_allclose(dy, [-10.0, 10.0])
+
+
+def test_adjust_overwrite_where() -> None:
+    state, age, pm = _sir_age()
+    model = FlowModel(pm)
+    model.add_flow(
+        TransitionFlow(
+            "inf",
+            state["S"],
+            state["I"],
+            0.2,
+            adjust=[Overwrite(0.0, where=age["0-4"])],
+        )
+    )
+    y = np.ones(pm.size)
+    dy = model.compile()(0.0, y, {})
+    np.testing.assert_allclose(dy[pm.select(state["S"] & age["0-4"])], 0.0)
+    np.testing.assert_allclose(dy[pm.select(state["S"] & ~age["0-4"])], -0.2)
+
+
+def test_adjust_transform_minimum() -> None:
+    state = Property("state", ("S", "I"))
+    pm = PropertyMap.from_property(state)
+    refs = derived_refs(_Cap)
+    model = FlowModel(pm)
+    model.add_flow(
+        TransitionFlow(
+            "inf",
+            state["S"],
+            state["I"],
+            0.2,
+            adjust=[Transform(np.minimum, refs.foi_cap)],
+        )
+    )
+    dy = model.compile()(0.0, np.array([100.0, 0.0]), _Cap(foi_cap=0.05))
+    np.testing.assert_allclose(dy, [-5.0, 5.0])
+
+
+def test_adjust_transform_depends_on_flow_ref() -> None:
+    state = Property("state", ("S", "I"))
+    pm = PropertyMap.from_property(state)
+    model = FlowModel(pm)
+    death = model.add_flow(ExitFlow("death", Everything(), 0.1))
+    model.add_flow(
+        TransitionFlow(
+            "inf",
+            state["S"],
+            state["I"],
+            0.2,
+            adjust=[Transform(lambda prev, deaths: prev * deaths, death.sum())],
+        )
+    )
+    y = np.array([100.0, 50.0])
+    dy = model.compile()(0.0, y, {})
+    death_sum = 0.1 * 150.0
+    inf_mass = 0.2 * death_sum * 100.0
+    np.testing.assert_allclose(dy[0], -0.1 * 100.0 - inf_mass)
+    np.testing.assert_allclose(dy[1], -0.1 * 50.0 + inf_mass)
+
+
+def test_euler_numpy_matches_manual_steps() -> None:
+    state = Property("state", ("S", "I"))
+    pm = PropertyMap.from_property(state)
+    model = FlowModel(pm)
+    model.add_flow(TransitionFlow("inf", state["S"], state["I"], 0.1))
+    vf = model.compile()
+    y0 = np.array([100.0, 0.0])
+    y_e = euler(vf, 0.0, y0, {}, dt=0.5, steps=2)
+    y = y0.copy()
+    t = 0.0
+    for _ in range(2):
+        y = y + 0.5 * vf(t, y, {})
+        t += 0.5
+    np.testing.assert_allclose(y_e, y)
+
+
+def test_euler_jax_jit_matches_numpy_and_time_varies() -> None:
+    jax = pytest.importorskip("jax")
+    jnp = pytest.importorskip("jax.numpy")
+    state = Property("state", ("S", "I"))
+    loc = Property("location", ("north", "south"))
+    pm = PropertyMap.from_property(state).stratify(loc)
+    mask = np.array([[0.0, 1.0], [1.0, 0.0]])
+    refs = derived_refs(_MigRates)
+
+    def derived_fn(params: dict[str, float], y: object = None, t: object = 0.0) -> _MigRates:
+        del y
+        seasonal = 1.0 + params["amp"] * jnp.sin(params["omega"] * t)
+        baseline = jnp.asarray(np.array([[0.0, 0.1], [0.1, 0.0]]))
+        return _MigRates(mig=baseline * seasonal)
+
+    model = FlowModel(pm)
+    model.add_flow(
+        TransitionFlow(
+            "migration",
+            loc.present(),
+            loc.present(),
+            refs.mig,
+            pairing=TraitMatrix(loc, mask),
+        )
+    )
+    y0 = np.array([80.0, 20.0, 0.0, 0.0])
+    params = {"amp": 0.5, "omega": 1.0}
+    vf_np = model.compile(derived_fn=derived_fn)
+    y_np = euler(vf_np, 0.0, y0, params, dt=0.25, steps=8)
+    vf_jax = model.compile(derived_fn=derived_fn, backend="jax")
+    step = jax.jit(lambda y: euler(vf_jax, 0.0, y, params, dt=0.25, steps=8))
+    y_j = np.asarray(step(jnp.asarray(y0)))
+    np.testing.assert_allclose(y_j, y_np, rtol=1e-5)
+    np.testing.assert_allclose(y_np.sum(), y0.sum())
+    y_const = euler(vf_np, 0.0, y0, {"amp": 0.0, "omega": 1.0}, dt=0.25, steps=8)
+    assert not np.allclose(y_np, y_const)
+
+
+def test_refine_flows_notebook_executes() -> None:
+    _exec_notebook(NOTEBOOK_02)
