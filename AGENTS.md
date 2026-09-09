@@ -16,7 +16,20 @@ git fetch origin
 git switch -c feat/my-feature origin/main   # or local main if no remote
 ```
 
-After clone or when hooks are missing, run `pixi run setup` so merge hooks are installed.
+After clone or when hooks are missing, run `pixi run setup` so commit and merge
+hooks are installed. The pre-commit hook formats staged Python with Black
+(line length 100) and rejects notebooks that still have outputs or execution
+counts.
+
+## Style
+
+Follow the [Google Python Style Guide](https://google.github.io/styleguide/pyguide.html)
+unless this file or the tooling below says otherwise.
+
+- **Line length is 100**, not 80. Black is the formatter (`pixi run format`).
+- **Every function definition is type-annotated** (parameters and return type),
+  including tests and scripts. mypy `--strict` on `src/summer4` enforces this
+  for the package.
 
 ## Plans land in the workspace on merge
 
@@ -53,6 +66,8 @@ Before you ask for a merge:
 
 ```bash
 pixi run lint
+pixi run format-check
+pixi run check-notebooks
 pixi run test
 pixi run check-branch
 ```

@@ -1,0 +1,37 @@
+#!/bin/sh
+# Format staged Python with Black and reject dirty notebooks.
+# Installed via `pixi run setup` (git config core.hooksPath .githooks).
+set -e
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+if [ -x "$ROOT/.pixi/envs/default/bin/python" ]; then
+  PY="$ROOT/.pixi/envs/default/bin/python"
+else
+  PY="python3"
+fi
+
+if [ -x "$ROOT/.pixi/envs/default/bin/black" ]; then
+  BLACK="$ROOT/.pixi/envs/default/bin/black"
+else
+  BLACK="black"
+fi
+
+PY_FILES="$(git diff --cached --name-only --diff-filter=ACMR -- '*.py')"
+NB_FILES="$(git diff --cached --name-only --diff-filter=ACMR -- '*.ipynb')"
+
+if [ -n "$PY_FILES" ]; then
+  # Black formats in place; re-stage so the commit contains the formatted text.
+  printf '%s\n' "$PY_FILES" | while IFS= read -r file; do
+    [ -n "$file" ] || continue
+    "$BLACK" -- "$file"
+    git add -- "$file"
+  done
+fi
+
+if [ -n "$NB_FILES" ]; then
+  printf '%s\n' "$NB_FILES" | while IFS= read -r file; do
+    [ -n "$file" ] || continue
+    "$PY" "$ROOT/scripts/check_cleared_notebooks.py" -- "$file"
+  done
+fi

@@ -44,7 +44,9 @@ pm.partition(age)
 ## Development
 
 Read [AGENTS.md](AGENTS.md) before changing the code: work on a feature branch,
-copy the plan into `plans/`, and land tests plus a runnable example notebook.
+follow the Google Python Style Guide (function definitions are always
+type-annotated; Black line length 100), copy the plan into `plans/`, and land
+tests plus a runnable example notebook.
 
 ```bash
 pixi install
