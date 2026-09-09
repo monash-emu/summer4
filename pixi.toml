@@ -41,10 +41,14 @@ nbformat = ">=5.10"
 [feature.notebooks.dependencies]
 jupyterlab = ">=4.0"
 
+[feature.explore.dependencies]
+xarray = ">=2026.1.0"
+
 [environments]
 default = ["jax06", "dev"]
 latest = ["jaxlatest", "dev"]
 nb = ["jax06", "notebooks", "dev"]
+explore = ["jax06", "dev", "explore"]
 
 [tasks]
 setup = { cmd = "python scripts/setup_hooks.py", description = "Install git hooks so merges copy plans into plans/" }
@@ -52,9 +56,10 @@ register-kernel = { cmd = "python -m ipykernel install --user --name summer4 --d
 check-branch = { cmd = "python scripts/check_feature_branch.py", description = "Require tests, a notebook, and a plan on feature branches that change src/" }
 test = { cmd = "pytest tests/ -v", description = "Run unit, property, and notebook smoke tests" }
 test-all = { cmd = "pixi run --environment default test && pixi run --environment latest test", description = "Run tests in every JAX environment" }
-lint = { cmd = "ruff check src tests benchmarks scripts && mypy src/summer4", description = "Lint and type-check" }
-format = { cmd = "ruff format src tests benchmarks scripts", description = "Format code with ruff" }
-format-check = { cmd = "ruff format --check src tests benchmarks scripts", description = "Check formatting" }
+lint = { cmd = "ruff check src tests benchmarks scripts explorations && mypy src/summer4", description = "Lint and type-check" }
+format = { cmd = "ruff format src tests benchmarks scripts explorations", description = "Format code with ruff" }
+format-check = { cmd = "ruff format --check src tests benchmarks scripts explorations", description = "Check formatting" }
+explore-test = { cmd = "pixi run --environment explore python explorations/datatypes/run_notebooks.py", description = "Execute the datatypes spike notebooks" }
 bench = { cmd = "pytest benchmarks/ --benchmark-only -v --benchmark-columns=min,max,median,ops", description = "Run taxonomy benchmarks in the current env" }
 bench-json = { cmd = "python scripts/bench_json.py", description = "Write benchmark JSON keyed by JAX version" }
 notebook = { cmd = "jupyter lab examples/notebooks", description = "Launch JupyterLab on the example notebooks" }

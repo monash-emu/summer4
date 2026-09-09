@@ -31,10 +31,13 @@ packages = ["src/summer4"]
 [tool.ruff]
 line-length = 100
 target-version = "py313"
-src = ["src", "tests", "benchmarks", "scripts"]
+src = ["src", "tests", "benchmarks", "scripts", "explorations"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+"explorations/**/*.ipynb" = ["E402", "E501"]
 
 [tool.ruff.format]
 quote-style = "double"
