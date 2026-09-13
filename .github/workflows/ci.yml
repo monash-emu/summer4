@@ -3,6 +3,15 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: Which CI suite to run
+        type: choice
+        options:
+          - quick
+          - full
+        default: full
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -11,7 +20,9 @@ concurrency:
 jobs:
   quick:
     name: Quick
-    if: github.event_name == 'push'
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && inputs.suite == 'quick')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,7 +38,9 @@ jobs:
 
   quality:
     name: Quality
-    if: github.event_name == 'pull_request'
+    if: >-
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'workflow_dispatch' && inputs.suite == 'full')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -41,11 +54,13 @@ jobs:
       - run: pixi run lint
       - run: pixi run format-check
       - run: pixi run check-notebooks
-      - run: pixi run check-branch -- --base origin/${{ github.base_ref }}
+      - run: pixi run check-branch -- --base origin/${{ github.base_ref || 'main' }}
 
   test:
     name: Test (${{ matrix.environment }})
-    if: github.event_name == 'pull_request'
+    if: >-
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'workflow_dispatch' && inputs.suite == 'full')
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
