@@ -11,6 +11,7 @@ class PropertyMap:
     codes: NDArray[np.int16]
     history: tuple[Stratification, ...] = ()
     parent_row: NDArray[np.int32] | None = None
+    # _cache, _prop_index, _digest built in __post_init__
 ```
 
 ### `codes` — the compartment table
@@ -45,17 +46,20 @@ another map with `step.apply(pmap)`.
 
 ### `_cache` — memoised queries
 
-`dict[Selector, NDArray[np.int8]]`, populated by `_kleene`. Frozen selectors
+`dict[Selector, NDArray[np.int8]]`, populated by `kleene`. Frozen selectors
 compare by value, so a structurally identical selector built elsewhere hits the
 same entry. Cached arrays are frozen too, which is why `copy()` exists: it
 returns the same table with an empty cache when a long-lived map has accumulated
 many one-off queries.
 
-### `_prop_index` — name to column
+### `_prop_index` / `_digest` — lookup and hashing
 
-`dict[str, int]`. Properties are identified by **name**, not object identity;
-this is what lets `pmap.partition("age")` work and what makes a `Property`
-rebuilt in a helper function interchangeable with the original.
+`_prop_index` is `dict[str, int]`. Properties are identified by **name**, not
+object identity; this is what lets `pmap.partition("age")` work and what makes a
+`Property` rebuilt in a helper function interchangeable with the original.
+Public accessors `column_index`, `column`, `kleene`, and `label` wrap the table
+without exposing these fields. `_digest` is a blake2b-16 of `codes` and
+`parent_row`; `__hash__` is `hash((properties, history, _digest))`.
 
 ## `Property` and `Trait`
 
@@ -73,22 +77,32 @@ class Trait(SelectorOps):
     code: int
 ```
 
-`Trait` stores the property **name**, not the `Property` object. That keeps
-traits cheap to compare and hash, and keeps a selector tree free of references
-to large objects — but it means a trait is only meaningful relative to a map
-that registers a property of that name. `PropertyMap._validate_selector` closes
-the loop by checking that the trait's `code` still matches the registered
-property's index, so a renamed or reordered property is caught rather than
-silently selecting the wrong compartments.
+`Property` names must be Python identifiers (so Phase 1 `@source` / `@dest`
+column mangling cannot collide with a user property). `Trait` stores the
+property **name**, not the `Property` object. That keeps traits cheap to compare
+and hash, and keeps a selector tree free of references to large objects — but it
+means a trait is only meaningful relative to a map that registers a property of
+that name. `PropertyMap._validate_selector` closes the loop by checking that the
+trait's `code` still matches the registered property's index, so a renamed or
+reordered property is caught rather than silently selecting the wrong
+compartments.
 
 ## Selector nodes
 
-All nine node types are frozen, slotted dataclasses inheriting `SelectorOps`,
+All eleven node types are frozen, slotted dataclasses inheriting `SelectorOps`,
 which supplies `&`, `|`, `~` and a `__bool__` that raises.
 
 ```python
-type Selector = Trait | IsIn | Present | Absent | Everything | Nothing | And | Or | Not
+type Selector = (
+    Trait | IsIn | Present | Absent | Everything | Nothing | And | Or | Not
+    | Source | Dest
+)
 ```
+
+`Source` and `Dest` are in the union so they compose with `&` / `|` / `~` under
+`mypy --strict`. On a compartment map they raise
+(`"Source()/Dest() select flow edges, not compartments"`); edge evaluation lands
+with flows.
 
 The union is a PEP 695 `type` alias, and evaluation is a `match` statement over
 it, so adding a node type produces a `TypeError` at the two exhaustive match

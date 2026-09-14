@@ -32,6 +32,13 @@ def test_empty_name_raises() -> None:
         Property("", ("a",))
 
 
+def test_non_identifier_name_raises() -> None:
+    with pytest.raises(ValueError, match="identifier"):
+        Property("age@dest", ("young", "old"))
+    with pytest.raises(ValueError, match="identifier"):
+        Property("age-band", ("young", "old"))
+
+
 def test_empty_traits_raises() -> None:
     with pytest.raises(ValueError, match="at least one trait"):
         Property("age", ())

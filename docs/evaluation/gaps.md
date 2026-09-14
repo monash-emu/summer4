@@ -63,9 +63,9 @@ request and post-integration machinery is not.
 
 ### 1.6 `PropertyMap` must become hashable
 
-Blocks JAX pytree use. Digest of `codes` and `parent_row` plus `properties` and
-`history`. This is the smallest item on the list and a prerequisite for most of
-the rest.
+**State:** done in Phase 0 (`feat/taxonomy-prereqs`). Maps hash by
+`(properties, history, blake2b-16 digest of codes and parent_row)`, so equal
+rebuilt maps share a hash and work as `jax.jit` static arguments.
 
 ## Priority 2 — blocks seven more chapters
 
@@ -111,13 +111,13 @@ Detailed in {doc}`user-satisfaction`; summarised here.
 
 | Gap | Effort | Impact |
 |---|---|---|
-| `__hash__` on `PropertyMap` | Small | Blocks JAX; see 1.6 |
-| `__len__`, `__getitem__`, `__iter__` | Small | Removes a recurring papercut |
-| `PropertyMap.from_properties([...])` | Small | The simplest model becomes one line |
-| `to_frame()` for polars/pandas | Small | Compartment tables in papers and reports |
+| `__hash__` on `PropertyMap` | ~~Small~~ | **Done** (Phase 0); see 1.6 |
+| `__len__`, `__getitem__`, `__iter__` | Small | `__len__` done (Phase 0); `__getitem__` / `__iter__` still open |
+| `PropertyMap.from_properties([...])` | ~~Small~~ | **Done** (Phase 0) |
+| `to_frame()` for polars/pandas | ~~Small~~ | **Done** (Phase 0; polars, lazy import) |
 | Serialise a map or its `history` | Medium | Reproducible model structures |
 | A `filter` / `drop` operation | Medium | Excluding impossible combinations after the fact |
-| Consistent `partition` / `group_by` return types | Small | Reduces surprise |
+| Consistent `partition` / `group_by` return types | ~~Small~~ | **Done** (Phase 0; `group_by` returns `Groups`) |
 
 ## Priority 5 — documentation infrastructure
 

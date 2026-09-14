@@ -50,7 +50,7 @@ emit `0`, which is what makes them the two-valued escape hatch from raggedness.
 
 ## Caching
 
-`_kleene` memoises on the **selector value**. Every node in a tree is cached
+`kleene` memoises on the **selector value**. Every node in a tree is cached
 independently, so a shared sub-expression across several queries is evaluated
 once per map:
 

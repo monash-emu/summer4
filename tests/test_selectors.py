@@ -70,3 +70,13 @@ def test_selectors_are_hashable() -> None:
     assert isinstance(sel, SelectorOps)
     cache = {sel: "ok"}
     assert cache[state["S"] & ~state["I"]] == "ok"
+
+
+def test_source_and_dest_compose() -> None:
+    from summer4 import Dest, Source
+
+    state = Property("state", ("S", "I", "R"))
+    edge = Source(state["S"]) & Dest(state["I"])
+    assert isinstance(edge, And)
+    assert edge == And(Source(state["S"]), Dest(state["I"]))
+    assert ~Source(state["I"]) == Not(Source(state["I"]))

@@ -65,23 +65,16 @@ step is unambiguous.
 The taxonomy API is small and coherent. These are the frictions a user will hit,
 in rough order of how often.
 
-### `PropertyMap` is unhashable
+### `PropertyMap` hashing
 
-```python
-{pmap: cached_result}   # TypeError: unhashable type: 'PropertyMap'
-```
+Maps are hashable via a blake2b-16 digest of `codes` and `parent_row` plus
+`properties` and `history`. Equal rebuilt maps share a hash and work as
+`jax.jit` static arguments.
 
-`PropertyMap` sets `eq=False` on the dataclass, defines `__eq__` by value, and
-does not define `__hash__`. Maps therefore cannot be dictionary keys, memoisation
-keys, or JAX pytree auxiliary data. This is item 1 on the spike's own promotion
-list and it blocks the JAX work, not just user convenience.
+### Partial container protocol
 
-### No container protocol
-
-`len(pmap)`, `pmap[0]` and `for row in pmap` all raise. The information is
-available (`pmap.size`, `pmap.to_dicts()[0]`, `iter(pmap.to_dicts())`) but the
-obvious spellings do not work, and `size` is an unusual name for something
-`len()` would normally give.
+`len(pmap)` works (same as `pmap.size`). `pmap[0]` and `for row in pmap` still
+raise; use `pmap.to_dicts()[0]` / `iter(pmap.to_dicts())` for row access.
 
 ### No way to remove compartments
 
@@ -92,11 +85,10 @@ treatment-experienced new diagnoses — and today the only route is to plan the
 stratification order so that `where=` can express the exclusion up front. That
 is not always possible.
 
-### No tabular export
+### Tabular export
 
-`to_dicts()` is the only structured view, despite `polars` being a development
-dependency. `pmap.to_frame()` would be the obvious thing for anyone building a
-compartment table for a paper or a report.
+`to_frame()` returns a polars DataFrame (lazy import) with one column per
+property and nulls for absent traits. `to_dicts()` remains available.
 
 ### No serialisation
 
@@ -106,17 +98,16 @@ selectors are frozen dataclasses — but nothing converts it to and from JSON.
 Reproducing a model structure therefore means re-running the Python that built
 it.
 
-### Inconsistent return types
+### `partition` and `group_by` return types
 
-`partition` returns a `dict`; `group_by` returns a generator. Both are
-"group compartments by properties". The asymmetry is defensible on performance
-grounds and surprising in use.
+`partition` returns a `dict[Trait, ...]`; `group_by` returns a `Groups` mapping
+keyed by `tuple[Trait, ...]`. Both are Mapping-shaped; `partition` still unwraps
+single-property keys and includes empty groups.
 
-### No bulk constructor
+### Bulk constructor
 
-Building a map always starts with `from_property` and chains. There is no
-`PropertyMap.from_properties([state, age, vax])` for the common fully-crossed
-case, so the simplest possible model is four lines instead of one.
+`PropertyMap.from_properties([state, age, vax])` builds a fully-crossed map in
+one call.
 
 ### The `Present` / `Absent` binding question is unresolved
 

@@ -71,6 +71,18 @@ def test_rebuild_is_deterministic(
 
 @settings(max_examples=60, deadline=2000)
 @given(built_maps())
+def test_equal_maps_have_equal_hashes(
+    payload: tuple[list[Property], list[bool], PropertyMap],
+) -> None:
+    props, flags, pm = payload
+    again = _build_map(props, flags)
+    assert pm == again
+    assert hash(pm) == hash(again)
+    assert {pm: "a"}[again] == "a"
+
+
+@settings(max_examples=60, deadline=2000)
+@given(built_maps())
 def test_select_and_is_intersection(
     payload: tuple[list[Property], list[bool], PropertyMap],
 ) -> None:

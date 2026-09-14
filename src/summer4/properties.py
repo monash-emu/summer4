@@ -37,6 +37,11 @@ class Property:
     def __post_init__(self) -> None:
         if not self.name:
             raise ValueError("Property name must be a non-empty string.")
+        if not self.name.isidentifier():
+            raise ValueError(
+                f"Property name {self.name!r} must be a Python identifier "
+                f"(cannot contain '@' or other non-identifier characters)."
+            )
         if not self.traits:
             raise ValueError(f"Property {self.name!r} must have at least one trait.")
         if any(not trait for trait in self.traits):

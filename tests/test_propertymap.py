@@ -139,10 +139,10 @@ def test_group_by_combinations() -> None:
     state, pm = _sir()
     age = Property("age", ("child", "adult"))
     pm = pm.stratify(age)
-    groups = list(pm.group_by(state, age))
+    groups = pm.group_by(state, age)
     assert len(groups) == 6
     seen: set[int] = set()
-    for _key, idx in groups:
+    for _key, idx in groups.items():
         seen.update(int(i) for i in idx)
     assert seen == set(range(pm.size))
 
@@ -151,16 +151,16 @@ def test_group_by_skips_absent() -> None:
     state, pm = _sir()
     sev = Property("severity", ("mild", "severe"))
     pm = pm.stratify(sev, where=state["I"])
-    groups = list(pm.group_by(sev))
+    groups = pm.group_by(sev)
     assert len(groups) == 2
-    covered = {int(i) for _key, idx in groups for i in idx}
+    covered = {int(i) for _key, idx in groups.items() for i in idx}
     assert covered == set(pm.select(sev.present()).tolist())
 
 
 def test_group_by_empty_raises() -> None:
     _state, pm = _sir()
     with pytest.raises(ValueError, match="at least one"):
-        list(pm.group_by())
+        pm.group_by()
 
 
 def test_to_dicts_omits_absent() -> None:
@@ -220,3 +220,90 @@ def test_taxonomy_modules_do_not_import_jax() -> None:
                 assert all(not alias.name.startswith("jax") for alias in node.names)
             if isinstance(node, ast.ImportFrom) and node.module:
                 assert not node.module.startswith("jax")
+
+
+def test_len_matches_size() -> None:
+    _state, pm = _sir()
+    assert len(pm) == pm.size == 3
+
+
+def test_from_properties_is_fully_crossed() -> None:
+    state = Property("state", ("S", "I"))
+    age = Property("age", ("child", "adult"))
+    pm = PropertyMap.from_properties([state, age])
+    assert pm == PropertyMap.from_property(state).stratify(age)
+    assert pm.size == 4
+
+
+def test_from_properties_empty_raises() -> None:
+    with pytest.raises(ValueError, match="at least one"):
+        PropertyMap.from_properties([])
+
+
+def test_public_column_accessors() -> None:
+    state, pm = _sir()
+    age = Property("age", ("child", "adult"))
+    pm = pm.stratify(age)
+    assert pm.column_index(age) == 1
+    assert pm.column_index("age") == 1
+    np.testing.assert_array_equal(pm.column(age), pm.codes[:, 1])
+    assert pm.label(0) == "state=S_age=child"
+
+
+def test_to_frame_uses_null_for_absent() -> None:
+    state, pm = _sir()
+    sev = Property("severity", ("mild", "severe"))
+    pm = pm.stratify(sev, where=state["I"])
+    frame = pm.to_frame()
+    assert frame.columns == ["state", "severity"]
+    assert frame.height == pm.size
+    assert frame["severity"][0] is None
+    assert frame["severity"][1] == "mild"
+
+
+def test_equal_maps_share_hash() -> None:
+    state, pm = _sir()
+    age = Property("age", ("child", "adult"))
+    a = pm.stratify(age)
+    b = pm.stratify(age)
+    assert a == b
+    assert a is not b
+    assert hash(a) == hash(b)
+    assert {a: "ok"}[b] == "ok"
+
+
+def test_rebuilt_map_hits_jit_cache() -> None:
+    from functools import partial
+
+    import jax
+    import jax.numpy as jnp
+
+    state = Property("state", ("S", "I", "R"))
+    a = PropertyMap.from_property(state)
+    b = PropertyMap.from_property(state)
+    c = a.stratify(Property("age", ("child", "adult")))
+    assert a == b and a is not b
+
+    @partial(jax.jit, static_argnums=0)
+    def scale(pmap: PropertyMap, x: jnp.ndarray) -> jnp.ndarray:
+        return x * pmap.size
+
+    x = jnp.asarray(1.0)
+    scale(a, x)
+    size_after_first = scale._cache_size()
+    scale(b, x)
+    assert scale._cache_size() == size_after_first
+    scale(c, x)
+    assert scale._cache_size() == size_after_first + 1
+
+
+def test_source_dest_rejected_on_compartment_map() -> None:
+    from summer4 import Dest, Source
+
+    state, pm = _sir()
+    with pytest.raises(TypeError, match="flow edges"):
+        pm.select(Source(state["I"]))
+    with pytest.raises(TypeError, match="flow edges"):
+        pm.mask(Dest(state["R"]))
+    with pytest.raises(TypeError, match="flow edges"):
+        pm.select(Source(state["S"]) & Dest(state["I"]))
