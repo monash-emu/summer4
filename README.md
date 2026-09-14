@@ -58,6 +58,20 @@ pixi run check-branch
 pixi run bench
 ```
 
+## Documentation
+
+```bash
+pixi run -e docs docs         # build HTML into docs/_build/html
+pixi run -e docs docs-serve   # http://localhost:8765
+pixi run -e docs docs-strict  # warnings become errors
+```
+
+The site has a **user guide** (properties, maps, selectors, ragged
+stratification, partitions, provenance), a **developer guide** (architecture,
+data structures, Kleene evaluation, measured performance, tooling, and the
+`explorations/flows/` spike published as two executed walkthroughs), a partial **textbook** port, and and the generated **API reference**. Every notebook on the site is executed at build time, so a docs
+build is also a test run.
+
 The default environment includes `ipykernel` so example notebooks run in VS Code/Cursor.
 Select the interpreter at `.pixi/envs/default/bin/python`, or run `pixi run register-kernel`
 and choose the **Python (summer4)** kernel.

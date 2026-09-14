@@ -27,6 +27,29 @@ diffrax = "*"
 numpyro = "*"
 optax = "*"
 
+[feature.docs.dependencies]
+python = "3.13.*"
+
+[feature.docs.pypi-dependencies]
+sphinx = ">=8.0,<9"
+myst-nb = ">=1.1"
+myst-parser = ">=4.0"
+pydata-sphinx-theme = ">=0.16"
+sphinx-copybutton = "*"
+sphinx-design = "*"
+sphinxcontrib-mermaid = "*"
+sphinx-autodoc-typehints = "*"
+jupyter-cache = "*"
+linkify-it-py = "*"
+ipykernel = ">=6.29"
+matplotlib = ">=3.8"
+# The flows-spike notebooks in docs/dev/flows/ exercise the JAX backend
+# and plot with Polars + Plotly.
+jax = ">=0.6,<0.7"
+jaxlib = ">=0.6,<0.7"
+polars = ">=1.0"
+plotly = ">=5.24"
+
 [feature.dev.dependencies]
 pytest = ">=8.0"
 pytest-benchmark = "*"
@@ -49,6 +72,7 @@ jupyterlab = ">=4.0"
 default = ["jax06", "dev"]
 latest = ["jaxlatest", "dev"]
 nb = ["jax06", "notebooks", "dev"]
+docs = ["docs"]
 
 [tasks]
 setup = { cmd = "python scripts/setup_hooks.py", description = "Install git hooks (Black format, cleared notebooks, plan copy)" }
@@ -63,4 +87,8 @@ explore-flows = { cmd = "pytest tests/test_explore_flows.py -v", description = "
 check-notebooks = { cmd = "python scripts/check_cleared_notebooks.py", description = "Require committed notebooks to have cleared outputs" }
 bench = { cmd = "pytest benchmarks/ --benchmark-only -v --benchmark-columns=min,max,median,ops", description = "Run taxonomy benchmarks in the current env" }
 bench-json = { cmd = "python scripts/bench_json.py", description = "Write benchmark JSON keyed by JAX version" }
+docs = { cmd = "sphinx-build -b html docs docs/_build/html", env = { PYTHONPATH = "." }, description = "Build the HTML documentation" }
+docs-strict = { cmd = "sphinx-build -b html -W --keep-going docs docs/_build/html", env = { PYTHONPATH = "." }, description = "Build docs with warnings as errors" }
+docs-clean = { cmd = "rm -rf docs/_build", description = "Remove documentation build artifacts" }
+docs-serve = { cmd = "python -m http.server -d docs/_build/html 8765", description = "Serve built documentation locally" }
 notebook = { cmd = "jupyter lab examples/notebooks", description = "Launch JupyterLab on the example notebooks" }

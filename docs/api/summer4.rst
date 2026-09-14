@@ -1,0 +1,39 @@
+summer4
+=======
+
+.. automodule:: summer4
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :member-order: bysource
+   :no-index:
+
+Properties
+----------
+
+.. automodule:: summer4.properties
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :member-order: bysource
+   :no-index:
+
+Property maps
+-------------
+
+.. automodule:: summer4.propertymap
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :member-order: bysource
+   :no-index:
+
+Selectors
+---------
+
+.. automodule:: summer4.selectors
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :member-order: bysource
+   :no-index:

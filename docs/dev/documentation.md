@@ -1,0 +1,87 @@
+# Documentation
+
+```bash
+pixi run -e docs docs         # HTML into docs/_build/html
+pixi run -e docs docs-strict  # warnings become errors
+pixi run -e docs docs-serve   # http://localhost:8765
+pixi run -e docs docs-clean   # remove docs/_build
+```
+
+## Stack
+
+| Piece | Role |
+|---|---|
+| `sphinx` | Build system |
+| `myst-nb` | Markdown (MyST) pages and executed notebooks |
+| `pydata-sphinx-theme` | Theme |
+| `sphinx.ext.autosummary` + `autodoc` | Generated API reference |
+| `sphinx-autodoc-typehints` | Signatures from annotations |
+| `sphinxcontrib-mermaid` | Diagrams |
+| `sphinx-design`, `sphinx-copybutton` | Admonitions, grids, copy buttons |
+| `jupyter-cache` | Notebook execution cache |
+
+The `docs` environment installs **no JAX**. Keep it that way: if a documentation
+page ever needs JAX to build, that is a signal about where the package
+dependency boundary has moved.
+
+## Notebooks on this site
+
+Notebooks are committed **cleared** and executed by Sphinx:
+
+```python
+nb_execution_mode = "cache"
+nb_execution_raise_on_error = True
+nb_execution_cache_path = "_build/.jupyter_cache"
+```
+
+Three rules follow.
+
+1. **Every documented claim must be asserted, not printed.** A cell that prints
+   a number proves nothing on the next build; a cell that asserts it fails the
+   build when the library changes.
+2. **No magics, no shell escapes.** Same rule as `examples/notebooks/`.
+3. **Clear outputs before committing.** `pixi run check-notebooks` enforces
+   this, and the pre-commit hook installed by `pixi run setup` rejects dirty
+   notebooks at commit time.
+
+The execution cache lives under `docs/_build/`, so `docs-clean` forces a full
+re-execution. Use it when a change should have invalidated a page and did not.
+
+## Writing a page
+
+- **User guide** pages are notebooks. They teach one idea, build the smallest
+  map that shows it, and assert the result.
+- **Developer guide** pages are Markdown, except {doc}`performance`, which is a
+  notebook precisely because its claims are measurements.
+- Cross-reference with `{doc}` so the link is checked:
+  ``{doc}`../user/04-ragged-stratification` ``.
+- Reference API objects with `{class}` / `{func}` so they link into the
+  generated reference.
+
+## Honesty rule
+
+This project's documentation covers a small implemented layer inside a much
+larger intended platform. Pages must not describe planned behaviour in the
+present tense. Where a summer2 or textbook capability has no summer4 equivalent,
+say so and link to {doc}`../user/07-from-summer2` or {doc}`../textbook/roadmap`
+rather than writing an example that cannot run.
+
+Every page that makes a coverage claim — {doc}`../textbook/roadmap` in
+particular — should be re-derived from the source repositories when the API
+changes, not edited by hand from memory.
+
+### Publishing work that is not the API
+
+{doc}`flows/index` is the deliberate exception. The flows spike is documented
+because it is real, tested, executable code and the largest body of design work
+in the repository — hiding it would misrepresent the project as much as
+presenting it as an API would. Three rules keep that honest:
+
+1. Every such page opens with a warning admonition naming it as a spike and
+   stating that it is not importable from `summer4`.
+2. The code cells are byte-identical to the notebooks that
+   `pixi run explore-flows` executes as tests, and
+   `tests/test_flows_docs_sync.py` fails if they drift. Regenerate the
+   published copy; never edit it in place.
+3. Coverage claims elsewhere on the site count the spike separately: never
+   conflate "what ships" with "what exists".

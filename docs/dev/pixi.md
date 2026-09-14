@@ -1,0 +1,66 @@
+# Environments with pixi
+
+[pixi](https://pixi.sh) manages the toolchain, the Python dependencies and the
+task table. `pixi.toml` is the single entry point — there is no Makefile and no
+`requirements.txt`.
+
+## Features and environments
+
+Features are dependency groups; environments are combinations of features.
+
+| Environment | Features | Python | JAX | Purpose |
+|---|---|---|---|---|
+| `default` | `jax06`, `dev` | 3.13 | 0.6.x | Primary development and the notebook kernel |
+| `latest` | `jaxlatest`, `dev` | 3.13 | current | Forward-compatibility checks |
+| `nb` | `jax06`, `notebooks`, `dev` | 3.13 | 0.6.x | JupyterLab |
+| `docs` | `docs` | 3.13 | none | Sphinx build |
+
+The JAX matrix exists so that solver work, when it lands, can be benchmarked
+across versions without a flag day. It is currently unexercised by
+`src/summer4`, which depends on NumPy alone — running `pixi run -e docs docs`
+successfully with no JAX installed is a direct check of that.
+
+## Tasks
+
+```bash
+pixi run setup            # install git hooks
+pixi run test             # unit, property and notebook smoke tests
+pixi run test-all         # tests in default and latest
+pixi run lint             # ruff + mypy --strict on src/summer4
+pixi run format           # black, line length 100
+pixi run format-check     # black --check
+pixi run check-notebooks  # reject notebooks with outputs
+pixi run check-branch     # enforce the feature bar
+pixi run bench            # pytest-benchmark table
+pixi run bench-json       # benchmark JSON keyed by JAX version
+pixi run explore-flows    # the flows spike tests and notebooks
+pixi run -e nb notebook   # JupyterLab on examples/notebooks
+pixi run -e docs docs     # build this site
+pixi run -e docs docs-strict   # build with warnings as errors
+pixi run -e docs docs-serve    # serve at http://localhost:8765
+```
+
+## Adding a dependency
+
+Add it to the feature that needs it, not to the workspace, unless every
+environment needs it:
+
+```toml
+[feature.dev.dependencies]
+pytest = ">=8.0"
+
+[feature.docs.pypi-dependencies]
+myst-nb = ">=1.1"
+```
+
+Then `pixi install -e <env>` and commit the updated `pixi.lock`. Keep the lock
+file in the commit that changes `pixi.toml`; a lock that disagrees with the
+manifest is the most common cause of an unreproducible CI run.
+
+```{admonition} Do not add JAX to the package
+:class: warning
+
+`pyproject.toml` keeps `jax` under `[project.optional-dependencies]`. The
+taxonomy layer must stay importable from a NumPy-only environment; the flows and
+solver work will live behind that extra.
+```

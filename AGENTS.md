@@ -41,6 +41,22 @@ Cursor plans must travel with the branch so a merge automatically copies them in
 
 Do not leave the only copy of a plan outside the repository. Do not edit a plan file that was already committed as historical record; add a new plan for follow-up work.
 
+## Documentation
+
+Documentation lives in `docs/` and builds with `pixi run -e docs docs`. Every
+notebook on the site executes at build time (`nb_execution_raise_on_error`), so
+a docs build is a test run — add `pixi run -e docs docs-strict` to your checks
+when a change touches documented behaviour.
+
+Two rules that are easy to get wrong:
+
+- **Do not describe planned behaviour in the present tense.** Where a summer2 or
+  textbook capability has no summer4 equivalent, say so and cite the ledger.
+- **`docs/dev/flows/` is generated.** Its code cells are byte-identical to
+  `explorations/flows/01-flows.ipynb` and `02-flows.ipynb`, and
+  `tests/test_flows_docs_sync.py` enforces that. Edit the spike notebooks and
+  regenerate; never edit the published copies in place.
+
 ## Feature acceptance bar
 
 A branch that adds or changes **features** (new public API, new modelling capability, or user-visible behaviour) is not complete unless it includes all three:
