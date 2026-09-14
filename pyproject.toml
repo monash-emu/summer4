@@ -21,6 +21,9 @@ calibration = [
     "numpyro>=0.16.0",
     "optax>=0.2.0",
 ]
+pandas = [
+    "pandas>=2.0",
+]
 
 [build-system]
 requires = ["hatchling"]

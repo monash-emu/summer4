@@ -39,11 +39,11 @@ reach, and it is the denominator for every percentage on this site.
 | --- | --- | --- | --- | --- | --- |
 | L1 | `CompartmentalModel` | lifecycle | `partial` | `FlowModel` | No times, timestep or infectious_compartments |
 | L2 | `model.finalize()` | lifecycle | `full` | `FlowModel.compile()` | Actualizes every join once |
-| L3 | `model.run()` | lifecycle | `partial` | `euler()` | Fixed step; returns final state only, no trajectory |
+| L3 | `model.run()` | lifecycle | `full` | `CompiledModel.run()` | Returns a `Result`; Euler backend in Phase 2 |
 | L4 | `model.set_initial_population()` | lifecycle | `none` | — | Deferred as a separate later API |
 | L5 | `model.get_initial_population()` | lifecycle | `none` | — |  |
-| L6 | `model.get_outputs_df()` | lifecycle | `none` | — | No results object, no dataframe convention |
-| L7 | `model.get_derived_outputs_df()` | lifecycle | `none` | — |  |
+| L6 | `model.get_outputs_df()` | lifecycle | `full` | `Trace.to_frame` / `to_pandas` | Polars default; pandas optional |
+| L7 | `model.get_derived_outputs_df()` | lifecycle | `full` | `Result` traces via `SavePlan` | Flat named traces; no parallel df namespace |
 | S1 | `Stratification(name, strata)` | stratification | `full` | `Property + PropertyMap.stratify` |  |
 | S2 | `model.stratify_with()` | stratification | `full` | `PropertyMap.stratify` | Returns a new map; summer2 mutates |
 | S3 | `Stratification(compartments=[...])` | stratification | `full` | `stratify(prop, where=selector)` | Generalised from names to a query |
@@ -77,18 +77,18 @@ reach, and it is the denominator for every percentage on this site.
 | P7 | `get_sigmoidal_interpolation_function` | parameters | `none` | — |  |
 | P8 | `get_piecewise_function` | parameters | `none` | — |  |
 | P9 | `get_time_callable` | parameters | `partial` | `compile() -> vf(t, y, params)` | A time callable, but not summer2's graph wrapper |
-| D1 | `request_output_for_flow` | outputs | `none` | — | FlowRef exposes mass to flows, not to the caller |
-| D2 | `request_output_for_compartments` | outputs | `none` | — | partition/group_by give the index sets only |
-| D3 | `request_aggregate_output` | outputs | `none` | — |  |
-| D4 | `request_cumulative_output` | outputs | `none` | — |  |
-| D5 | `request_function_output` | outputs | `none` | — |  |
-| D6 | `request_computed_value_output` | outputs | `none` | — |  |
+| D1 | `request_output_for_flow` | outputs | `none` | — | FlowMass saves exist; edge query surface is Phase 4 |
+| D2 | `request_output_for_compartments` | outputs | `full` | `Compartments(where=)` / `Trace.select` |  |
+| D3 | `request_aggregate_output` | outputs | `full` | `Trace.sum_over` / `total` / `partition` |  |
+| D4 | `request_cumulative_output` | outputs | `full` | `Trace.cumulative()` |  |
+| D5 | `request_function_output` | outputs | `full` | `SaveFn` plus trace arithmetic |  |
+| D6 | `request_computed_value_output` | outputs | `none` | — | `ComputedValue` saves; Phase 4 |
 | D7 | `request_track_modelled_value` | outputs | `none` | — |  |
 | D8 | `add_computed_value_func` | outputs | `full` | `derived_fn hook` | compute_derived_params runs every step |
-| V1 | `solve_ode` | solver | `partial` | `euler()` | Fixed step, final state only |
+| V1 | `solve_ode` | solver | `full` | `CompiledModel.run` over `euler` | Fixed step; adaptive is V2 / Phase 3 |
 | V2 | `SolverType / solver selection` | solver | `none` | — | No adaptive backend, no diffrax |
-| T1 | `ref_date / Epoch` | time | `none` | — |  |
-| T2 | `model.get_epoch()` | time | `none` | — |  |
+| T1 | `ref_date / Epoch` | time | `full` | `Epoch` |  |
+| T2 | `model.get_epoch()` | time | `full` | `Result.times.epoch` / `TimeAxis.epoch` |  |
 <!-- /ledger:api -->
 
 ## Textbook ledger
@@ -101,16 +101,16 @@ published as written.
 | Ch | Title | Status | Blocker |
 | --- | --- | --- | --- |
 | 1 | Infectious disease modelling | `full` | None - prose |
-| 2 | Basic model construction | `partial` | Trajectory, initial population, results frame |
-| 3 | Thinking about flows | `partial` | Trajectory |
-| 4 | Thinking about flow rates | `partial` | Trajectory, sojourn-time outputs |
-| 5 | Series compartments and latency | `partial` | Trajectory |
-| 6 | Post-infection immunity | `partial` | Trajectory |
+| 2 | Basic model construction | `partial` | Initial population |
+| 3 | Thinking about flows | `full` | None |
+| 4 | Thinking about flow rates | `partial` | Sojourn-time / flow outputs (Phase 4) |
+| 5 | Series compartments and latency | `full` | None |
+| 6 | Post-infection immunity | `full` | None |
 | 7 | Obtaining numerical solutions | `partial` | Runge-Kutta backend and solver selection |
-| 8 | Derived outputs | `none` | Derived outputs, results object |
-| 9 | Transmission assumptions | `partial` | Trajectory |
-| 10 | The reproduction number | `partial` | Trajectory, Rt as a derived output |
-| 11 | Cyclical epidemic dynamics | `partial` | Trajectory, phase-plane outputs |
+| 8 | Derived outputs | `partial` | Compartment outputs yes; flow outputs Phase 4 |
+| 9 | Transmission assumptions | `full` | None |
+| 10 | The reproduction number | `partial` | Rt as a derived / flow output (Phase 4) |
+| 11 | Cyclical epidemic dynamics | `full` | None |
 | 12 | Heterogeneous mixing introduction | `none` | Mixing matrices |
 | 13 | Mixing and transmission types | `none` | Mixing matrices, population split |
 | 14 | Assortative mixing | `none` | Mixing matrices, infectiousness adjustments |
@@ -127,15 +127,15 @@ published as written.
 <!-- ledger:summer2docs -->
 | Page | Status | Blocker |
 | --- | --- | --- |
-| `examples/01-basic-model` | `partial` | Trajectory, initial population, results frame |
-| `examples/03-derived-outputs` | `none` | Derived outputs |
-| `examples/04-flow-types` | `partial` | Trajectory, flow outputs |
-| `examples/06-stratification-introduction` | `partial` | Infectiousness adjustments, trajectory |
-| `examples/07-age-stratification` | `partial` | Population split, trajectory |
-| `examples/08-strain-stratification` | `partial` | Strain-aware FOI primitive, trajectory |
+| `examples/01-basic-model` | `partial` | Initial population |
+| `examples/03-derived-outputs` | `partial` | Compartment outputs yes; flow outputs Phase 4 |
+| `examples/04-flow-types` | `partial` | Flow outputs Phase 4 |
+| `examples/06-stratification-introduction` | `partial` | Infectiousness adjustments |
+| `examples/07-age-stratification` | `partial` | Population split |
+| `examples/08-strain-stratification` | `partial` | Strain-aware FOI primitive |
 | `examples/09-mixing-matrices` | `none` | Mixing matrices |
-| `examples/10-derived-outputs-stratified` | `none` | Derived outputs |
-| `examples/11-flows-between-strata` | `partial` | Trajectory, compartment outputs |
+| `examples/10-derived-outputs-stratified` | `partial` | Flow / stratified derived outputs Phase 4 |
+| `examples/11-flows-between-strata` | `full` | None |
 | `detailed/time-varying-functions` | `partial` | Interpolation and piecewise helpers |
 | `detailed/InitialPopulationGraphobject` | `none` | Initial population, parameters |
 <!-- /ledger:summer2docs -->
@@ -148,24 +148,22 @@ above rather than against a narrative.
 
 WP1 (promote the flows spike into `summer4`) is **applied**. Flows, rates,
 adjustments, `EdgeMap`, `CompiledModel` and a JAX Euler ship in
-`summer4.flows`. The "today" row below is post-promotion.
+`summer4.flows`. WP2 (trajectories and a results object, including real-world
+time) is **applied**: `CompiledModel.run` returns a queryable `Result`.
 
 `Present` and `Absent` are **non-binding** in flow pairing: they name a property
 (`selector_properties`) but do not bind it (`selector_values`). Binding is
 `Trait` / `IsIn` only. `strict_pairing=True` raises when an unbound property
 would move people.
 
-### WP2 — Trajectories and a results object
+### WP2 — Trajectories and a results object (applied)
 
-**Closes:** L3 L6 L7 V1 (to `full`) · **Unblocks:** textbook 3, 4, 7, 9, 10, 11
-and deepens 2, 5, 6; summer2 `01-basic-model`, `04-flow-types`,
-`11-flows-between-strata`
+**Closes:** L3 L6 L7 V1 T1 T2 D2 D3 D4 D5 (to `full`) · **Unblocks:** textbook
+3, 5, 6, 9, 11 and deepens 2, 4, 8, 10; summer2 `11-flows-between-strata`
 
-The highest-value package in the list, and among the smallest. The compiled Euler
-already uses `lax.scan`; returning stacked per-step states instead of only the
-carry is a few lines. What is missing is the **convention**: a results type, one
-dataframe library, one plotting idiom. Nothing else in this ledger converts
-"expressible" into "publishable". Plan phase: `feat/results`.
+`CompiledModel.run` returns a `Result` of named `Trace`s. `Epoch` / `TimeAxis`
+map calendar dates; `SavePlan` names what to keep. Query surface covers select,
+aggregate, cumulative, calendar resample, rolling, and interpolated `at_times`.
 
 ### WP3 — Initial population
 
@@ -175,16 +173,14 @@ dataframe library, one plotting idiom. Nothing else in this ledger converts
 {doc}`../user/06-immutability-and-provenance`. This is an API wrapper over
 mechanics that exist.
 
-### WP4 — Derived outputs
+### WP4 — Flow outputs and polarity queries
 
-**Closes:** D1–D7 · **Unblocks:** textbook 8, 10; summer2 `03-derived-outputs`,
-`10-derived-outputs-stratified`
+**Closes:** D1 D6 D7 · **Unblocks:** textbook 8, 10 fully; summer2
+`03-derived-outputs`, `10-derived-outputs-stratified`
 
-`partition` and `group_by` already produce the index sets that compartment
-outputs aggregate over. The request mechanism, the post-integration stage and
-the whitelist are the new work. Depends on WP2. Plan phases: flow-outputs
-(`feat/flow-outputs`) then sparse-targets (`feat/sparse-targets`, no API-row
-delta).
+`FlowMass` saves already materialise per-edge mass. The edge query surface
+(`sum_over(..., side=)`, `.integrate()`, `.incidence()`) and computed-value
+capture are the remaining work. Plan phase: `feat/flow-outputs`.
 
 ### WP5 — Time-varying function library
 
@@ -209,12 +205,6 @@ it moves people, not transmission.
 A diffrax backend behind the existing solver seam, plus solver selection.
 `pyproject.toml` already declares the extra. Plan phase: `feat/diffrax-solver`.
 
-### WP8 — Real-world time
-
-**Closes:** T1 T2
-
-Epoch handling so model times can be dates. Needed by every applied example.
-
 ### WP9 — Contact survey data
 
 **Unblocks:** textbook 16, 17, 18, 19
@@ -238,13 +228,12 @@ table below is **computed** from these declarations by
 <!-- ledger:packages -->
 | WP | Name | Closes |
 | --- | --- | --- |
-| WP2 | Trajectories and a results object | L3 L6 L7 V1 |
+| WP2 | Trajectories and a results object | L3 L6 L7 V1 T1 T2 D2 D3 D4 D5 |
 | WP3 | Initial population | L4 L5 S8 |
-| WP4 | Derived outputs | D1 D2 D3 D4 D5 D6 D7 |
+| WP4 | Flow outputs and polarity queries | D1 D6 D7 |
 | WP5 | Time-varying function library | P5 P6 P7 P8 |
 | WP6 | Force of infection and mixing | F7 F8 A4 M1 |
 | WP7 | Adaptive solver | V2 |
-| WP8 | Real-world time | T1 T2 |
 | WP9 | Contact survey data | *(no API rows; unblocks textbook 16-19)* |
 | WP10 | Calibration | *(no API rows; unblocks textbook 20)* |
 <!-- /ledger:packages -->
@@ -254,14 +243,13 @@ table below is **computed** from these declarations by
 <!-- ledger:progression -->
 | After | API rows at `full` | Share |
 | --- | --- | --- |
-| today | 22 / 52 | 42% |
-| WP2 | 26 / 52 | 50% |
-| WP3 | 29 / 52 | 56% |
-| WP4 | 36 / 52 | 69% |
-| WP5 | 40 / 52 | 77% |
-| WP6 | 44 / 52 | 85% |
-| WP7 | 45 / 52 | 87% |
-| WP8 | 47 / 52 | 90% |
+| today | 32 / 52 | 62% |
+| WP2 | 32 / 52 | 62% |
+| WP3 | 35 / 52 | 67% |
+| WP4 | 38 / 52 | 73% |
+| WP5 | 42 / 52 | 81% |
+| WP6 | 46 / 52 | 88% |
+| WP7 | 47 / 52 | 90% |
 | WP9 | 47 / 52 | 90% |
 | WP10 | 47 / 52 | 90% |
 <!-- /ledger:progression -->
@@ -297,9 +285,7 @@ API shapes.
   not apply.
 - `SI` and `SIS` share a compartment map; the distinction lives in the flows.
   With `FlowModel` they are different objects.
-- The flows layer scoped out timeseries, so `euler` returns only the final
-  state. That was a deliberate decision, and it is why WP2 is the binding
-  constraint: every summer2 notebook and almost every textbook chapter ends by
-  plotting a trajectory.
+- The flows layer originally scoped out timeseries; WP2 lands `CompiledModel.run`
+  and a queryable `Result`, so trajectories are now first-class.
 - No user research exists. Every satisfaction claim on this site is a heuristic
   evaluation; see {doc}`user-satisfaction`.

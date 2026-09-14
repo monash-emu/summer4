@@ -47,3 +47,33 @@ Flows
    :show-inheritance:
    :member-order: bysource
    :no-index:
+
+Time
+----
+
+.. automodule:: summer4.time
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :member-order: bysource
+   :no-index:
+
+Results
+-------
+
+.. automodule:: summer4.results
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :member-order: bysource
+   :no-index:
+
+JAX arrays
+----------
+
+.. automodule:: summer4.jax
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :member-order: bysource
+   :no-index:

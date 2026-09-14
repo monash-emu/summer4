@@ -7,14 +7,13 @@ flows with summer4.
 :class: important
 
 Chapters 1–6 document the **compartment taxonomy**. Chapter 8 documents
-**flows**: named transitions over a map, `CompiledModel`, edge queries with
-`Source` / `Dest`, and a fixed-step Euler that returns the **final state
-only**.
+**flows**: named transitions over a map, `CompiledModel`, and edge queries with
+`Source` / `Dest`. Chapter 9 documents **running and results**:
+`CompiledModel.run`, `SavePlan`, `Result` / `Trace`, and `Epoch`.
 
-There is no results object, trajectory, or derived-output request API yet, so
-there are no chapters on plotting outputs or fitting a model. Chapter 7 maps
-the summer2 vocabulary onto what exists and names what does not;
-{doc}`../evaluation/index` quantifies the gap.
+Flow-output polarity queries and calibration targets are still ahead;
+{doc}`../evaluation/index` quantifies the gap. Chapter 7 maps the summer2
+vocabulary onto what exists.
 ```
 
 ```{toctree}
@@ -28,15 +27,17 @@ the summer2 vocabulary onto what exists and names what does not;
 06-immutability-and-provenance
 07-from-summer2
 08-flows
+09-running-and-results
 ```
 
 ## Reading order
 
 If you have never used summer, read them in order — each chapter builds the map
-the next one queries, and chapter 8 compiles flows over that map.
+the next one queries; chapter 8 compiles flows over that map; chapter 9 runs
+and queries results.
 
 If you are coming from summer2 or summer3, start with {doc}`07-from-summer2`,
-then read {doc}`04-ragged-stratification` and {doc}`08-flows`. Ragged
-stratification with three-valued logic is the one genuinely new idea in the
-taxonomy layer, and it changes what `~` means compared with every earlier
-version of summer.
+then read {doc}`04-ragged-stratification`, {doc}`08-flows`, and
+{doc}`09-running-and-results`. Ragged stratification with three-valued logic is
+the one genuinely new idea in the taxonomy layer, and it changes what `~` means
+compared with every earlier version of summer.

@@ -85,6 +85,33 @@ compartment {class}`PropertyMap` they raise.
    identity_join
 ```
 
+### Time and results
+
+```{eval-rst}
+.. currentmodule:: summer4
+
+.. autosummary::
+   :toctree: generated
+   :nosignatures:
+
+   Epoch
+   TimeAxis
+   TimeGrouping
+   RollingSpec
+   SavePlan
+   SaveRequest
+   Compartments
+   FlowMass
+   ComputedValue
+   SaveFn
+   EVERYTHING
+   Result
+   Trace
+   SolverInfo
+   PropertyData
+   State
+```
+
 ### Rates and adjustments
 
 ```{eval-rst}
@@ -108,8 +135,8 @@ compartment {class}`PropertyMap` they raise.
 
 ## What is not here
 
-There is no results object, derived-output *request* API, mixing matrix,
-force-of-infection primitive, interpolation helpers, initial-population
-wrapper, or adaptive solver selection. {func}`euler` returns the final state
-only. See {doc}`../evaluation/feature-completeness` for the full accounting and
+There is no flow-output polarity query surface (incidence by edge with
+`side=`), mixing matrix, force-of-infection primitive, interpolation helpers,
+initial-population wrapper, or adaptive solver selection. See
+{doc}`../evaluation/feature-completeness` for the full accounting and
 {doc}`../user/07-from-summer2` for the summer2 symbols that have no equivalent.

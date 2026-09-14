@@ -19,18 +19,17 @@ gaps
 |---|---|
 | Public API symbols | 40 |
 | Package source | taxonomy (NumPy) plus `summer4.flows` and `summer4.jax` |
-| summer2 API surface exercised by its own docs, complete in summer4 | **22 of 52 (42%)** |
-| … with any working route (complete or partial) | 31 of 52 (60%) |
-| summer2 documentation notebooks reproducible as runnable summer4 | **0 of 11** (7 partially) |
-| summer textbook chapters reproducible as runnable summer4 | **1 of 20** (9 more partially) |
-| Implemented layers of the intended stack | taxonomy + flows; no results object |
+| summer2 API surface exercised by its own docs, complete in summer4 | **32 of 52 (62%)** |
+| … with any working route (complete or partial) | 39 of 52 (75%) |
+| summer2 documentation notebooks reproducible as runnable summer4 | **1 of 11** (8 partially) |
+| summer textbook chapters reproducible as runnable summer4 | **6 of 20** (5 more partially) |
+| Implemented layers of the intended stack | taxonomy + flows + results |
 | Ceiling of the planned roadmap (WP2–WP10) | 47 of 52 (90%) — see {doc}`coverage-ledger` |
 
-summer4 ships a compartment taxonomy and a flows layer: declare a map, attach
-named flows, compile to a `CompiledModel`, evaluate a JAX vector field, and
-take a fixed-step Euler to a **final state**. There is no trajectory, results
-object or derived-output request API, so no summer2 notebook or textbook
-chapter that ends by plotting a run is publishable yet.
+summer4 ships a compartment taxonomy, a flows layer, and a results layer:
+declare a map, attach named flows, compile to a `CompiledModel`, and
+`run()` to a queryable `Result`. Flow-output polarity queries and an adaptive
+solver are still ahead.
 
 ## How to read this section
 

@@ -130,6 +130,6 @@ everything around a *run*.
 | Interpolation helpers | `get_linear_interpolation_function`, `get_sigmoidal_interpolation_function`, `get_piecewise_function` |
 | Adaptive solver | `SolverType`, backend selection |
 | Derived output requests | `request_output_for_*`, `request_aggregate_output`, `request_cumulative_output`, … |
-| Results | `get_outputs_df`, `get_derived_outputs_df` — `euler` returns a final state only |
+| Results | `Result` / `Trace.to_frame` / `to_pandas` via `CompiledModel.run` |
 | Real-world time | `ref_date`, `get_epoch` |
 | Calibration | everything in the summer textbook chapter 20 |

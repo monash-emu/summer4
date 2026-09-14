@@ -7,7 +7,7 @@ from summer4.flows.actualize import (
     TransitionEdges,
     actualize,
 )
-from summer4.flows.compiled import CompiledModel, FlowModel, euler, numpy_euler
+from summer4.flows.compiled import CompiledModel, FlowModel, SaveContext, euler, numpy_euler
 from summer4.flows.edges import EdgeMap, EdgeRoles
 from summer4.flows.join import (
     TraitChain,
@@ -46,6 +46,7 @@ __all__ = [
     "FlowRef",
     "Multiply",
     "Overwrite",
+    "SaveContext",
     "TraitChain",
     "TraitMatrix",
     "Transform",

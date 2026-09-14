@@ -347,6 +347,17 @@ def _eval_derived(derived_fn: DerivedFn | None, params: object, y_arr: Any, t: o
     return derived_fn(params, y=y_arr, t=t)
 
 
+@dataclass(frozen=True, slots=True)
+class SaveContext:
+    """Snapshot of one field evaluation for save functions."""
+
+    t: Any
+    y: Any
+    dy: Any
+    derived: Any
+    flows: Mapping[str, Any]
+
+
 @dataclass(frozen=True, slots=True, eq=False)
 class CompiledModel:
     """Static compiled flows over one :class:`PropertyMap`.
@@ -356,8 +367,8 @@ class CompiledModel:
     adjust masks) as well as topology, so two models that differ only in split
     proportions do not collide in the jit cache.
 
-    ``derived_fn`` and :class:`Transform` callables hash by identity, so a lambda
-    defined inside a loop retraces every call.
+    ``derived_fn``, :class:`Transform` callables, and ``SaveFn.fn`` hash by
+    identity, so a lambda defined inside a loop retraces every call.
     """
 
     pmap: PropertyMap
@@ -389,14 +400,14 @@ class CompiledModel:
         except KeyError:
             raise KeyError(f"Unknown flow {name!r}. Known: {list(self.edge_maps)}") from None
 
-    def vector_field(self, t: object, y: object, params: object) -> Any:
-        """Return ``dy/dt`` for state ``y`` (JAX arrays or :class:`PropertyData`)."""
+    def observe(self, t: object, y: object, params: object) -> SaveContext:
+        """Evaluate the field once and return ``dy`` plus per-flow masses."""
         import jax.numpy as jnp
 
         from summer4.jax.propertydata import PropertyData
+        from summer4.jax.state import State, unpack_state
 
-        y_pd: PropertyData | None = y if isinstance(y, PropertyData) else None
-        y_arr: Any = y_pd.data if y_pd is not None else jnp.asarray(y)
+        y_arr, rebox = unpack_state(y, self.pmap)
         derived = _eval_derived(self.derived_fn, params, y_arr, t)
         dy: Any = jnp.zeros_like(y_arr)
         flow_values: dict[str, Any] = {}
@@ -442,9 +453,196 @@ class CompiledModel:
                     dy = _scatter_add(dy, src_idx, -mass)
                     dy = _scatter_add(dy, dest_idx, mass)
                     flow_values[name] = mass
-        if y_pd is not None:
-            return y_pd._with_data(dy)
-        return dy
+        y_boxed = rebox(y_arr) if not isinstance(y, (PropertyData, State)) else y
+        if isinstance(y, State):
+            y_out: Any = y
+            dy_out: Any = State(
+                compartments=PropertyData(y.compartments.pmap, dy),
+                ledgers=y.ledgers,
+            )
+        elif isinstance(y, PropertyData):
+            y_out = y
+            dy_out = y._with_data(dy)
+        else:
+            y_out = y_boxed
+            dy_out = dy
+        return SaveContext(t=t, y=y_out, dy=dy_out, derived=derived, flows=flow_values)
+
+    def vector_field(self, t: object, y: object, params: object) -> Any:
+        """Return ``dy/dt`` for state ``y`` (JAX arrays, PropertyData, or State)."""
+        return self.observe(t, y, params).dy
+
+    def expand(self, plan: Any) -> Any:
+        """Fill an empty (EVERYTHING) plan with compartments, flows, and computed paths."""
+        from summer4.results.plan import (
+            Compartments,
+            ComputedValue,
+            FlowMass,
+            SavePlan,
+            SaveRequest,
+        )
+
+        if not isinstance(plan, SavePlan):
+            raise TypeError(f"Expected SavePlan, got {type(plan).__name__}.")
+        if plan.requests:
+            return plan
+        requests: dict[str, SaveRequest] = {
+            "compartments": SaveRequest(Compartments()),
+        }
+        for name in self.order:
+            requests[name] = SaveRequest(FlowMass(flow=name))
+        for path in self.computed_paths:
+            key = ".".join(path)
+            requests[key] = SaveRequest(ComputedValue(path=path))
+        return SavePlan(
+            requests=requests,
+            ts=plan.ts,
+            dense=plan.dense,
+            solver_stats=plan.solver_stats,
+        )
+
+    def describe(
+        self,
+        plan: Any,
+        *,
+        t0: float = 0.0,
+        y0: object | None = None,
+        n_saves: int | None = None,
+    ) -> Any:
+        """Return output shapes and memory footprint without solving."""
+        import jax
+
+        from summer4.jax.propertydata import PropertyData
+        from summer4.results.eval import build_save_fn
+        from summer4.results.plan import OutputShape, PlanDescription, SavePlan
+
+        expanded = self.expand(plan)
+        if not isinstance(expanded, SavePlan):
+            raise TypeError("expand must return SavePlan")
+        if y0 is None:
+            y0 = PropertyData.wrap(self.pmap, np.zeros(self.pmap.size))
+        save_fn = build_save_fn(expanded, pmap=self.pmap, edge_maps=dict(self.edge_maps))
+
+        def _one(t: object, y: object, params: object) -> Any:
+            ctx = self.observe(t, y, params)
+            return save_fn(ctx)
+
+        try:
+            shaped = jax.eval_shape(_one, t0, y0, None)
+        except Exception as exc:
+            raise ValueError(
+                f"SavePlan failed shape inference (SaveFn must return statically "
+                f"shaped arrays): {exc}"
+            ) from exc
+
+        if n_saves is not None:
+            n = int(n_saves)
+        elif expanded.ts is not None:
+            n = int(np.asarray(expanded.ts).size)
+        else:
+            n = 1
+
+        outputs: list[OutputShape] = []
+        total = 0
+        for key in expanded.requests:
+            leaf = shaped[key]
+            if hasattr(leaf, "data"):
+                leaf = leaf.data
+            shape = tuple(int(s) for s in getattr(leaf, "shape", ()))
+            full_shape = (n, *shape)
+            dtype = str(getattr(leaf, "dtype", "float64"))
+            itemsize = np.dtype(dtype).itemsize if dtype else 8
+            nbytes = int(np.prod(full_shape)) * int(itemsize)
+            outputs.append(OutputShape(key=key, shape=full_shape, dtype=dtype, nbytes=nbytes))
+            total += nbytes
+        return PlanDescription(outputs=tuple(outputs), n_saves=n, total_nbytes=total)
+
+    def run(
+        self,
+        params: object,
+        y0: object,
+        *,
+        t0: float,
+        t1: float | None = None,
+        dt: float,
+        steps: int | None = None,
+        save: Any = None,
+        solver: str = "euler",
+        epoch: Any = None,
+    ) -> Any:
+        """Integrate and return a :class:`~summer4.results.Result`.
+
+        Exactly one of ``t1`` / ``steps``. ``euler`` stays the low-level seam;
+        Phase 3 swaps diffrax in behind ``solver=``.
+        """
+        from summer4.results.eval import dims_for_quantity
+        from summer4.results.plan import EVERYTHING, SavePlan
+        from summer4.results.result import Result, SolverInfo
+        from summer4.results.trace import Trace
+        from summer4.time import Epoch, TimeAxis
+
+        if save is None:
+            save = EVERYTHING
+        if not isinstance(save, SavePlan):
+            raise TypeError(f"save must be a SavePlan, got {type(save).__name__}.")
+        if solver != "euler":
+            raise ValueError(f"Unsupported solver {solver!r}; Phase 2 supports 'euler' only.")
+        if (t1 is None) == (steps is None):
+            raise ValueError("Provide exactly one of t1 or steps.")
+        if steps is None:
+            assert t1 is not None
+            if dt <= 0:
+                raise ValueError(f"dt must be > 0, got {dt}.")
+            steps = int(round((float(t1) - float(t0)) / float(dt)))
+            if steps < 0:
+                raise ValueError("t1 must be >= t0.")
+        n_steps = int(steps)
+
+        expanded = self.expand(save)
+        # Default save grid: include t0 and every step endpoint
+        if expanded.ts is None:
+            ts = t0 + dt * np.arange(n_steps + 1, dtype=np.float64)
+        else:
+            ts = np.asarray(expanded.ts, dtype=np.float64)
+
+        times = TimeAxis(
+            values=ts,
+            epoch=epoch if isinstance(epoch, Epoch) else epoch,
+            kind="grid",
+        )
+
+        saved = _euler_save(
+            self,
+            t0=t0,
+            y0=y0,
+            params=params,
+            dt=float(dt),
+            steps=n_steps,
+            ts=ts,
+            plan=expanded,
+        )
+
+        traces: dict[str, Trace] = {}
+        for key, req in expanded.requests.items():
+            dims = dims_for_quantity(req.what)
+            raw = saved[key]
+            from summer4.jax.propertydata import PropertyData
+            from summer4.results.plan import Compartments
+
+            if (
+                isinstance(req.what, Compartments)
+                and req.what.sum_over is None
+                and req.what.where is None
+            ):
+                values: Any = PropertyData(self.pmap, raw)
+            else:
+                values = raw
+            traces[key] = Trace(times=times, values=values, dims=dims)
+
+        solver_info = (
+            SolverInfo(solver="euler", num_steps=n_steps) if expanded.solver_stats else None
+        )
+        return Result(times=times, traces=traces, solver=solver_info)
 
     def __hash__(self) -> int:
         return hash(self._digest)
@@ -453,6 +651,131 @@ class CompiledModel:
         if not isinstance(other, CompiledModel):
             return NotImplemented
         return self._digest == other._digest
+
+
+def _is_arithmetic_subgrid(ts: NDArray[np.float64], t0: float, dt: float) -> bool:
+    """True when ``ts`` is an arithmetic subgrid of the Euler step grid including t0."""
+    if ts.size == 0:
+        return False
+    if abs(float(ts[0]) - float(t0)) > 1e-9 * max(1.0, abs(t0)):
+        return False
+    steps = (ts - t0) / dt
+    if not np.allclose(steps, np.round(steps), atol=1e-6):
+        return False
+    rounded = np.round(steps).astype(np.int64)
+    if rounded.size >= 2:
+        diffs = np.diff(rounded)
+        if not np.all(diffs == diffs[0]) or diffs[0] <= 0:
+            return False
+    return True
+
+
+def _euler_save(
+    model: CompiledModel,
+    *,
+    t0: float,
+    y0: object,
+    params: object,
+    dt: float,
+    steps: int,
+    ts: NDArray[np.float64],
+    plan: Any,
+) -> dict[str, Any]:
+    """Integrate with Euler and evaluate the save plan on ``ts``."""
+    import jax
+    import jax.numpy as jnp
+
+    from summer4.jax.propertydata import PropertyData
+    from summer4.jax.state import State, unpack_state
+    from summer4.results.eval import build_save_fn
+
+    save_fn = build_save_fn(plan, pmap=model.pmap, edge_maps=dict(model.edge_maps))
+    y_arr, rebox = unpack_state(y0, model.pmap)
+
+    def observe_arr(t: Any, y: Any) -> Any:
+        y_in = rebox(y)
+        return model.observe(t, y_in, params)
+
+    def snapshot(t: Any, y: Any) -> dict[str, Any]:
+        ctx = observe_arr(t, y)
+        raw = save_fn(ctx)
+        out: dict[str, Any] = {}
+        for k, v in raw.items():
+            out[k] = v.data if isinstance(v, PropertyData) else jnp.asarray(v)
+        return out
+
+    # Shape template
+    init_snap = snapshot(jnp.asarray(t0), y_arr)
+
+    # Nested scan fast path when ts is an arithmetic subgrid of the step grid.
+    if _is_arithmetic_subgrid(ts, t0, dt):
+        stride = int(round((float(ts[1]) - float(ts[0])) / dt)) if ts.size > 1 else max(steps, 1)
+        n_saves = int(ts.size)
+
+        def outer_body(
+            carry: tuple[Any, Any, Any], unused: Any
+        ) -> tuple[tuple[Any, Any, Any], dict[str, Any]]:
+            del unused
+            t, y, k = carry
+            snap = snapshot(t, y)
+
+            def step(i: Any, ty: tuple[Any, Any]) -> tuple[Any, Any]:
+                del i
+                tt, yy = ty
+                ctx = observe_arr(tt, yy)
+                dy_val = ctx.dy
+                if isinstance(dy_val, State):
+                    dy_a = dy_val.compartments.data
+                elif isinstance(dy_val, PropertyData):
+                    dy_a = dy_val.data
+                else:
+                    dy_a = dy_val
+                return tt + dt, yy + dt * dy_a
+
+            do_step = k < (n_saves - 1)
+
+            def do_stride(ty: tuple[Any, Any]) -> tuple[Any, Any]:
+                result: tuple[Any, Any] = jax.lax.fori_loop(0, stride, step, ty)
+                return result
+
+            t2, y2 = jax.lax.cond(do_step, do_stride, lambda ty: ty, (t, y))
+            return (t2, y2, k + 1), snap
+
+        (_tf, _yf, _), snaps = jax.lax.scan(
+            outer_body, (jnp.asarray(t0), y_arr, jnp.asarray(0)), xs=None, length=n_saves
+        )
+        return {k: snaps[k] for k in init_snap}
+
+    # General path: stack all step states, interpolate onto ts, vmap observe.
+    def body(carry: tuple[Any, Any], unused: Any) -> tuple[tuple[Any, Any], Any]:
+        del unused
+        t, y = carry
+        ctx = observe_arr(t, y)
+        dy_val = ctx.dy
+        if isinstance(dy_val, State):
+            dy_a = dy_val.compartments.data
+        elif isinstance(dy_val, PropertyData):
+            dy_a = dy_val.data
+        else:
+            dy_a = dy_val
+        return (t + dt, y + dt * dy_a), y
+
+    (_t_final, y_final), ys = jax.lax.scan(body, (jnp.asarray(t0), y_arr), xs=None, length=steps)
+    ys_all = jnp.concatenate([ys, y_final[None, ...]], axis=0)
+    step_ts = t0 + dt * np.arange(steps + 1, dtype=np.float64)
+
+    from summer4.time import TimeAxis
+
+    axis = TimeAxis(values=step_ts, kind="grid")
+    idx, w = axis.weights_for(ts)
+    idx_j = jnp.asarray(idx)
+    w_j = jnp.asarray(w)
+    y_left = ys_all[idx_j[:, 0]]
+    y_right = ys_all[idx_j[:, 1]]
+    y_at = w_j[:, 0:1] * y_left + w_j[:, 1:2] * y_right
+
+    snaps = jax.vmap(snapshot)(jnp.asarray(ts), y_at)
+    return {k: snaps[k] for k in init_snap}
 
 
 class FlowModel:
@@ -514,24 +837,27 @@ def _euler_jax(
     import jax.numpy as jnp
 
     from summer4.jax.propertydata import PropertyData
+    from summer4.jax.state import State, unpack_state
 
-    y_pd = y0 if isinstance(y0, PropertyData) else None
-    y_arr: Any = y_pd.data if y_pd is not None else jnp.asarray(y0)
+    y_arr, rebox = unpack_state(y0)
     t0_j: Any = jnp.asarray(t0)
     dt_j: Any = jnp.asarray(dt)
 
     def body(carry: tuple[Any, Any], unused: Any) -> tuple[tuple[Any, Any], None]:
         del unused
         t, y = carry
-        y_in = y_pd._with_data(y) if y_pd is not None else y
+        y_in = rebox(y)
         dy = vf(t, y_in, params)
-        dy_arr = dy.data if isinstance(dy, PropertyData) else dy
+        if isinstance(dy, State):
+            dy_arr = dy.compartments.data
+        elif isinstance(dy, PropertyData):
+            dy_arr = dy.data
+        else:
+            dy_arr = dy
         return (t + dt_j, y + dt_j * dy_arr), None
 
     (_t_final, y_final), _ = jax.lax.scan(body, (t0_j, y_arr), xs=None, length=int(steps))
-    if y_pd is not None:
-        return y_pd._with_data(y_final)
-    return y_final
+    return rebox(y_final)
 
 
 def euler(
@@ -545,8 +871,8 @@ def euler(
 ) -> Any:
     """Forward Euler via ``lax.scan``: ``y <- y + dt * vf(t, y, params)``.
 
-    Returns the final state only. For a NumPy reference stepper see
-    :func:`numpy_euler`.
+    Returns the final state only. For trajectories use :meth:`CompiledModel.run`.
+    For a NumPy reference stepper see :func:`numpy_euler`.
     """
     if steps < 0:
         raise ValueError(f"steps must be >= 0, got {steps}.")
@@ -564,6 +890,7 @@ def numpy_euler(
 ) -> Any:
     """NumPy reference Euler loop. Used in tests; not the compiled JAX path."""
     from summer4.jax.propertydata import PropertyData
+    from summer4.jax.state import State, unpack_state
 
     if steps < 0:
         raise ValueError(f"steps must be >= 0, got {steps}.")
@@ -572,10 +899,13 @@ def numpy_euler(
     dt_f = float(dt)
     for _ in range(int(steps)):
         dy = vf(t, y, params)
-        if isinstance(y, PropertyData):
-            dy_data = dy.data if isinstance(dy, PropertyData) else dy
-            y = y._with_data(np.asarray(y.data) + dt_f * np.asarray(dy_data))
+        y_arr, rebox = unpack_state(y)
+        if isinstance(dy, State):
+            dy_data = dy.compartments.data
+        elif isinstance(dy, PropertyData):
+            dy_data = dy.data
         else:
-            y = np.asarray(y) + dt_f * np.asarray(dy)
+            dy_data = dy
+        y = rebox(np.asarray(y_arr) + dt_f * np.asarray(dy_data))
         t = np.asarray(t) + dt_f
     return y
