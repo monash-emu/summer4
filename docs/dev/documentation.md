@@ -63,12 +63,12 @@ re-execution. Use it when a change should have invalidated a page and did not.
 This project's documentation covers a small implemented layer inside a much
 larger intended platform. Pages must not describe planned behaviour in the
 present tense. Where a summer2 or textbook capability has no summer4 equivalent,
-say so and link to {doc}`../user/07-from-summer2` or {doc}`../textbook/roadmap`
-rather than writing an example that cannot run.
+say so and link to {doc}`../evaluation/feature-completeness` rather than writing
+an example that cannot run.
 
-Every page that makes a coverage claim — {doc}`../textbook/roadmap` in
-particular — should be re-derived from the source repositories when the API
-changes, not edited by hand from memory.
+Every page that makes a coverage claim — {doc}`../evaluation/docs-coverage` and
+{doc}`../evaluation/if-promoted` in particular — should be re-derived from the
+source repositories when the API changes, not edited by hand from memory.
 
 ### Publishing work that is not the API
 
@@ -83,5 +83,6 @@ presenting it as an API would. Three rules keep that honest:
    `pixi run explore-flows` executes as tests, and
    `tests/test_flows_docs_sync.py` fails if they drift. Regenerate the
    published copy; never edit it in place.
-3. Coverage claims elsewhere on the site count the spike separately: never
-   conflate "what ships" with "what exists".
+3. Coverage claims elsewhere on the site count the spike separately — see
+   {doc}`../evaluation/feature-completeness` for what ships and
+   {doc}`../evaluation/if-promoted` for what promotion would add.

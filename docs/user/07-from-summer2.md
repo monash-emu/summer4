@@ -136,5 +136,6 @@ textbook as runnable material.
 | Calibration | everything in the summer textbook chapter 20 |
 
 Design work for the flows, rates and adjustment portion of that list exists as a
-spike under `explorations/flows/`; see {doc}`../dev/flows/index`. It is not
+spike under `explorations/flows/`; see {doc}`../dev/flows/index`, and
+{doc}`../evaluation/if-promoted` for what promoting it would be worth. It is not
 importable as part of `summer4` and nothing on this site depends on it.

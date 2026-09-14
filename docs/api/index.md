@@ -55,5 +55,5 @@ type Selector = Trait | IsIn | Present | Absent | Everything | Nothing | And | O
 ## What is not here
 
 There is no model, flow, rate, parameter, solver, derived-output or results API.
-See {doc}`../user/07-from-summer2` for the summer2 symbols that have no
-equivalent.
+See {doc}`../evaluation/feature-completeness` for the full accounting and
+{doc}`../user/07-from-summer2` for the summer2 symbols that have no equivalent.

@@ -13,7 +13,8 @@ built.
 
 There is no model, flow, rate, solver or derived-output API yet, so there are no
 chapters on running a model, fitting one, or plotting its outputs. Chapter 7
-maps the summer2 vocabulary onto what exists and names what does not.
+maps the summer2 vocabulary onto what exists and names what does not;
+{doc}`../evaluation/index` quantifies the gap.
 ```
 
 ```{toctree}

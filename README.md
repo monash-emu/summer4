@@ -58,6 +58,17 @@ pixi run check-branch
 pixi run bench
 ```
 
+## Coverage
+
+`docs/evaluation/coverage-ledger.md` records what summer4 covers against the
+summer2 API and the summer textbook, and the ordered work packages that lead to
+full coverage. It is the reference other branches and agents should plan
+against.
+
+```bash
+pixi run coverage
+```
+
 ## Documentation
 
 ```bash
@@ -69,7 +80,9 @@ pixi run -e docs docs-strict  # warnings become errors
 The site has a **user guide** (properties, maps, selectors, ragged
 stratification, partitions, provenance), a **developer guide** (architecture,
 data structures, Kleene evaluation, measured performance, tooling, and the
-`explorations/flows/` spike published as two executed walkthroughs), a partial **textbook** port, and and the generated **API reference**. Every notebook on the site is executed at build time, so a docs
+`explorations/flows/` spike published as two executed walkthroughs), a partial **textbook** port, a **project evaluation** of feature
+completeness against summer2 and the summer textbook, and the generated **API
+reference**. Every notebook on the site is executed at build time, so a docs
 build is also a test run.
 
 The default environment includes `ipykernel` so example notebooks run in VS Code/Cursor.

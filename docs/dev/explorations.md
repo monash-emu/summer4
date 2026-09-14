@@ -61,6 +61,14 @@ scan share one `euler(...)`; `jax.jit` around the scan matches NumPy over eight
 steps; time-varying derived rates change the result and replacement births keep
 `sum(y)` constant. Diffrax can wrap the same vector field later.
 
+## What promotion would be worth
+
+{doc}`../evaluation/if-promoted` works the question through in detail: moving
+this spike into `summer4` takes API coverage against summer2 from 12% to 48%
+and makes the modelling content of ten more textbook chapters expressible. It
+does **not**, on its own, make any of them publishable, because the spike has
+no timeseries — `euler` returns the final state only.
+
 ## The promotion list
 
 `FINDINGS.md` names thirteen items to promote onto a `feat/flows` branch. The

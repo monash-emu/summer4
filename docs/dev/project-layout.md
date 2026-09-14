@@ -74,6 +74,7 @@ docs/
 ├── dev/                      # this guide
 │   └── flows/                # the flows spike, executed at build time
 ├── textbook/                 # summer-textbook port and its roadmap
+├── evaluation/               # feature completeness, docs coverage, gaps
 └── api/                      # autosummary stubs
 ```
 
