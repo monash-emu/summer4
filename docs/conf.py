@@ -62,6 +62,9 @@ autodoc_default_options = {
 }
 autodoc_typehints = "description"
 autodoc_typehints_format = "short"
+# PEP-695 type params (e.g. Groups[V]) are not visible to the typehints
+# resolver yet; the annotations themselves are correct for mypy.
+suppress_warnings = ["sphinx_autodoc_typehints.forward_reference"]
 napoleon_google_docstring = True
 napoleon_numpy_docstring = False
 napoleon_use_param = True
@@ -77,7 +80,7 @@ pygments_style = "friendly"
 html_theme = "pydata_sphinx_theme"
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]
-# The flows-spike notebooks emit Plotly figures.
+# User-guide flow notebooks compile a JAX vector field.
 html_js_files = ["https://cdn.plot.ly/plotly-2.35.2.min.js"]
 
 html_theme_options = {

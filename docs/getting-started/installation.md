@@ -1,8 +1,8 @@
 # Installation
 
-summer4's taxonomy layer depends on **NumPy only**. JAX lives in the pixi
-environment matrix so that later stages can benchmark solvers across versions
-without forcing a JAX dependency on the core package.
+summer4's taxonomy layer depends on **NumPy only**. Compiled flows import JAX.
+JAX also lives in the pixi environment matrix so solvers can be benchmarked
+across versions.
 
 ## With pixi (recommended)
 
@@ -28,7 +28,7 @@ execution counts, plus a post-merge hook that copies merged plans into `plans/`.
 | `default` | 3.13 | 0.6.x | Primary development, notebook kernel |
 | `latest` | 3.13 | current | Forward-compatibility checks |
 | `nb` | 3.13 | 0.6.x | JupyterLab |
-| `docs` | 3.13 | — | Sphinx documentation build (NumPy only) |
+| `docs` | 3.13 | 0.6.x | Sphinx documentation build (JAX for flow notebooks) |
 
 ```bash
 pixi run -e latest test
@@ -36,8 +36,8 @@ pixi run -e nb notebook
 pixi run -e docs docs
 ```
 
-The `docs` environment deliberately omits JAX: nothing on this site needs it,
-which is itself a fact about the current feature surface.
+The `docs` environment includes JAX so the user-guide flows notebook can
+compile a vector field at build time.
 
 ## With pip
 
@@ -47,11 +47,10 @@ The package builds with hatchling and is importable from a plain virtualenv:
 pip install .
 ```
 
-Optional extras exist for the stages that are not yet implemented, and installing
-them today gets you the dependencies but no summer4 functionality that uses them:
+Optional extras:
 
 ```bash
-pip install ".[jax]"           # jax, jaxlib, diffrax
+pip install ".[jax]"           # jax, jaxlib, diffrax, equinox
 pip install ".[calibration]"   # numpyro, optax
 ```
 

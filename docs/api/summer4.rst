@@ -37,3 +37,13 @@ Selectors
    :show-inheritance:
    :member-order: bysource
    :no-index:
+
+Flows
+-----
+
+.. automodule:: summer4.flows
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :member-order: bysource
+   :no-index:

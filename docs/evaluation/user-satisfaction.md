@@ -24,15 +24,16 @@ case data.*
 | Declare S, E, I, R | Works |
 | Stratify by age | Works |
 | Add severity only to the infectious | Works, and better than summer2 |
-| Set the initial population | **Blocked** |
-| Add infection, progression, recovery flows | **Blocked** |
-| Run the model | **Blocked** |
+| Set the initial population | **Blocked** — build `y0` by hand with `select` |
+| Add infection, progression, recovery flows | Works (`TransitionFlow`; infection FOI is hand-written) |
+| Run the model | **Partial** — `euler` returns the final state, not a trajectory |
 | Request incidence by age | **Blocked** — the index sets exist, the request mechanism does not |
 | Plot | **Blocked** |
 | Calibrate | **Blocked** |
 
-Three of nine steps complete. The modeller cannot finish any task they came
-with. For this user, summer4 is not yet a tool — it is a component of one.
+Four of nine steps complete, one partial. The modeller can compile a vector
+field but cannot plot a run. For this user, summer4 is still not a finished
+tool.
 
 ### The summer2 user evaluating a migration
 
@@ -40,10 +41,11 @@ with. For this user, summer4 is not yet a tool — it is a component of one.
 
 They will find the compartment model genuinely better — selector queries instead
 of dictionaries, ragged stratification instead of compartment-name lists,
-immutable maps with replayable history — and then find that 46 of the 52 API
-symbols their code uses have no equivalent. The honest answer for this user is
-"not yet, and not close"; {doc}`../user/07-from-summer2` gives it directly
-rather than making them discover it by trying.
+immutable maps with replayable history — and a flows layer that covers most
+constructors. They will then find that 31 of 52 symbols have any working route,
+and that `euler` does not return a dataframe. The honest answer is "you can
+compile a model; you cannot yet publish a run"; {doc}`../user/07-from-summer2`
+gives it directly.
 
 The risk to manage here is expectation. The package is named `summer4` and
 describes itself as a modelling platform; a summer2 user arriving at `pip
@@ -51,14 +53,13 @@ install summer4` reasonably expects to be able to run a model.
 
 ### The contributor
 
-*Wants: add the flows layer.*
+*Wants: add the next layer (results, then solvers).*
 
 This user is well served. The repository has a stated contribution contract
 (`AGENTS.md`), an enforced feature bar (tests + notebook + plan, checked by
 `pixi run check-branch`), `mypy --strict`, Hypothesis invariants, a benchmark
-suite, git hooks, and — unusually — a completed design spike with written
-findings and a numbered promotion list. Onboarding friction is low and the next
-step is unambiguous.
+suite, git hooks, and a ledger whose next package is WP2 (trajectories).
+Onboarding friction is low and the next step is unambiguous.
 
 ## API ergonomics review
 
@@ -109,12 +110,11 @@ single-property keys and includes empty groups.
 `PropertyMap.from_properties([state, age, vax])` builds a fully-crossed map in
 one call.
 
-### The `Present` / `Absent` binding question is unresolved
+### `Present` / `Absent` are non-binding in flow pairing
 
-`FINDINGS.md` flags that treating `age.present()` as *binding* `age` is right
-for a pairing override and surprising for a "match leftover age" reading. This
-is the one open design question that affects the **already public** API, and it
-should be settled before more code depends on the current behaviour.
+`selector_values` binds `Trait` / `IsIn` only. `age.present()` names `age` but
+does not bind it; `strict_pairing=True` raises if that would move people
+across leftover strata. This is settled, not an open question.
 
 ## What is likely to satisfy
 
@@ -134,7 +134,7 @@ should be settled before more code depends on the current behaviour.
 
 | Dimension | Assessment |
 |---|---|
-| Can a modeller complete a real task? | **No** |
+| Can a modeller complete a real task? | **No** — compile yes, plot a run no |
 | Is the implemented layer pleasant to use? | **Yes** |
 | Is the implemented layer better than summer2's equivalent? | **Yes**, materially |
 | Is it discoverable? | **It is now** — there was no documentation before this site |
@@ -142,7 +142,6 @@ should be settled before more code depends on the current behaviour.
 | Is there any evidence about real users? | **No** |
 
 The project's risk is not quality; the layer that exists is good. The risk is
-that the distance to a usable tool is large — ten of twenty textbook chapters and
-eight of eleven summer2 notebooks sit behind one tier of missing functionality —
-and that no external user can currently exercise anything, so no feedback is
-arriving to steer the remaining design.
+that the distance to a *publishable* tool is still one layer — trajectories and
+a results object — and that no external user can currently exercise a full run,
+so little feedback is arriving to steer the remaining design.

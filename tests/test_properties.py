@@ -39,6 +39,14 @@ def test_non_identifier_name_raises() -> None:
         Property("age-band", ("young", "old"))
 
 
+def test_mangled_allows_at_sign() -> None:
+    prop = Property._mangled("age@source", ("0-4", "5-9"))
+    assert prop.name == "age@source"
+    assert prop.trait("0-4").code == 0
+    with pytest.raises(ValueError, match="at least one trait"):
+        Property._mangled("age@dest", ())
+
+
 def test_empty_traits_raises() -> None:
     with pytest.raises(ValueError, match="at least one trait"):
         Property("age", ())

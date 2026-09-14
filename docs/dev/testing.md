@@ -10,20 +10,17 @@ pixi run test-all    # everything, in default and latest
 
 ## What is covered
 
-| File | Lines | Covers |
-|---|---|---|
-| `test_properties.py` | 68 | `Property` validation, trait lookup, `isin`, `present` / `absent` |
-| `test_selectors.py` | 72 | Node construction, `&` / `|` / `~`, the `__bool__` guard |
-| `test_propertymap.py` | 222 | Construction, stratification, queries, partition, `group_by`, labels, equality |
-| `test_taxonomy_properties.py` | 127 | Hypothesis property-based invariants |
-| `test_explore_flows.py` | 620 | The `explorations/flows` spike |
-| `test_notebooks.py` | 54 | Executes every notebook in `examples/notebooks/` |
-| `test_cleared_notebooks.py` | 80 | The cleared-notebook checker itself |
-| `test_branch_workflow.py` | 34 | The feature-branch gate itself |
-
-Roughly half the test lines cover code that is not in the package. That is
-appropriate for a spike under active design, but it means the headline test
-count overstates coverage of the shipped API.
+| File | Covers |
+|---|---|
+| `test_properties.py` | `Property` validation, trait lookup, `isin`, `present` / `absent` |
+| `test_selectors.py` | Node construction, `&` / `|` / `~`, the `__bool__` guard |
+| `test_propertymap.py` | Construction, stratification, queries, partition, `group_by`, labels, equality |
+| `test_taxonomy_properties.py` | Hypothesis property-based invariants |
+| `test_flows.py` | Joins, `EdgeMap`, rates, `CompiledModel`, Euler |
+| `test_coverage_ledger.py` | Ledger parse, quoted totals |
+| `test_notebooks.py` | Executes every notebook in `examples/notebooks/` |
+| `test_cleared_notebooks.py` | The cleared-notebook checker itself |
+| `test_branch_workflow.py` | The feature-branch gate itself |
 
 ## Property-based tests
 
@@ -39,9 +36,6 @@ than for hand-picked examples. The invariants worth knowing about:
   `n` where `sel` matches `m` rows yields `n - m + m·len(p.traits)` rows.
 - **Replay.** Replaying `history` onto a bootstrap map reproduces the map.
 
-These are the properties that a future `join` implementation will rely on, so
-they are the ones to extend first when the flows layer lands.
-
 ## Notebooks are tests
 
 `test_notebooks.py` executes every `examples/notebooks/*.ipynb` in-process,
@@ -55,7 +49,7 @@ The same is true of the documentation: `nb_execution_raise_on_error = True` in
 `docs/conf.py` means a broken claim on this site fails the docs build. See
 {doc}`documentation`.
 
-## Writing a test for new taxonomy behaviour
+## Writing a test for new behaviour
 
 Three things, in this order:
 
@@ -72,6 +66,4 @@ Three things, in this order:
 `mypy --strict` runs over `src/summer4` as part of `pixi run lint`. Every
 function definition in the repository — tests and scripts included — is
 annotated in both parameters and return type. `strict` is not negotiable for the
-package; the exploration modules are linted by `ruff` but are inside the same
-`mypy` invocation only to the extent that they live under `src`, which they do
-not.
+package.

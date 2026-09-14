@@ -1,8 +1,8 @@
 # Developer guide
 
 Documentation for contributors to summer4: how the taxonomy is represented, how
-queries are evaluated, how the repository is organised, and what the exploratory
-work under `explorations/` has established about the layers that come next.
+queries are evaluated, how the repository is organised, and how the flows layer
+fits on top of the map.
 
 ```{toctree}
 :maxdepth: 2
@@ -12,7 +12,6 @@ data-structures
 selector-evaluation
 performance
 explorations
-flows/index
 project-layout
 pixi
 testing

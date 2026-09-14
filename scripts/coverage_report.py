@@ -32,6 +32,13 @@ AREA_TITLES = {
     "time": "Real-world time",
 }
 
+# Status column in each ledger table (0-based, after the header is stripped).
+STATUS_COLUMN = {
+    "api": 3,
+    "textbook": 2,
+    "summer2docs": 1,
+}
+
 
 @dataclass(frozen=True, slots=True)
 class Tally:
@@ -118,15 +125,11 @@ def read_packages(text: str) -> list[tuple[str, str, list[str]]]:
 def progression(text: str) -> list[tuple[str, int, int]]:
     """Cumulative ``full`` count after each package, computed from declarations."""
     api = read_block(text, "api")
-    shipped = {row[0]: row[3] for row in api}
-    spike = {row[0]: row[4] for row in api}
+    state = {row[0]: row[3] for row in api}
     total = len(api)
 
-    state = dict(shipped)
     rows = [("today", sum(v == "full" for v in state.values()), total)]
     for pkg_id, _name, closes in read_packages(text):
-        if pkg_id == "WP1":
-            state = dict(spike)
         for ledger_id in closes:
             if ledger_id not in state:
                 raise ValueError(f"{pkg_id} closes unknown ledger ID {ledger_id!r}.")
@@ -162,68 +165,54 @@ def render(text: str) -> str:
     book = read_block(text, "textbook")
     s2 = read_block(text, "summer2docs")
 
-    shipped, spike = tally(api, 3), tally(api, 4)
+    status = tally(api, STATUS_COLUMN["api"])
     lines: list[str] = []
     lines.append("summer4 coverage")
     lines.append("=" * 64)
     lines.append("")
-    lines.append(f"API ledger: {shipped.total} summer2 symbols")
+    lines.append(f"API ledger: {status.total} summer2 symbols")
     lines.append("")
     lines.append(f"{'':<38}{'complete':>12}{'covered':>12}")
-    for label, t in (("shipped (summer4 today)", shipped), ("with flows spike promoted", spike)):
-        lines.append(
-            f"  {label:<36}"
-            f"{t.complete:>4} ({t.pct(t.complete):>4.0f}%)"
-            f"{t.covered:>6} ({t.pct(t.covered):>4.0f}%)"
-        )
+    lines.append(
+        f"  {'shipped (summer4 today)':<36}"
+        f"{status.complete:>4} ({status.pct(status.complete):>4.0f}%)"
+        f"{status.covered:>6} ({status.pct(status.covered):>4.0f}%)"
+    )
     lines.append("")
     lines.append("By area (complete / covered / total):")
-    ship_areas, spike_areas = by_area(api, 3), by_area(api, 4)
+    areas = by_area(api, STATUS_COLUMN["api"])
     for area, title in AREA_TITLES.items():
-        if area not in ship_areas:
+        if area not in areas:
             continue
-        s, k = ship_areas[area], spike_areas[area]
-        lines.append(
-            f"  {title:<38}"
-            f"shipped {s.complete}/{s.covered}/{s.total:<6}"
-            f"spike {k.complete}/{k.covered}/{k.total}"
-        )
+        t = areas[area]
+        lines.append(f"  {title:<38}{t.complete}/{t.covered}/{t.total}")
     lines.append("")
-    for name, rows, col_ship, col_spike, unit in (
-        ("Textbook chapters", book, 2, 3, "chapters"),
-        ("summer2 doc pages", s2, 1, 2, "pages"),
+    for name, rows, unit in (
+        ("Textbook chapters", book, "chapters"),
+        ("summer2 doc pages", s2, "pages"),
     ):
-        ts, tk = tally(rows, col_ship), tally(rows, col_spike)
-        lines.append(f"{name}: {ts.total} {unit}")
-        lines.append(
-            f"  shipped                             "
-            f"{ts.full:>4} full{ts.partial:>6} partial{ts.none:>6} blocked"
-        )
-        lines.append(
-            f"  with flows spike promoted           "
-            f"{tk.full:>4} full{tk.partial:>6} partial{tk.none:>6} blocked"
-        )
+        block = "textbook" if name.startswith("Textbook") else "summer2docs"
+        t = tally(rows, STATUS_COLUMN[block])
+        lines.append(f"{name}: {t.total} {unit}")
+        lines.append(f"  {t.full:>4} full{t.partial:>6} partial{t.none:>6} blocked")
         lines.append("")
     lines.append("Path to 100% (API rows at `full`):")
     for label, count, total in progression(text):
         lines.append(f"  {label:<10}{count:>4} / {total}  ({100 * count / total:>3.0f}%)")
     lines.append("")
-    remaining = [row for row in api if row[4] != "full"]
-    lines.append(f"Distance to 100%: {len(remaining)} of {shipped.total} symbols")
-    lines.append("still incomplete even with the spike promoted.")
+    remaining = [row for row in api if row[STATUS_COLUMN["api"]] != "full"]
+    lines.append(f"Distance to 100%: {len(remaining)} of {status.total} symbols still incomplete.")
     return "\n".join(lines)
 
 
 def quoted_totals(text: str) -> dict[str, int]:
     """Totals the rest of the documentation is allowed to quote."""
     api = read_block(text, "api")
-    shipped, spike = tally(api, 3), tally(api, 4)
+    status = tally(api, STATUS_COLUMN["api"])
     return {
-        "api_total": shipped.total,
-        "shipped_complete": shipped.complete,
-        "shipped_covered": shipped.covered,
-        "spike_complete": spike.complete,
-        "spike_covered": spike.covered,
+        "api_total": status.total,
+        "complete": status.complete,
+        "covered": status.covered,
     }
 
 
@@ -260,15 +249,10 @@ def main(argv: list[str] | None = None) -> int:
 
     totals = quoted_totals(text)
     index = (ROOT / "docs" / "evaluation" / "index.md").read_text(encoding="utf-8")
-    expected = (
-        f"**{totals['shipped_complete']} of {totals['api_total']}",
-        f"**{totals['spike_complete']} of {totals['api_total']}",
-    )
-    missing = [snippet for snippet in expected if snippet not in index]
-    if missing:
+    expected = f"**{totals['complete']} of {totals['api_total']}"
+    if expected not in index:
         print("evaluation/index.md quotes stale totals; expected to find:", file=sys.stderr)
-        for snippet in missing:
-            print(f"  {snippet} ...", file=sys.stderr)
+        print(f"  {expected} ...", file=sys.stderr)
         print("\nCurrent ledger says:\n" + report, file=sys.stderr)
         return 1
     print(report)

@@ -16,26 +16,24 @@ Two comparisons, both derived from source rather than from memory:
    documentation notebooks (`docs/examples/*.ipynb`, `docs/detailed/*.ipynb`) or
    by the summer textbook notebooks, extracted mechanically, then checked for a
    summer4 equivalent.
-2. **Against summer4's own intent.** The layers named in the project's README,
-   plans and `explorations/flows/FINDINGS.md`.
+2. **Against summer4's own intent.** The layers named in the project's README
+   and plans.
 
 ## 1. Against the summer2 API
 
-### Model lifecycle — 0 of 7
+### Model lifecycle — 1 of 7 complete (3 covered)
 
 | summer2 | summer4 |
 |---|---|
-| `CompartmentalModel(times, compartments, infectious_compartments, timestep)` | — |
-| `model.finalize()` | — |
-| `model.run(parameters)` | — |
+| `CompartmentalModel(times, compartments, infectious_compartments, timestep)` | `FlowModel(pmap)` — no times, timestep or infectious_compartments |
+| `model.finalize()` | `FlowModel.compile()` → `CompiledModel` |
+| `model.run(parameters)` | `euler(...)` — final state only, no trajectory |
 | `model.set_initial_population(distribution)` | — |
 | `model.get_initial_population(parameters)` | — |
 | `model.get_outputs_df()` | — |
 | `model.get_derived_outputs_df()` | — |
 
-There is no object that owns a model, and no representation of time at all.
-
-### Compartments and stratification — 4 of 8 complete (5 covered)
+### Compartments and stratification — 4 of 8 complete (7 covered)
 
 | summer2 | summer4 |
 |---|---|
@@ -44,138 +42,118 @@ There is no object that owns a model, and no representation of time at all.
 | `Stratification(..., compartments=[...])` | `where=` selector — **more general** |
 | `model.get_stratification(name)` | `PropertyMap.get_property(name)`, `PropertyMap.history` |
 | `Compartment` (name + strata object) | rows; `labels()`, `to_dicts()` — no per-compartment object |
-| `AgeStratification` | — (it was a stratification *plus* ageing flows) |
-| `StrainStratification` | — (a stratification *plus* strain-aware force of infection) |
+| `AgeStratification` | `Property` plus a `TraitChain` flow; no bundled class |
+| `StrainStratification` | `Property` plus per-strain flows; strain-aware FOI is hand-written |
 | `Stratification.set_population_split` / `model.adjust_population_split` | — |
 
 This is the one area where summer4 is ahead. Partial stratification in summer2
 is a list of compartment names; in summer4 it is any selector, and the resulting
 ragged structure is handled by three-valued logic rather than by special cases.
 
-### Compartment queries — 2 of 3
+### Compartment queries — 3 of 3
 
 | summer2 | summer4 |
 |---|---|
 | `model.query_compartments(dict)` | `PropertyMap.select` / `mask` / `select_one` |
 | `model.get_matching_compartments(name, strata)` | `PropertyMap.select` |
-| `model.query_flows(...)` | — (there are no flows to query) |
+| `model.query_flows(...)` | `CompiledModel.edges` / `EdgeMap` with `Source` / `Dest` |
 
 summer2 queries are conjunction-only dictionaries. summer4 queries are an
 algebra with `&`, `|`, `~`, multi-trait membership, and explicit presence and
-absence. This is a genuine capability increase, not a translation.
+absence. Flow-edge queries use the same algebra, polarity-wrapped.
 
-### Flows — 0 of 8
+### Flows — 6 of 8 complete (8 covered)
 
-`add_transition_flow`, `add_infection_frequency_flow`,
-`add_infection_density_flow`, `add_death_flow`, `add_universal_death_flows`,
-`add_crude_birth_flow`, `add_replacement_birth_flow`, `add_importation_flow`.
+`TransitionFlow`, `ExitFlow` and `EntryFlow` cover transition, death, universal
+death, crude birth, replacement birth and importation. The two infection
+constructors are expressible but not primitives: the user writes
+`contact * I / N` (or `contact * I`) in `derived_fn` and passes a `FieldRef` as
+the rate (F7, F8 `partial`).
 
-None exist. Prototypes of the transition/entry/exit trio exist in
-`explorations/flows/`; the two infection flows — which require a force of
-infection computed over a grouping — have no prototype.
+### Flow adjustments — 3 of 4
 
-### Flow adjustments — 0 of 4
-
-`Stratification.set_flow_adjustments`, `Stratification.add_infectiousness_adjustments`,
-`Multiply`, `Overwrite`.
-
-The spike prototypes flow-owned `Multiply` / `Overwrite` / `Transform` with a
-selector `where`, and concludes explicitly that adjustments should **not** hang
-off `Stratification` as they do in summer2.
+`adjust=` with `Multiply` / `Overwrite` / `Transform` and a selector `where`
+covers `set_flow_adjustments`. Adjustments belong to the flow, not to a
+`Stratification`. `add_infectiousness_adjustments` does not translate: it
+weights a compartment's contribution to a force of infection that is not a
+library concept.
 
 ### Mixing — 0 of 1
 
-`Stratification.set_mixing_matrix`. No prototype. This is the hardest remaining
-item: it requires the force of infection to be a matrix-weighted coupling across
-a grouping rather than a per-edge rate.
+`Stratification.set_mixing_matrix`. `TraitMatrix` looks superficially similar
+and is a different thing: it moves *people* between strata (migration), whereas
+a mixing matrix weights *transmission* between strata.
 
-### Parameters and time-varying functions — 0 of 9
+### Parameters and time-varying functions — 4 of 9 complete (5 covered)
 
-`Parameter`, `Function`, `Time`, `Data`, `DerivedOutput`,
-`get_linear_interpolation_function`, `get_sigmoidal_interpolation_function`,
-`get_piecewise_function`, `get_time_callable`.
+`derived_refs` over a `NamedTuple` gives schema-checked `Parameter` equivalents;
+`t` reaches `derived_fn` every step; `FlowRef` lets one flow's mass feed
+another. Missing is the *library* of time functions — linear and sigmoidal
+interpolation, piecewise — and a data-loading surface.
 
-The spike prototypes schema-built parameter references over a `NamedTuple` and a
-small lazy rate expression tree, and concludes that a full compute graph
-(summer2 uses `computegraph`) is not warranted yet. Nothing about time-varying
-functions or interpolation has been prototyped.
+### Derived outputs — 1 of 8
 
-### Derived outputs — 0 of 8
+`derived_fn` ≈ `add_computed_value_func`. There is no request mechanism, no
+post-integration stage and no results object. `FlowRef` exposes mass to *other
+flows* inside the vector field, not to the caller.
 
-`request_output_for_flow`, `request_output_for_compartments`,
-`request_aggregate_output`, `request_cumulative_output`,
-`request_function_output`, `request_computed_value_output`,
-`request_track_modelled_value`, `add_computed_value_func`.
+### Solver — 0 of 2 complete (1 covered)
 
-`PropertyMap.partition` and `group_by` provide the *index sets* that
-compartment-based outputs would aggregate over, which is a real head start, but
-there is no request mechanism, no post-integration stage and no results object.
-
-### Solver — 0 of 2
-
-Solver selection and ODE integration. The spike contains a fixed-step Euler
-shared between a NumPy loop and a JAX `lax.scan`, checked to agree over eight
-steps. There is no adaptive solver, no diffrax integration, and no solver seam
-in the package.
+`euler` is a fixed-step stepper returning the final state (`partial` vs
+`solve_ode`). No adaptive backend, no solver selection.
 
 ### Real-world time — 0 of 2
 
-`ref_date` / epoch handling and `get_epoch`. Not started, and not prototyped.
+`ref_date` / epoch handling and `get_epoch`. Not started.
 
 ### Totals
 
 | Area | summer4 / summer2 |
 |---|---|
-| Model lifecycle | 0 / 7 |
+| Model lifecycle | 1 / 7 |
 | Compartments and stratification | 4 / 8 |
-| Compartment queries | 2 / 3 |
-| Flows | 0 / 8 |
-| Flow adjustments | 0 / 4 |
+| Compartment queries | 3 / 3 |
+| Flows | 6 / 8 |
+| Flow adjustments | 3 / 4 |
 | Mixing | 0 / 1 |
-| Parameters and time-varying functions | 0 / 9 |
-| Derived outputs | 0 / 8 |
+| Parameters and time-varying functions | 4 / 9 |
+| Derived outputs | 1 / 8 |
 | Solver | 0 / 2 |
 | Real-world time | 0 / 2 |
-| **Total (complete)** | **6 / 52 (12%)** |
-| **Total (covered, incl. partial)** | 7 / 52 (13%) |
+| **Total (complete)** | **22 / 52 (42%)** |
+| **Total (covered, incl. partial)** | 31 / 52 (60%) |
 
-The 12% is not evenly distributed: it is one contiguous area — declaring and
-querying a compartment space — implemented to a higher standard than summer2's
-equivalent, with everything else absent.
+The 42% is two contiguous areas — declaring a compartment space, then compiling
+named flows over it — with everything above the vector field (trajectories,
+outputs, mixing, calibration) still absent or partial.
 
 ## 2. Against summer4's own intended stack
 
 | Layer | State | Evidence |
 |---|---|---|
-| Compartment taxonomy | **Implemented** | `src/summer4`, 570 lines, 4 test modules, benchmark suite |
-| Query join (source × destination pairing) | Prototyped | `explorations/flows/prototype.py` |
-| Flows (transition / entry / exit, chains, matrices) | Prototyped | as above |
-| Lazy rates, derived parameters, adjustments | Prototyped | as above, plus `refine-flows.plan.md` |
-| Array container over a map (`PropertyData`) | Prototyped | `explorations/flows/propertydata.py` |
-| Fixed-step integrator | Prototyped | Euler, NumPy + `lax.scan` |
+| Compartment taxonomy | **Implemented** | `src/summer4` |
+| Query join (source × destination pairing) | **Implemented** | `summer4.flows.join` |
+| Flows (transition / entry / exit, chains, matrices) | **Implemented** | `TransitionFlow` / `ExitFlow` / `EntryFlow` |
+| Lazy rates, derived parameters, adjustments | **Implemented** | `FieldRef`, `FlowRef`, `adjust=` |
+| Array container over a map (`PropertyData`) | **Implemented** | `summer4.jax.propertydata` |
+| Edge queries | **Implemented** | `EdgeMap`, `Source` / `Dest` |
+| Compiled model + fixed-step integrator | **Implemented** | `CompiledModel`, `euler` (final state) |
 | Adaptive solver seam (diffrax) | Not started | `pyproject.toml` extra only |
-| Force of infection / mixing | Not started | — |
+| Force of infection / mixing | Not started | F7/F8 hand-written |
 | Derived outputs and results | Not started | — |
 | Real-world time | Not started | — |
 | Calibration | Not started | `pyproject.toml` extra only |
 
-Three of the four committed plans in `plans/` are exploratory. The project has
-done substantial design work on tier 1 and has not yet promoted any of it.
-
 ## What is genuinely strong
-
-It is worth being specific, because "12%" undersells the quality of what exists:
 
 - **Ragged stratification is a real advance.** summer2 handles partial
   stratification by listing compartment names; summer4 handles it with a
   selector and a three-valued algebra in which `~p[t]` correctly excludes
-  compartments where `p` does not apply. That property is asserted by
-  Hypothesis tests and is the kind of thing that is very hard to retrofit.
+  compartments where `p` does not apply.
 - **The representation is solver-ready.** A frozen, contiguous `int16` table
-  plus an `int32` `parent_row` is exactly the shape a JAX kernel wants, and
-  population redistribution is a gather rather than a join.
-- **Error messages are good.** Every failure path names the offending value and
-  lists the valid alternatives.
+  plus an `int32` `parent_row` is exactly the shape a JAX kernel wants.
+- **Flow edges are queryable.** `CompiledModel.edges` returns an `EdgeMap`;
+  `Source` / `Dest` reuse the compartment algebra on polarity-mangled columns.
 - **The invariants are tested as laws, not examples.** The Hypothesis suite
   asserts three-way exhaustion, partition coverage, stratification arithmetic
   and history replay for arbitrary maps.

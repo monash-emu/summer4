@@ -1,14 +1,12 @@
 """Slim PropertyData: a PropertyMap paired with a JAX array as a pytree.
 
-Copied from the explore-datatypes spike (digest hashing only). Not part of
-summer4. ``__init__`` does not check ``data.shape`` because JAX unflatten
-passes tracers; validate with :meth:`PropertyData.check` / :meth:`wrap`.
+``__init__`` does not check ``data.shape`` because JAX unflatten passes tracers;
+validate with :meth:`PropertyData.check` / :meth:`wrap`.
 """
 
 from __future__ import annotations
 
-import hashlib
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import jax
@@ -16,42 +14,9 @@ import jax.numpy as jnp
 import numpy as np
 from jax.tree_util import register_pytree_node_class
 
-from summer4 import Property, PropertyMap, Selector, Trait
-
-_NA = -1
-
-
-def _digest_bytes(pmap: PropertyMap) -> bytes:
-    hasher = hashlib.blake2b(digest_size=16)
-    hasher.update(pmap.codes.tobytes())
-    if pmap.parent_row is not None:
-        hasher.update(b"|pr|")
-        hasher.update(pmap.parent_row.tobytes())
-    else:
-        hasher.update(b"|pr|none")
-    return hasher.digest()
-
-
-class DigestStatic:
-    """Hashable PropertyMap stand-in: structural digest of the code table."""
-
-    __slots__ = ("digest", "pmap")
-
-    def __init__(self, pmap: PropertyMap) -> None:
-        self.pmap = pmap
-        self.digest = _digest_bytes(pmap)
-
-    def __hash__(self) -> int:
-        return hash((self.pmap.properties, self.pmap.history, self.digest))
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, DigestStatic):
-            return NotImplemented
-        return (
-            self.digest == other.digest
-            and self.pmap.properties == other.pmap.properties
-            and self.pmap.history == other.pmap.history
-        )
+from summer4.properties import Property, Trait
+from summer4.propertymap import PropertyMap
+from summer4.selectors import Selector
 
 
 def _resolve_property(pmap: PropertyMap, prop: Property | str) -> Property:
@@ -105,11 +70,6 @@ class PropertyData:
 
     pmap: PropertyMap
     data: Any
-    _static: DigestStatic | None = field(default=None, repr=False, compare=False)
-
-    def __post_init__(self) -> None:
-        if self._static is None:
-            object.__setattr__(self, "_static", DigestStatic(self.pmap))
 
     @classmethod
     def wrap(cls, pmap: PropertyMap, data: Any) -> PropertyData:
@@ -131,18 +91,15 @@ class PropertyData:
         return self
 
     def _with_data(self, data: Any) -> PropertyData:
-        return PropertyData(self.pmap, data, _static=self._static)
+        return PropertyData(self.pmap, data)
 
-    def tree_flatten(self) -> tuple[tuple[Any], DigestStatic]:
-        static = self._static
-        if static is None:  # pragma: no cover - post_init always sets this
-            raise RuntimeError("PropertyData is missing its static wrapper.")
-        return (self.data,), static
+    def tree_flatten(self) -> tuple[tuple[Any], PropertyMap]:
+        return (self.data,), self.pmap
 
     @classmethod
-    def tree_unflatten(cls, aux: DigestStatic, children: tuple[Any, ...]) -> PropertyData:
+    def tree_unflatten(cls, aux: PropertyMap, children: tuple[Any, ...]) -> PropertyData:
         (data,) = children
-        return cls(aux.pmap, data, _static=aux)
+        return cls(aux, data)
 
     @property
     def at(self) -> _AtHelper:
@@ -171,7 +128,7 @@ class PropertyData:
         where ``prop`` is absent do not contribute.
         """
         resolved = _resolve_property(self.pmap, prop)
-        col_i = next(i for i, p in enumerate(self.pmap.properties) if p.name == resolved.name)
+        col_i = self.pmap.column_index(resolved)
         col = np.asarray(self.pmap.codes[:, col_i], dtype=np.int32)
         n_traits = len(resolved.traits)
         valid = col >= 0
@@ -197,7 +154,7 @@ class PropertyData:
         if isinstance(values, PropertyData):
             _require_same_map(values.pmap, PropertyMap.from_property(resolved))
             values = values.data
-        col_i = next(i for i, p in enumerate(self.pmap.properties) if p.name == resolved.name)
+        col_i = self.pmap.column_index(resolved)
         col = np.asarray(self.pmap.codes[:, col_i], dtype=np.int32)
         n_traits = len(resolved.traits)
         pad = jnp.zeros(values.shape[:-1] + (1,), dtype=values.dtype)

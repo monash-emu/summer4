@@ -10,37 +10,32 @@ the summer textbook, in priority order.
 `TransitionFlow`, `EntryFlow`, `ExitFlow` as public API, with the query join
 that pairs source and destination compartments across leftover strata.
 
-**State:** prototyped in `explorations/flows/prototype.py`, with the pairing
-rule settled (bound = properties mentioned in either selector; leftover
-properties matched) and destination split settled (`1/N` default, explicit
-`split=` escape hatch).
-
-**Needed:** `PropertyMap.join(source, dest, *, extra_bound=..., split=...)` as a
-real method; the flow classes promoted out of `explorations/`.
+**State:** **done.** Import from `summer4`. `Present` / `Absent` are
+non-binding in pairing; `strict_pairing=True` raises when an unbound property
+would move people. Inspect edges with {class}`~summer4.flows.edges.EdgeMap`
+and `Source` / `Dest` on {meth}`~summer4.flows.compiled.CompiledModel.edges`.
 
 ### 1.2 Rates and parameters
 
 A parameter representation and a way to attach time- and state-dependent rates
 to flows.
 
-**State:** prototyped as a small lazy expression tree with schema-built
-`FieldRef`s over a `NamedTuple`, `FlowRef` results from `add_flow`, and a
-`Multiply` / `Overwrite` / `Transform` adjustment pipeline. The spike concluded
-explicitly that a full compute graph is not warranted yet.
+**State:** **done** for the expression tree (`FieldRef`, `FlowRef`, `Multiply` /
+`Overwrite` / `Transform`, `derived_fn`). A full compute graph is not
+warranted yet.
 
-**Needed:** promotion, plus compile-time validation of `FieldRef` paths.
-**Not prototyped:** time-varying functions — interpolation, sigmoidal ramps,
-piecewise — which summer2's `detailed/time-varying-functions` page is entirely
-about.
+**Not done:** time-varying *library* functions — interpolation, sigmoidal
+ramps, piecewise — which summer2's `detailed/time-varying-functions` page is
+entirely about (WP5).
 
 ### 1.3 A solver seam
 
-**State:** a fixed-step Euler shared between a NumPy loop and a JAX `lax.scan`,
-verified to agree over eight steps.
+**State:** a fixed-step Euler via JAX `lax.scan`, plus a NumPy reference loop
+in tests. `euler` returns the final state only.
 
-**Needed:** an adaptive backend (diffrax is the stated intent), a solver
-selection API, and the ability to evaluate the vector field manually — textbook
-chapter 7 compares hand-stepped Euler against Runge-Kutta and needs all three.
+**Needed:** trajectories (WP2), an adaptive backend (diffrax; WP7), and solver
+selection. Textbook chapter 7 compares hand-stepped Euler against Runge-Kutta
+and needs all three.
 
 ### 1.4 Initial population
 
@@ -49,8 +44,8 @@ across a stratification.
 
 **State:** the mechanism is trivially available — `parent_row` makes it a gather
 and a divide, as demonstrated in {doc}`../user/06-immutability-and-provenance` —
-but no API wraps it. The spike explicitly deferred this as "a separate later
-API, a one-shot redistribution of `y`, not a flow property".
+but no API wraps it. Deferred as "a one-shot redistribution of `y`, not a flow
+property".
 
 ### 1.5 Derived outputs and a results object
 
@@ -59,7 +54,8 @@ function outputs; a results type; a dataframe view.
 
 **State:** not started. `partition` and `group_by` already produce the index sets
 that compartment outputs aggregate over, so the aggregation half is cheap; the
-request and post-integration machinery is not.
+request and post-integration machinery is not. This is the **binding
+constraint** now that flows ship.
 
 ### 1.6 `PropertyMap` must become hashable
 
@@ -72,15 +68,17 @@ rebuilt maps share a hash and work as `jax.jit` static arguments.
 ### 2.1 Force of infection
 
 `add_infection_frequency_flow` and `add_infection_density_flow`. This is
-**not** prototyped, and it is not a small addition to the existing spike: the
-prototype's rates are per-edge scalars, whereas a force of infection is a
-reduction over a grouping fed back into a rate.
+**not** a small addition to the flows layer: rates are per-edge scalars,
+whereas a force of infection is a reduction over a grouping fed back into a
+rate. Expressible today by writing `contact * I / N` in `derived_fn` (F7/F8
+`partial`).
 
 ### 2.2 Mixing matrices
 
 `set_mixing_matrix`, with the infection flow becoming a matrix-weighted coupling
 between strata. Textbook chapters 12–15 and 19 are entirely about this, as is
-summer2's `examples/09-mixing-matrices`.
+summer2's `examples/09-mixing-matrices`. `TraitMatrix` moves *people*, not
+transmission.
 
 ### 2.3 Infectiousness and susceptibility adjustments
 
@@ -140,19 +138,10 @@ Still missing:
 
 ## The single highest-leverage move
 
-Promote the `explorations/flows/` spike — quantified in {doc}`if-promoted`, and
-published as executed walkthroughs under {doc}`../dev/flows/index`. Items 1.1, 1.2 (partially), 1.3
-(partially) and 1.6 are already designed, prototyped and tested; the written
-promotion list in `FINDINGS.md` has thirteen numbered items. Landing it makes the
-modelling content of ten more textbook chapters expressible and takes API
-coverage from 12% to 48%.
+**Trajectories and a results object** (ledger WP2). Flows are in the package;
+`euler` still returns only the final state. Every summer2 notebook and almost
+every textbook chapter ends by plotting a trajectory. Landing WP2 is what
+converts "modelling content is expressible" into "the chapter can be published".
 
-It does not by itself make those chapters publishable. The spike scoped out
-timeseries results, so `euler` returns only the final state, and every summer2
-notebook and almost every textbook chapter ends by plotting a trajectory.
-**Promotion plus a results object** is the pair that converts a library which
-cannot complete a user task into one that can; see {doc}`if-promoted`.
-
-The one open question that should be settled first, because it affects the
-already-public API, is whether `Present` and `Absent` should bind their property
-in flow pairing.
+`Present` / `Absent` binding is **settled**: they are non-binding in flow
+pairing.

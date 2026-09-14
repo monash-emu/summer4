@@ -1,11 +1,12 @@
 # summer4
 
-JAX-native compartmental modelling. Stage 1 is the compartment taxonomy:
-`Property`, `Trait`, a Kleene three-valued selector algebra, and an immutable
-NumPy-backed `PropertyMap`.
+JAX-native compartmental modelling. This release ships the compartment taxonomy
+(`Property`, `Trait`, a Kleene three-valued selector algebra, an immutable
+NumPy-backed `PropertyMap`) and a flows layer (`FlowModel`, `CompiledModel`,
+named transition/entry/exit flows, a JAX vector field). `euler` returns the
+final state only.
 
-The taxonomy layer depends on NumPy only. JAX lives in the pixi environment
-matrix so later stages can benchmark solvers across versions.
+The taxonomy layer depends on NumPy only. Compiled flows import JAX.
 
 ## Concepts
 
@@ -78,9 +79,9 @@ pixi run -e docs docs-strict  # warnings become errors
 ```
 
 The site has a **user guide** (properties, maps, selectors, ragged
-stratification, partitions, provenance), a **developer guide** (architecture,
-data structures, Kleene evaluation, measured performance, tooling, and the
-`explorations/flows/` spike published as two executed walkthroughs), a partial **textbook** port, a **project evaluation** of feature
+stratification, partitions, provenance, and flows), a **developer guide**
+(architecture, data structures, Kleene evaluation, measured performance,
+tooling), a partial **textbook** port, a **project evaluation** of feature
 completeness against summer2 and the summer textbook, and the generated **API
 reference**. Every notebook on the site is executed at build time, so a docs
 build is also a test run.

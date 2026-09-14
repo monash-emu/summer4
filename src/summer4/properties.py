@@ -8,6 +8,22 @@ from dataclasses import dataclass, field
 from summer4.selectors import Absent, IsIn, Present, Selector, SelectorOps
 
 
+def _validate_property(name: str, traits: tuple[str, ...], *, require_identifier: bool) -> None:
+    if not name:
+        raise ValueError("Property name must be a non-empty string.")
+    if require_identifier and not name.isidentifier():
+        raise ValueError(
+            f"Property name {name!r} must be a Python identifier "
+            f"(cannot contain '@' or other non-identifier characters)."
+        )
+    if not traits:
+        raise ValueError(f"Property {name!r} must have at least one trait.")
+    if any(not trait for trait in traits):
+        raise ValueError(f"Property {name!r} has an empty trait name.")
+    if len(set(traits)) != len(traits):
+        raise ValueError(f"Property {name!r} has duplicate traits.")
+
+
 @dataclass(frozen=True, slots=True)
 class Trait(SelectorOps):
     """A single mutually exclusive value of a :class:`Property`.
@@ -35,20 +51,22 @@ class Property:
     _index: dict[str, int] = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
-        if not self.name:
-            raise ValueError("Property name must be a non-empty string.")
-        if not self.name.isidentifier():
-            raise ValueError(
-                f"Property name {self.name!r} must be a Python identifier "
-                f"(cannot contain '@' or other non-identifier characters)."
-            )
-        if not self.traits:
-            raise ValueError(f"Property {self.name!r} must have at least one trait.")
-        if any(not trait for trait in self.traits):
-            raise ValueError(f"Property {self.name!r} has an empty trait name.")
-        if len(set(self.traits)) != len(self.traits):
-            raise ValueError(f"Property {self.name!r} has duplicate traits.")
+        _validate_property(self.name, self.traits, require_identifier=True)
         object.__setattr__(self, "_index", {trait: i for i, trait in enumerate(self.traits)})
+
+    @classmethod
+    def _mangled(cls, name: str, traits: Sequence[str]) -> Property:
+        """Build a property whose name may contain ``@`` (EdgeMap columns).
+
+        Public :class:`Property` construction still requires ``isidentifier()``.
+        """
+        traits_t = tuple(traits)
+        _validate_property(name, traits_t, require_identifier=False)
+        obj = object.__new__(cls)
+        object.__setattr__(obj, "name", name)
+        object.__setattr__(obj, "traits", traits_t)
+        object.__setattr__(obj, "_index", {trait: i for i, trait in enumerate(traits_t)})
+        return obj
 
     def trait(self, name: str) -> Trait:
         """Return the :class:`Trait` named ``name``."""

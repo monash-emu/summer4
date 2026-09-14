@@ -10,8 +10,7 @@ planning work, and update it in the same commit that changes coverage.
 1. The tables below are the single source of truth. Prose elsewhere on this
    site quotes their totals; it does not restate their contents.
 2. Status values are exactly `full`, `partial` or `none`. Nothing else parses.
-3. `Shipped` means importable from `summer4`. `Spike` means achievable with
-   `explorations/flows/` promoted as-is.
+3. `Status` is what is importable from `summer4` today.
 4. Run `pixi run coverage` after editing. `tests/test_coverage_ledger.py`
    fails if a status is misspelled or a total is stale.
 5. When you land a feature, change its row in the same commit. A branch that
@@ -36,60 +35,60 @@ reach, and it is the denominator for every percentage on this site.
 ## API ledger
 
 <!-- ledger:api -->
-| ID | summer2 symbol | Area | Shipped | Spike | summer4 equivalent | Notes |
-| --- | --- | --- | --- | --- | --- | --- |
-| L1 | `CompartmentalModel` | lifecycle | `none` | `partial` | `FlowModel` | No times, timestep or infectious_compartments |
-| L2 | `model.finalize()` | lifecycle | `none` | `full` | `FlowModel.compile()` | Actualizes every join once |
-| L3 | `model.run()` | lifecycle | `none` | `partial` | `euler()` | Fixed step; returns final state only, no trajectory |
-| L4 | `model.set_initial_population()` | lifecycle | `none` | `none` | — | Deferred by the spike as a separate later API |
-| L5 | `model.get_initial_population()` | lifecycle | `none` | `none` | — |  |
-| L6 | `model.get_outputs_df()` | lifecycle | `none` | `none` | — | No results object, no dataframe convention |
-| L7 | `model.get_derived_outputs_df()` | lifecycle | `none` | `none` | — |  |
-| S1 | `Stratification(name, strata)` | stratification | `full` | `full` | `Property + PropertyMap.stratify` |  |
-| S2 | `model.stratify_with()` | stratification | `full` | `full` | `PropertyMap.stratify` | Returns a new map; summer2 mutates |
-| S3 | `Stratification(compartments=[...])` | stratification | `full` | `full` | `stratify(prop, where=selector)` | Generalised from names to a query |
-| S4 | `model.get_stratification()` | stratification | `full` | `full` | `PropertyMap.get_property / history` | History also records the where= selector |
-| S5 | `Compartment` | stratification | `partial` | `partial` | `rows; labels(), to_dicts()` | No per-compartment object by design |
-| S6 | `AgeStratification` | stratification | `none` | `partial` | `Property + TraitChain flow` | Ageing flows exist; no bundled convenience class |
-| S7 | `StrainStratification` | stratification | `none` | `partial` | `Property + per-strain flows` | Strain-aware force of infection is hand-written |
-| S8 | `set_population_split / adjust_population_split` | stratification | `none` | `none` | — | Flow split= is fan-out only, not initial population |
-| Q1 | `model.query_compartments()` | queries | `full` | `full` | `PropertyMap.select / mask` | Algebra, not a conjunction dict |
-| Q2 | `model.get_matching_compartments()` | queries | `full` | `full` | `PropertyMap.select / select_one` |  |
-| Q3 | `model.query_flows()` | queries | `none` | `partial` | `actualize() -> ActualizedFlow` | Inspection of edges; not a query API |
-| F1 | `add_transition_flow` | flows | `none` | `full` | `TransitionFlow` |  |
-| F2 | `add_death_flow` | flows | `none` | `full` | `ExitFlow` |  |
-| F3 | `add_universal_death_flows` | flows | `none` | `full` | `ExitFlow(Everything(), rate)` |  |
-| F4 | `add_crude_birth_flow` | flows | `none` | `full` | `EntryFlow` | Absolute rate from a derived total |
-| F5 | `add_replacement_birth_flow` | flows | `none` | `full` | `EntryFlow(dest, death.sum_over(...))` | Demonstrated in flows spike I |
-| F6 | `add_importation_flow` | flows | `none` | `full` | `EntryFlow` | Absolute rate |
-| F7 | `add_infection_frequency_flow` | flows | `none` | `partial` | `TransitionFlow + derived FOI` | User writes contact*I/N; not a primitive |
-| F8 | `add_infection_density_flow` | flows | `none` | `partial` | `TransitionFlow + derived FOI` | User writes contact*I; not a primitive |
-| A1 | `Stratification.set_flow_adjustments` | adjustments | `none` | `full` | `adjust= with where=` | Flow-owned, deliberately not on Stratification |
-| A2 | `Multiply` | adjustments | `none` | `full` | `Multiply` | Default for a bare value in adjust= |
-| A3 | `Overwrite` | adjustments | `none` | `full` | `Overwrite` | Supports where=Selector |
-| A4 | `Stratification.add_infectiousness_adjustments` | adjustments | `none` | `none` | — | Needs a force-of-infection concept |
-| M1 | `Stratification.set_mixing_matrix` | mixing | `none` | `none` | — | TraitMatrix moves people, it does not weight transmission |
-| P1 | `Parameter` | parameters | `none` | `full` | `FieldRef via derived_refs` | Schema-checked, IDE-completable |
-| P2 | `Function` | parameters | `none` | `full` | `Transform / callables in derived_fn` |  |
-| P3 | `Time` | parameters | `none` | `full` | `t passed to derived_fn` |  |
-| P4 | `DerivedOutput (as a rate input)` | parameters | `none` | `full` | `FlowRef, .sum(), .sum_over()` | Topologically ordered, cycles detected |
-| P5 | `Data` | parameters | `none` | `none` | — | No data-loading surface |
-| P6 | `get_linear_interpolation_function` | parameters | `none` | `none` | — |  |
-| P7 | `get_sigmoidal_interpolation_function` | parameters | `none` | `none` | — |  |
-| P8 | `get_piecewise_function` | parameters | `none` | `none` | — |  |
-| P9 | `get_time_callable` | parameters | `none` | `partial` | `compile() -> vf(t, y, params)` | A time callable, but not summer2's graph wrapper |
-| D1 | `request_output_for_flow` | outputs | `none` | `none` | — | FlowRef exposes mass to flows, not to the caller |
-| D2 | `request_output_for_compartments` | outputs | `none` | `none` | — | partition/group_by give the index sets only |
-| D3 | `request_aggregate_output` | outputs | `none` | `none` | — |  |
-| D4 | `request_cumulative_output` | outputs | `none` | `none` | — |  |
-| D5 | `request_function_output` | outputs | `none` | `none` | — |  |
-| D6 | `request_computed_value_output` | outputs | `none` | `none` | — |  |
-| D7 | `request_track_modelled_value` | outputs | `none` | `none` | — |  |
-| D8 | `add_computed_value_func` | outputs | `none` | `full` | `derived_fn hook` | compute_derived_params runs every step |
-| V1 | `solve_ode` | solver | `none` | `partial` | `euler()` | Fixed step, final state only |
-| V2 | `SolverType / solver selection` | solver | `none` | `none` | — | No adaptive backend, no diffrax |
-| T1 | `ref_date / Epoch` | time | `none` | `none` | — |  |
-| T2 | `model.get_epoch()` | time | `none` | `none` | — |  |
+| ID | summer2 symbol | Area | Status | summer4 equivalent | Notes |
+| --- | --- | --- | --- | --- | --- |
+| L1 | `CompartmentalModel` | lifecycle | `partial` | `FlowModel` | No times, timestep or infectious_compartments |
+| L2 | `model.finalize()` | lifecycle | `full` | `FlowModel.compile()` | Actualizes every join once |
+| L3 | `model.run()` | lifecycle | `partial` | `euler()` | Fixed step; returns final state only, no trajectory |
+| L4 | `model.set_initial_population()` | lifecycle | `none` | — | Deferred as a separate later API |
+| L5 | `model.get_initial_population()` | lifecycle | `none` | — |  |
+| L6 | `model.get_outputs_df()` | lifecycle | `none` | — | No results object, no dataframe convention |
+| L7 | `model.get_derived_outputs_df()` | lifecycle | `none` | — |  |
+| S1 | `Stratification(name, strata)` | stratification | `full` | `Property + PropertyMap.stratify` |  |
+| S2 | `model.stratify_with()` | stratification | `full` | `PropertyMap.stratify` | Returns a new map; summer2 mutates |
+| S3 | `Stratification(compartments=[...])` | stratification | `full` | `stratify(prop, where=selector)` | Generalised from names to a query |
+| S4 | `model.get_stratification()` | stratification | `full` | `PropertyMap.get_property / history` | History also records the where= selector |
+| S5 | `Compartment` | stratification | `partial` | `rows; labels(), to_dicts()` | No per-compartment object by design |
+| S6 | `AgeStratification` | stratification | `partial` | `Property + TraitChain flow` | Ageing flows exist; no bundled convenience class |
+| S7 | `StrainStratification` | stratification | `partial` | `Property + per-strain flows` | Strain-aware force of infection is hand-written |
+| S8 | `set_population_split / adjust_population_split` | stratification | `none` | — | Flow split= is fan-out only, not initial population |
+| Q1 | `model.query_compartments()` | queries | `full` | `PropertyMap.select / mask` | Algebra, not a conjunction dict |
+| Q2 | `model.get_matching_compartments()` | queries | `full` | `PropertyMap.select / select_one` |  |
+| Q3 | `model.query_flows()` | queries | `full` | `EdgeMap` / `CompiledModel.edges` / `Source`/`Dest` | Query API over flow edges |
+| F1 | `add_transition_flow` | flows | `full` | `TransitionFlow` |  |
+| F2 | `add_death_flow` | flows | `full` | `ExitFlow` |  |
+| F3 | `add_universal_death_flows` | flows | `full` | `ExitFlow(Everything(), rate)` |  |
+| F4 | `add_crude_birth_flow` | flows | `full` | `EntryFlow` | Absolute rate from a derived total |
+| F5 | `add_replacement_birth_flow` | flows | `full` | `EntryFlow(dest, death.sum_over(...))` |  |
+| F6 | `add_importation_flow` | flows | `full` | `EntryFlow` | Absolute rate |
+| F7 | `add_infection_frequency_flow` | flows | `partial` | `TransitionFlow + derived FOI` | User writes contact*I/N; not a primitive |
+| F8 | `add_infection_density_flow` | flows | `partial` | `TransitionFlow + derived FOI` | User writes contact*I; not a primitive |
+| A1 | `Stratification.set_flow_adjustments` | adjustments | `full` | `adjust= with where=` | Flow-owned, deliberately not on Stratification |
+| A2 | `Multiply` | adjustments | `full` | `Multiply` | Default for a bare value in adjust= |
+| A3 | `Overwrite` | adjustments | `full` | `Overwrite` | Supports where=Selector |
+| A4 | `Stratification.add_infectiousness_adjustments` | adjustments | `none` | — | Needs a force-of-infection concept |
+| M1 | `Stratification.set_mixing_matrix` | mixing | `none` | — | TraitMatrix moves people, it does not weight transmission |
+| P1 | `Parameter` | parameters | `full` | `FieldRef via derived_refs` | Schema-checked, IDE-completable |
+| P2 | `Function` | parameters | `full` | `Transform / callables in derived_fn` |  |
+| P3 | `Time` | parameters | `full` | `t passed to derived_fn` |  |
+| P4 | `DerivedOutput (as a rate input)` | parameters | `full` | `FlowRef, .sum(), .sum_over()` | Topologically ordered, cycles detected |
+| P5 | `Data` | parameters | `none` | — | No data-loading surface |
+| P6 | `get_linear_interpolation_function` | parameters | `none` | — |  |
+| P7 | `get_sigmoidal_interpolation_function` | parameters | `none` | — |  |
+| P8 | `get_piecewise_function` | parameters | `none` | — |  |
+| P9 | `get_time_callable` | parameters | `partial` | `compile() -> vf(t, y, params)` | A time callable, but not summer2's graph wrapper |
+| D1 | `request_output_for_flow` | outputs | `none` | — | FlowRef exposes mass to flows, not to the caller |
+| D2 | `request_output_for_compartments` | outputs | `none` | — | partition/group_by give the index sets only |
+| D3 | `request_aggregate_output` | outputs | `none` | — |  |
+| D4 | `request_cumulative_output` | outputs | `none` | — |  |
+| D5 | `request_function_output` | outputs | `none` | — |  |
+| D6 | `request_computed_value_output` | outputs | `none` | — |  |
+| D7 | `request_track_modelled_value` | outputs | `none` | — |  |
+| D8 | `add_computed_value_func` | outputs | `full` | `derived_fn hook` | compute_derived_params runs every step |
+| V1 | `solve_ode` | solver | `partial` | `euler()` | Fixed step, final state only |
+| V2 | `SolverType / solver selection` | solver | `none` | — | No adaptive backend, no diffrax |
+| T1 | `ref_date / Epoch` | time | `none` | — |  |
+| T2 | `model.get_epoch()` | time | `none` | — |  |
 <!-- /ledger:api -->
 
 ## Textbook ledger
@@ -99,46 +98,46 @@ Chapters of the [summer textbook](https://github.com/monash-emu/summer-textbook)
 published as written.
 
 <!-- ledger:textbook -->
-| Ch | Title | Shipped | Spike | Blocker |
-| --- | --- | --- | --- | --- |
-| 1 | Infectious disease modelling | `full` | `full` | None - prose |
-| 2 | Basic model construction | `partial` | `partial` | Trajectory, initial population, results frame |
-| 3 | Thinking about flows | `none` | `partial` | Trajectory |
-| 4 | Thinking about flow rates | `none` | `partial` | Trajectory, sojourn-time outputs |
-| 5 | Series compartments and latency | `partial` | `partial` | Trajectory |
-| 6 | Post-infection immunity | `partial` | `partial` | Trajectory |
-| 7 | Obtaining numerical solutions | `none` | `partial` | Runge-Kutta backend and solver selection |
-| 8 | Derived outputs | `none` | `none` | Derived outputs, results object |
-| 9 | Transmission assumptions | `none` | `partial` | Trajectory |
-| 10 | The reproduction number | `none` | `partial` | Trajectory, Rt as a derived output |
-| 11 | Cyclical epidemic dynamics | `none` | `partial` | Trajectory, phase-plane outputs |
-| 12 | Heterogeneous mixing introduction | `none` | `none` | Mixing matrices |
-| 13 | Mixing and transmission types | `none` | `none` | Mixing matrices, population split |
-| 14 | Assortative mixing | `none` | `none` | Mixing matrices, infectiousness adjustments |
-| 15 | Susceptibility and infectiousness matrices | `none` | `none` | Mixing matrices, infectiousness adjustments |
-| 16 | Thinking about contact surveys | `none` | `none` | Mixing matrices, contact-survey data |
-| 17 | Understanding empiric contact data | `none` | `none` | Contact-survey data |
-| 18 | Implementing empiric survey data | `none` | `none` | Contact-survey data |
-| 19 | Adapting mixing matrices | `none` | `none` | Contact-survey data, matrix scaling |
-| 20 | Calibration and uncertainty | `none` | `none` | Calibration workflow |
+| Ch | Title | Status | Blocker |
+| --- | --- | --- | --- |
+| 1 | Infectious disease modelling | `full` | None - prose |
+| 2 | Basic model construction | `partial` | Trajectory, initial population, results frame |
+| 3 | Thinking about flows | `partial` | Trajectory |
+| 4 | Thinking about flow rates | `partial` | Trajectory, sojourn-time outputs |
+| 5 | Series compartments and latency | `partial` | Trajectory |
+| 6 | Post-infection immunity | `partial` | Trajectory |
+| 7 | Obtaining numerical solutions | `partial` | Runge-Kutta backend and solver selection |
+| 8 | Derived outputs | `none` | Derived outputs, results object |
+| 9 | Transmission assumptions | `partial` | Trajectory |
+| 10 | The reproduction number | `partial` | Trajectory, Rt as a derived output |
+| 11 | Cyclical epidemic dynamics | `partial` | Trajectory, phase-plane outputs |
+| 12 | Heterogeneous mixing introduction | `none` | Mixing matrices |
+| 13 | Mixing and transmission types | `none` | Mixing matrices, population split |
+| 14 | Assortative mixing | `none` | Mixing matrices, infectiousness adjustments |
+| 15 | Susceptibility and infectiousness matrices | `none` | Mixing matrices, infectiousness adjustments |
+| 16 | Thinking about contact surveys | `none` | Mixing matrices, contact-survey data |
+| 17 | Understanding empiric contact data | `none` | Contact-survey data |
+| 18 | Implementing empiric survey data | `none` | Contact-survey data |
+| 19 | Adapting mixing matrices | `none` | Contact-survey data, matrix scaling |
+| 20 | Calibration and uncertainty | `none` | Calibration workflow |
 <!-- /ledger:textbook -->
 
 ## summer2 documentation ledger
 
 <!-- ledger:summer2docs -->
-| Page | Shipped | Spike | Blocker |
-| --- | --- | --- | --- |
-| `examples/01-basic-model` | `none` | `partial` | Trajectory, initial population, results frame |
-| `examples/03-derived-outputs` | `none` | `none` | Derived outputs |
-| `examples/04-flow-types` | `none` | `partial` | Trajectory, flow outputs |
-| `examples/06-stratification-introduction` | `partial` | `partial` | Infectiousness adjustments, trajectory |
-| `examples/07-age-stratification` | `partial` | `partial` | Population split, trajectory |
-| `examples/08-strain-stratification` | `partial` | `partial` | Strain-aware FOI primitive, trajectory |
-| `examples/09-mixing-matrices` | `none` | `none` | Mixing matrices |
-| `examples/10-derived-outputs-stratified` | `none` | `none` | Derived outputs |
-| `examples/11-flows-between-strata` | `none` | `partial` | Trajectory, compartment outputs |
-| `detailed/time-varying-functions` | `none` | `partial` | Interpolation and piecewise helpers |
-| `detailed/InitialPopulationGraphobject` | `none` | `none` | Initial population, parameters |
+| Page | Status | Blocker |
+| --- | --- | --- |
+| `examples/01-basic-model` | `partial` | Trajectory, initial population, results frame |
+| `examples/03-derived-outputs` | `none` | Derived outputs |
+| `examples/04-flow-types` | `partial` | Trajectory, flow outputs |
+| `examples/06-stratification-introduction` | `partial` | Infectiousness adjustments, trajectory |
+| `examples/07-age-stratification` | `partial` | Population split, trajectory |
+| `examples/08-strain-stratification` | `partial` | Strain-aware FOI primitive, trajectory |
+| `examples/09-mixing-matrices` | `none` | Mixing matrices |
+| `examples/10-derived-outputs-stratified` | `none` | Derived outputs |
+| `examples/11-flows-between-strata` | `partial` | Trajectory, compartment outputs |
+| `detailed/time-varying-functions` | `partial` | Interpolation and piecewise helpers |
+| `detailed/InitialPopulationGraphobject` | `none` | Initial population, parameters |
 <!-- /ledger:summer2docs -->
 
 ## The path to 100%
@@ -147,18 +146,14 @@ Work packages in the order that maximises coverage gained per unit of effort.
 Each names the ledger IDs it closes, so progress is checkable against the tables
 above rather than against a narrative.
 
-### WP1 — Promote the flows spike
+WP1 (promote the flows spike into `summer4`) is **applied**. Flows, rates,
+adjustments, `EdgeMap`, `CompiledModel` and a JAX Euler ship in
+`summer4.flows`. The "today" row below is post-promotion.
 
-**Closes:** L1 L2 L3 Q3 F1–F8 A1 A2 A3 P1 P2 P3 P4 P9 D8 V1 (to their `Spike`
-status) · **Prerequisite for every later package**
-
-The thirteen-item list in {doc}`../dev/explorations`, starting with making
-`PropertyMap` hashable. The design is settled and the code is tested; see
-{doc}`../dev/flows/index`. Takes the API ledger from 6 complete to 21, and 7
-covered to 31.
-
-Settle one open question first, because it affects the already-public API:
-should `Present` and `Absent` bind their property in flow pairing?
+`Present` and `Absent` are **non-binding** in flow pairing: they name a property
+(`selector_properties`) but do not bind it (`selector_values`). Binding is
+`Trait` / `IsIn` only. `strict_pairing=True` raises when an unbound property
+would move people.
 
 ### WP2 — Trajectories and a results object
 
@@ -166,11 +161,11 @@ should `Present` and `Absent` bind their property in flow pairing?
 and deepens 2, 5, 6; summer2 `01-basic-model`, `04-flow-types`,
 `11-flows-between-strata`
 
-The highest-value package in the list, and among the smallest. `_euler_jax`
+The highest-value package in the list, and among the smallest. The compiled Euler
 already uses `lax.scan`; returning stacked per-step states instead of only the
 carry is a few lines. What is missing is the **convention**: a results type, one
 dataframe library, one plotting idiom. Nothing else in this ledger converts
-"expressible" into "publishable".
+"expressible" into "publishable". Plan phase: `feat/results`.
 
 ### WP3 — Initial population
 
@@ -187,7 +182,9 @@ mechanics that exist.
 
 `partition` and `group_by` already produce the index sets that compartment
 outputs aggregate over. The request mechanism, the post-integration stage and
-the whitelist are the new work. Depends on WP2.
+the whitelist are the new work. Depends on WP2. Plan phases: flow-outputs
+(`feat/flow-outputs`) then sparse-targets (`feat/sparse-targets`, no API-row
+delta).
 
 ### WP5 — Time-varying function library
 
@@ -203,14 +200,14 @@ surface. Mechanically straightforward; must be JAX-traceable.
 The largest genuinely unprototyped design problem remaining. A force of
 infection is a reduction over a grouping fed back into a rate, and a mixing
 matrix weights that coupling between strata. `TraitMatrix` does **not** do this:
-it moves people, not transmission. Expect this to need its own spike.
+it moves people, not transmission.
 
 ### WP7 — Adaptive solver
 
 **Closes:** V2 · **Unblocks:** textbook 7 fully
 
 A diffrax backend behind the existing solver seam, plus solver selection.
-`pyproject.toml` already declares the extra.
+`pyproject.toml` already declares the extra. Plan phase: `feat/diffrax-solver`.
 
 ### WP8 — Real-world time
 
@@ -241,7 +238,6 @@ table below is **computed** from these declarations by
 <!-- ledger:packages -->
 | WP | Name | Closes |
 | --- | --- | --- |
-| WP1 | Promote the flows spike | *(applies every `Spike` status)* |
 | WP2 | Trajectories and a results object | L3 L6 L7 V1 |
 | WP3 | Initial population | L4 L5 S8 |
 | WP4 | Derived outputs | D1 D2 D3 D4 D5 D6 D7 |
@@ -258,24 +254,25 @@ table below is **computed** from these declarations by
 <!-- ledger:progression -->
 | After | API rows at `full` | Share |
 | --- | --- | --- |
-| today | 6 / 52 | 12% |
-| WP1 | 21 / 52 | 40% |
-| WP2 | 25 / 52 | 48% |
-| WP3 | 28 / 52 | 54% |
-| WP4 | 35 / 52 | 67% |
-| WP5 | 39 / 52 | 75% |
-| WP6 | 43 / 52 | 83% |
-| WP7 | 44 / 52 | 85% |
-| WP8 | 46 / 52 | 88% |
-| WP9 | 46 / 52 | 88% |
-| WP10 | 46 / 52 | 88% |
+| today | 22 / 52 | 42% |
+| WP2 | 26 / 52 | 50% |
+| WP3 | 29 / 52 | 56% |
+| WP4 | 36 / 52 | 69% |
+| WP5 | 40 / 52 | 77% |
+| WP6 | 44 / 52 | 85% |
+| WP7 | 45 / 52 | 87% |
+| WP8 | 47 / 52 | 90% |
+| WP9 | 47 / 52 | 90% |
+| WP10 | 47 / 52 | 90% |
 <!-- /ledger:progression -->
 
 ## What never reaches `full`, and why that is fine
 
-Six rows stay below `full` even after every package, because they are summer2
+Five rows stay below `full` even after every package, because they are summer2
 *shapes* that summer4 has deliberately rejected rather than capabilities it
-lacks:
+lacks. Infection-frequency/density constructors (F7, F8) stay `partial` until
+WP6 lands a force-of-infection primitive; they are not in this table because
+they are capabilities still to build, not shapes rejected.
 
 | ID | summer2 symbol | Why |
 |---|---|---|
@@ -283,7 +280,6 @@ lacks:
 | S5 | `Compartment` | Compartments are rows, not objects |
 | S6 | `AgeStratification` | A property plus a `TraitChain` flow, not a bundled class |
 | S7 | `StrainStratification` | A property plus per-strain flows |
-| Q3 | `query_flows` | Edge inspection via `ActualizedFlow`, not a query API |
 | P9 | `get_time_callable` | `compile()` returns the callable; there is no graph to wrap |
 
 **100% capability does not require 100% symbol parity.** Read this ledger as a
@@ -299,10 +295,11 @@ API shapes.
   equivalent: partial stratification there is a list of compartment names, here
   it is any selector, and `~p[t]` correctly excludes compartments where `p` does
   not apply.
-- `SI` and `SIS` are currently the same object in summer4, because the
-  distinction lives entirely in the flows. WP1 fixes this.
-- The spike's exclusion of timeseries is why WP1 alone publishes nothing. That
-  was a deliberate scoping decision in `refine-flows.plan.md`, not an oversight,
-  but it is the single most consequential line in the plan.
+- `SI` and `SIS` share a compartment map; the distinction lives in the flows.
+  With `FlowModel` they are different objects.
+- The flows layer scoped out timeseries, so `euler` returns only the final
+  state. That was a deliberate decision, and it is why WP2 is the binding
+  constraint: every summer2 notebook and almost every textbook chapter ends by
+  plotting a trajectory.
 - No user research exists. Every satisfaction claim on this site is a heuristic
   evaluation; see {doc}`user-satisfaction`.

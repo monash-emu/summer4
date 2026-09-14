@@ -25,6 +25,7 @@ summer4
    Trait
    PropertyMap
    Stratification
+   Groups
 ```
 
 ### Selectors
@@ -44,16 +45,71 @@ summer4
    And
    Or
    Not
+   Source
+   Dest
 ```
 
 `Selector` is a union type alias:
 
 ```python
-type Selector = Trait | IsIn | Present | Absent | Everything | Nothing | And | Or | Not
+type Selector = (
+    Trait | IsIn | Present | Absent | Everything | Nothing | And | Or | Not
+    | Source | Dest
+)
+```
+
+`Source` and `Dest` wrap a compartment selector and evaluate on an
+{class}`~summer4.flows.edges.EdgeMap` (from {meth}`CompiledModel.edges`). On a
+compartment {class}`PropertyMap` they raise.
+
+### Flows
+
+```{eval-rst}
+.. currentmodule:: summer4
+
+.. autosummary::
+   :toctree: generated
+   :nosignatures:
+
+   FlowModel
+   CompiledModel
+   TransitionFlow
+   ExitFlow
+   EntryFlow
+   TraitChain
+   TraitMatrix
+   EdgeMap
+   EdgeRoles
+   euler
+   actualize
+   identity_join
+```
+
+### Rates and adjustments
+
+```{eval-rst}
+.. currentmodule:: summer4
+
+.. autosummary::
+   :toctree: generated
+   :nosignatures:
+
+   Const
+   FieldRef
+   FlowRef
+   BinOp
+   Multiply
+   Overwrite
+   Transform
+   derived_refs
+   as_rate
+   as_adjust
 ```
 
 ## What is not here
 
-There is no model, flow, rate, parameter, solver, derived-output or results API.
-See {doc}`../evaluation/feature-completeness` for the full accounting and
+There is no results object, derived-output *request* API, mixing matrix,
+force-of-infection primitive, interpolation helpers, initial-population
+wrapper, or adaptive solver selection. {func}`euler` returns the final state
+only. See {doc}`../evaluation/feature-completeness` for the full accounting and
 {doc}`../user/07-from-summer2` for the summer2 symbols that have no equivalent.

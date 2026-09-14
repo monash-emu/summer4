@@ -11,26 +11,25 @@ The site has four notebook-bearing sections plus prose and an API reference.
 | Page | Content | Reproducible? | Blocker |
 |---|---|---|---|
 | `install.ipynb` | Installation | **Replaced** | Superseded by {doc}`../getting-started/installation` |
-| `examples/01-basic-model` | SIR model, run, plot | **No** | Model, flows, solver, results |
-| `examples/03-derived-outputs` | Five `request_*` output types | **No** | Derived outputs, solver |
-| `examples/04-flow-types` | All eight flow constructors | **No** | Flows |
-| `examples/06-stratification-introduction` | Stratify, adjust flows, infectiousness | **Partial** | Structure ports; adjustments and infectiousness do not |
-| `examples/07-age-stratification` | Age strata, population split, ageing | **Partial** | Structure ports; population split and ageing flows do not |
-| `examples/08-strain-stratification` | Strain strata, strain-specific flows | **Partial** | Structure ports; strain-aware force of infection does not |
-| `examples/09-mixing-matrices` | Contact matrices | **No** | Mixing matrices, infection flows |
+| `examples/01-basic-model` | SIR model, run, plot | **Partial** | Trajectory, initial population, results frame |
+| `examples/03-derived-outputs` | Five `request_*` output types | **No** | Derived outputs |
+| `examples/04-flow-types` | All eight flow constructors | **Partial** | Trajectory, flow outputs |
+| `examples/06-stratification-introduction` | Stratify, adjust flows, infectiousness | **Partial** | Infectiousness adjustments, trajectory |
+| `examples/07-age-stratification` | Age strata, population split, ageing | **Partial** | Population split, trajectory |
+| `examples/08-strain-stratification` | Strain strata, strain-specific flows | **Partial** | Strain-aware FOI primitive, trajectory |
+| `examples/09-mixing-matrices` | Contact matrices | **No** | Mixing matrices |
 | `examples/10-derived-outputs-stratified` | Stratified outputs | **No** | Derived outputs |
-| `examples/11-flows-between-strata` | Inter-stratum flows | **No** | Flows |
-| `detailed/time-varying-functions` | Interpolation, piecewise, `Time` | **No** | Parameters, time-varying functions |
+| `examples/11-flows-between-strata` | Inter-stratum flows | **Partial** | Trajectory, compartment outputs |
+| `detailed/time-varying-functions` | Interpolation, piecewise, `Time` | **Partial** | Interpolation and piecewise helpers |
 | `detailed/InitialPopulationGraphobject` | Parameterised initial population | **No** | Initial population, parameters |
 | `rationale.md` | Why summer exists | **Portable** | Prose; adapted into {doc}`../dev/architecture` |
 | `api/*.rst` | Autodoc for six modules | **N/A** | summer4 has its own; see {doc}`../api/index` |
 | `dev-setup.md` | Development setup | **Replaced** | Superseded by {doc}`../dev/pixi` |
 
-**0 of 11 notebooks reproduce in full. 3 reproduce in part**, and in all three
-cases the part that survives is the compartment structure — which is what
-{doc}`../user/02-building-a-property-map` and
-{doc}`../user/04-ragged-stratification` already teach directly, with more
-capability than the summer2 original.
+**0 of 11 notebooks reproduce in full. 7 reproduce in part.** Structure,
+flows and a final-state Euler exist; every page that plots a run is still
+blocked on a results object. {doc}`../user/08-flows` is the summer4-native
+walkthrough.
 
 ## The summer textbook
 
@@ -39,19 +38,19 @@ Twenty chapters. Full detail in {doc}`../textbook/roadmap`; the summary:
 | Outcome | Chapters | Count |
 |---|---|---|
 | Ported in full | 1 | 1 |
-| Ported in part (compartment structure only) | 2, 5, 6 | 3 |
-| Blocked on flows / rates / solver / outputs | 3, 4, 7, 8, 9, 10, 11 | 7 |
+| Modelling content expressible, trajectory missing | 2, 3, 4, 5, 6, 7, 9, 10, 11 | 9 |
+| Blocked on derived outputs / results | 8 | 1 |
 | Blocked additionally on mixing matrices | 12, 13, 14, 15 | 4 |
 | Blocked additionally on contact-survey data | 16, 17, 18, 19 | 4 |
 | Blocked additionally on calibration | 20 | 1 |
 
-The three partial chapters are consolidated into one page here,
+The structural half of chapters 2, 5 and 6 is consolidated into one page here,
 {doc}`../textbook/02-model-structures`, rather than published as three stubs.
 
 ## Non-API blockers
 
-Even with tier 1 of the API complete, four things would still stand between the
-project and a published port.
+Even with flows in the package, four things still stand between the project
+and a published port of those corpora.
 
 ### 1. No results object or dataframe convention
 
@@ -88,10 +87,10 @@ the implemented layer completely and states the gap explicitly:
 | Section | Pages | All code executed at build time |
 |---|---|---|
 | Getting started | 2 | Yes |
-| User guide | 7 (6 notebooks + migration guide) | Yes |
-| Developer guide | 13 (3 notebooks, incl. the flows spike) | Yes |
+| User guide | 8 (7 notebooks + migration guide) | Yes |
+| Developer guide | (Markdown + performance notebook) | Yes |
 | Textbook | 3 (1 notebook) | Yes |
-| Evaluation | 6 | n/a — prose |
+| Evaluation | 5 | n/a — prose |
 | API reference | generated from `__all__` | n/a |
 
 `nb_execution_raise_on_error = True`, so every assertion on this site is a test.

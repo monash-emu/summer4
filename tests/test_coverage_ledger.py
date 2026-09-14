@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from scripts.coverage_report import (
     LEDGER,
+    STATUS_COLUMN,
     STATUSES,
     by_area,
     main,
@@ -34,42 +35,27 @@ def test_blocks_parse(text: str, block: str) -> None:
 
 
 def test_api_ledger_shape(text: str) -> None:
-    """Every API row has a unique ID and valid statuses in both columns."""
+    """Every API row has a unique ID and a valid status."""
     rows = read_block(text, "api")
     ids = [row[0] for row in rows]
     assert len(set(ids)) == len(ids), "duplicate ledger IDs"
     for row in rows:
-        assert len(row) == 7, f"row {row[0]!r} has {len(row)} cells, expected 7"
-        assert row[3] in STATUSES, f"row {row[0]!r} has bad Shipped status {row[3]!r}"
-        assert row[4] in STATUSES, f"row {row[0]!r} has bad Spike status {row[4]!r}"
+        assert len(row) == 6, f"row {row[0]!r} has {len(row)} cells, expected 6"
+        assert row[3] in STATUSES, f"row {row[0]!r} has bad status {row[3]!r}"
 
 
-def test_spike_never_worse_than_shipped(text: str) -> None:
-    """Promoting the spike cannot remove a capability that already ships."""
-    rank = {"none": 0, "partial": 1, "full": 2}
-    for row in read_block(text, "api"):
-        assert rank[row[4]] >= rank[row[3]], (
-            f"row {row[0]!r} claims the spike is worse than what ships "
-            f"({row[3]!r} -> {row[4]!r})"
-        )
-
-
-@pytest.mark.parametrize(
-    ("block", "columns"),
-    [("api", (3, 4)), ("textbook", (2, 3)), ("summer2docs", (1, 2))],
-)
-def test_tallies_are_exhaustive(text: str, block: str, columns: tuple[int, int]) -> None:
+@pytest.mark.parametrize("block", ["api", "textbook", "summer2docs"])
+def test_tallies_are_exhaustive(text: str, block: str) -> None:
     rows = read_block(text, block)
-    for column in columns:
-        counts = tally(rows, column)
-        assert counts.total == len(rows)
-        assert counts.covered == counts.full + counts.partial
+    counts = tally(rows, STATUS_COLUMN[block])
+    assert counts.total == len(rows)
+    assert counts.covered == counts.full + counts.partial
 
 
 def test_every_area_is_named(text: str) -> None:
     from scripts.coverage_report import AREA_TITLES
 
-    areas = by_area(read_block(text, "api"), 3)
+    areas = by_area(read_block(text, "api"), STATUS_COLUMN["api"])
     unknown = set(areas) - set(AREA_TITLES)
     assert not unknown, f"areas missing a title in AREA_TITLES: {sorted(unknown)}"
 
@@ -78,8 +64,7 @@ def test_quoted_totals_are_current(text: str) -> None:
     """evaluation/index.md must quote the ledger's own arithmetic."""
     totals = quoted_totals(text)
     index = (ROOT / "docs" / "evaluation" / "index.md").read_text(encoding="utf-8")
-    assert f"**{totals['shipped_complete']} of {totals['api_total']}" in index
-    assert f"**{totals['spike_complete']} of {totals['api_total']}" in index
+    assert f"**{totals['complete']} of {totals['api_total']}" in index
 
 
 def test_check_mode_passes() -> None:

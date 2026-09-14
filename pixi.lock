@@ -9524,6 +9524,7 @@ packages:
   - jax>=0.6.0 ; extra == 'jax'
   - jaxlib>=0.6.0 ; extra == 'jax'
   - diffrax>=0.7.2 ; extra == 'jax'
+  - equinox ; extra == 'jax'
   - numpyro>=0.16.0 ; extra == 'calibration'
   - optax>=0.2.0 ; extra == 'calibration'
   requires_python: '>=3.13'

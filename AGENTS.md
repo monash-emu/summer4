@@ -47,11 +47,10 @@ Do not leave the only copy of a plan outside the repository. Do not edit a plan 
 covers and what full coverage requires. It holds:
 
 - every summer2 API symbol exercised by the summer2 docs or the summer textbook,
-  with its status in the shipped package (`Shipped`) and with the
-  `explorations/flows/` spike promoted (`Spike`);
+  with a single `Status` (`full` / `partial` / `none`);
 - the same for all twenty textbook chapters and eleven summer2 doc pages;
-- ten ordered work packages (WP1–WP10) with the ledger IDs each one closes, and
-  a computed table of coverage after each.
+- remaining work packages (WP2–WP10; WP1 is applied) with the ledger IDs each
+  one closes, and a computed table of coverage after each.
 
 Read it before proposing feature work, so a branch lands the next package rather
 than a duplicate of one already designed. Quote its IDs (`F1`, `D4`, `WP2`) in
@@ -59,16 +58,16 @@ plans and PR descriptions — they are stable, and agents on other branches can
 resolve them without this context.
 
 **If your branch changes what summer4 can do, update the ledger in the same
-commit.** Change the affected rows' `Shipped` status, then:
+commit.** Change the affected rows' `Status`, then:
 
 ```bash
 pixi run coverage-write   # recompute the progression table
 pixi run coverage         # verify statuses and quoted totals
 ```
 
-`tests/test_coverage_ledger.py` fails if a status is misspelled, if the spike
-column claims less than the shipped column, if the progression table is stale,
-or if `docs/evaluation/index.md` quotes totals the ledger no longer supports.
+`tests/test_coverage_ledger.py` fails if a status is misspelled, if the
+progression table is stale, or if `docs/evaluation/index.md` quotes totals the
+ledger no longer supports.
 
 Status values are exactly `full`, `partial` or `none`:
 
@@ -78,7 +77,7 @@ Status values are exactly `full`, `partial` or `none`:
 | `partial` | Achievable, but the user supplies something summer2 supplied, or a material limitation applies |
 | `none` | No way to do it |
 
-Six rows are marked as never reaching `full` on purpose — they are summer2
+Five rows are marked as never reaching `full` on purpose — they are summer2
 shapes summer4 has rejected, not capabilities it lacks. Do not "fix" them
 without changing that decision explicitly.
 
@@ -93,10 +92,9 @@ Two rules that are easy to get wrong:
 
 - **Do not describe planned behaviour in the present tense.** Where a summer2 or
   textbook capability has no summer4 equivalent, say so and cite the ledger.
-- **`docs/dev/flows/` is generated.** Its code cells are byte-identical to
-  `explorations/flows/01-flows.ipynb` and `02-flows.ipynb`, and
-  `tests/test_flows_docs_sync.py` enforces that. Edit the spike notebooks and
-  regenerate; never edit the published copies in place.
+- **Flows ship in `summer4`.** Document them in the user guide against
+  `from summer4 import ...` / `CompiledModel`. There is no spike copy under
+  `explorations/` or `docs/dev/flows/`.
 
 ## Feature acceptance bar
 

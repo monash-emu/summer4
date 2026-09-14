@@ -101,8 +101,8 @@ type Selector = (
 
 `Source` and `Dest` are in the union so they compose with `&` / `|` / `~` under
 `mypy --strict`. On a compartment map they raise
-(`"Source()/Dest() select flow edges, not compartments"`); edge evaluation lands
-with flows.
+(`"Source()/Dest() select flow edges, not compartments"`); evaluate them on an
+{class}`~summer4.flows.edges.EdgeMap`.
 
 The union is a PEP 695 `type` alias, and evaluation is a `match` statement over
 it, so adding a node type produces a `TypeError` at the two exhaustive match
