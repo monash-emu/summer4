@@ -44,6 +44,28 @@ def test_api_ledger_shape(text: str) -> None:
         assert row[3] in STATUSES, f"row {row[0]!r} has bad status {row[3]!r}"
 
 
+def test_textbook_ledger_shape(text: str) -> None:
+    for row in read_block(text, "textbook"):
+        assert len(row) == 5, f"textbook row {row[0]!r} has {len(row)} cells, expected 5"
+
+
+def test_summer2docs_ledger_shape(text: str) -> None:
+    for row in read_block(text, "summer2docs"):
+        assert len(row) == 4, f"summer2docs row {row[0]!r} has {len(row)} cells, expected 4"
+
+
+def test_declared_ports_exist(text: str) -> None:
+    from scripts.coverage_report import declared_ports
+
+    docs_root = ROOT / "docs"
+    missing = [
+        (block, label, port)
+        for block, label, port in declared_ports(text)
+        if not (docs_root / port).is_file()
+    ]
+    assert not missing, f"Ported paths missing under docs/: {missing}"
+
+
 @pytest.mark.parametrize("block", ["api", "textbook", "summer2docs"])
 def test_tallies_are_exhaustive(text: str, block: str) -> None:
     rows = read_block(text, block)

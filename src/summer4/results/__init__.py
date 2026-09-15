@@ -1,5 +1,6 @@
 """Queryable solve results: SavePlan, Trace, Result."""
 
+from summer4.results.groups import SaveGroup, group_requests
 from summer4.results.plan import (
     EVERYTHING,
     Compartments,
@@ -24,8 +25,10 @@ __all__ = [
     "Result",
     "ResultWithParams",
     "SaveFn",
+    "SaveGroup",
     "SavePlan",
     "SaveRequest",
     "SolverInfo",
     "Trace",
+    "group_requests",
 ]

@@ -39,6 +39,12 @@ STATUS_COLUMN = {
     "summer2docs": 1,
 }
 
+# Optional trailing Ported column (path under docs/, or em dash).
+PORTED_COLUMN = {
+    "textbook": 4,
+    "summer2docs": 3,
+}
+
 
 @dataclass(frozen=True, slots=True)
 class Tally:
@@ -216,6 +222,38 @@ def quoted_totals(text: str) -> dict[str, int]:
     }
 
 
+def declared_ports(text: str) -> list[tuple[str, str, str]]:
+    """Return ``(block, row_label, port_path)`` for every non-dash Ported cell."""
+    found: list[tuple[str, str, str]] = []
+    for block, label_col in (("textbook", 0), ("summer2docs", 0)):
+        if block not in PORTED_COLUMN:
+            continue
+        port_col = PORTED_COLUMN[block]
+        for row in read_block(text, block):
+            if len(row) <= port_col:
+                continue
+            port = row[port_col]
+            if port in {"", "—", "-", "–"}:
+                continue
+            found.append((block, row[label_col], port))
+    return found
+
+
+def publishable_unported(text: str) -> list[tuple[str, str]]:
+    """Rows at ``full`` with no Ported path — backlog, not a check failure."""
+    missing: list[tuple[str, str]] = []
+    for block, label_col in (("textbook", 0), ("summer2docs", 0)):
+        status_col = STATUS_COLUMN[block]
+        port_col = PORTED_COLUMN[block]
+        for row in read_block(text, block):
+            if row[status_col] != "full":
+                continue
+            port = row[port_col] if len(row) > port_col else "—"
+            if port in {"", "—", "-", "–"}:
+                missing.append((block, row[label_col]))
+    return missing
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -247,6 +285,18 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
+    docs_root = ROOT / "docs"
+    missing_files = [
+        (block, label, port)
+        for block, label, port in declared_ports(text)
+        if not (docs_root / port).is_file()
+    ]
+    if missing_files:
+        print("Declared Ported paths must exist under docs/:", file=sys.stderr)
+        for block, label, port in missing_files:
+            print(f"  [{block}] {label}: {port}", file=sys.stderr)
+        return 1
+
     totals = quoted_totals(text)
     index = (ROOT / "docs" / "evaluation" / "index.md").read_text(encoding="utf-8")
     expected = f"**{totals['complete']} of {totals['api_total']}"
@@ -256,6 +306,13 @@ def main(argv: list[str] | None = None) -> int:
         print("\nCurrent ledger says:\n" + report, file=sys.stderr)
         return 1
     print(report)
+    backlog = publishable_unported(text)
+    print(
+        f"\nPublishable, not yet ported: {len(backlog)} "
+        f"(textbook/summer2docs rows at full with no Ported path)."
+    )
+    for block, label in backlog:
+        print(f"  [{block}] {label}")
     print("\nQuoted totals are current.")
     return 0
 

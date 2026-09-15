@@ -85,8 +85,8 @@ reach, and it is the denominator for every percentage on this site.
 | D6 | `request_computed_value_output` | outputs | `none` | — | `ComputedValue` saves; Phase 4 |
 | D7 | `request_track_modelled_value` | outputs | `none` | — |  |
 | D8 | `add_computed_value_func` | outputs | `full` | `derived_fn hook` | compute_derived_params runs every step |
-| V1 | `solve_ode` | solver | `full` | `CompiledModel.run` over `euler` | Fixed step; adaptive is V2 / Phase 3 |
-| V2 | `SolverType / solver selection` | solver | `none` | — | No adaptive backend, no diffrax |
+| V1 | `solve_ode` | solver | `full` | `CompiledModel.run` over `euler` | Fixed step; adaptive is V2 |
+| V2 | `SolverType / solver selection` | solver | `full` | `solver=` name or diffrax instance | Euler kept as reference stepper |
 | T1 | `ref_date / Epoch` | time | `full` | `Epoch` |  |
 | T2 | `model.get_epoch()` | time | `full` | `Result.times.epoch` / `TimeAxis.epoch` |  |
 <!-- /ledger:api -->
@@ -98,46 +98,46 @@ Chapters of the [summer textbook](https://github.com/monash-emu/summer-textbook)
 published as written.
 
 <!-- ledger:textbook -->
-| Ch | Title | Status | Blocker |
-| --- | --- | --- | --- |
-| 1 | Infectious disease modelling | `full` | None - prose |
-| 2 | Basic model construction | `partial` | Initial population |
-| 3 | Thinking about flows | `full` | None |
-| 4 | Thinking about flow rates | `partial` | Sojourn-time / flow outputs (Phase 4) |
-| 5 | Series compartments and latency | `full` | None |
-| 6 | Post-infection immunity | `full` | None |
-| 7 | Obtaining numerical solutions | `partial` | Runge-Kutta backend and solver selection |
-| 8 | Derived outputs | `partial` | Compartment outputs yes; flow outputs Phase 4 |
-| 9 | Transmission assumptions | `full` | None |
-| 10 | The reproduction number | `partial` | Rt as a derived / flow output (Phase 4) |
-| 11 | Cyclical epidemic dynamics | `full` | None |
-| 12 | Heterogeneous mixing introduction | `none` | Mixing matrices |
-| 13 | Mixing and transmission types | `none` | Mixing matrices, population split |
-| 14 | Assortative mixing | `none` | Mixing matrices, infectiousness adjustments |
-| 15 | Susceptibility and infectiousness matrices | `none` | Mixing matrices, infectiousness adjustments |
-| 16 | Thinking about contact surveys | `none` | Mixing matrices, contact-survey data |
-| 17 | Understanding empiric contact data | `none` | Contact-survey data |
-| 18 | Implementing empiric survey data | `none` | Contact-survey data |
-| 19 | Adapting mixing matrices | `none` | Contact-survey data, matrix scaling |
-| 20 | Calibration and uncertainty | `none` | Calibration workflow |
+| Ch | Title | Status | Blocker | Ported |
+| --- | --- | --- | --- | --- |
+| 1 | Infectious disease modelling | `full` | None - prose | `textbook/01-introduction.md` |
+| 2 | Basic model construction | `partial` | Initial population | `textbook/02-model-structures.ipynb` |
+| 3 | Thinking about flows | `full` | None | — |
+| 4 | Thinking about flow rates | `partial` | Sojourn-time / flow outputs (Phase 4) | — |
+| 5 | Series compartments and latency | `full` | None | — |
+| 6 | Post-infection immunity | `full` | None | — |
+| 7 | Obtaining numerical solutions | `full` | None | `textbook/07-numerical-solutions.ipynb` |
+| 8 | Derived outputs | `partial` | Compartment outputs yes; flow outputs Phase 4 | — |
+| 9 | Transmission assumptions | `full` | None | — |
+| 10 | The reproduction number | `partial` | Rt as a derived / flow output (Phase 4) | — |
+| 11 | Cyclical epidemic dynamics | `full` | None | — |
+| 12 | Heterogeneous mixing introduction | `none` | Mixing matrices | — |
+| 13 | Mixing and transmission types | `none` | Mixing matrices, population split | — |
+| 14 | Assortative mixing | `none` | Mixing matrices, infectiousness adjustments | — |
+| 15 | Susceptibility and infectiousness matrices | `none` | Mixing matrices, infectiousness adjustments | — |
+| 16 | Thinking about contact surveys | `none` | Mixing matrices, contact-survey data | — |
+| 17 | Understanding empiric contact data | `none` | Contact-survey data | — |
+| 18 | Implementing empiric survey data | `none` | Contact-survey data | — |
+| 19 | Adapting mixing matrices | `none` | Contact-survey data, matrix scaling | — |
+| 20 | Calibration and uncertainty | `none` | Calibration workflow | — |
 <!-- /ledger:textbook -->
 
 ## summer2 documentation ledger
 
 <!-- ledger:summer2docs -->
-| Page | Status | Blocker |
-| --- | --- | --- |
-| `examples/01-basic-model` | `partial` | Initial population |
-| `examples/03-derived-outputs` | `partial` | Compartment outputs yes; flow outputs Phase 4 |
-| `examples/04-flow-types` | `partial` | Flow outputs Phase 4 |
-| `examples/06-stratification-introduction` | `partial` | Infectiousness adjustments |
-| `examples/07-age-stratification` | `partial` | Population split |
-| `examples/08-strain-stratification` | `partial` | Strain-aware FOI primitive |
-| `examples/09-mixing-matrices` | `none` | Mixing matrices |
-| `examples/10-derived-outputs-stratified` | `partial` | Flow / stratified derived outputs Phase 4 |
-| `examples/11-flows-between-strata` | `full` | None |
-| `detailed/time-varying-functions` | `partial` | Interpolation and piecewise helpers |
-| `detailed/InitialPopulationGraphobject` | `none` | Initial population, parameters |
+| Page | Status | Blocker | Ported |
+| --- | --- | --- | --- |
+| `examples/01-basic-model` | `partial` | Initial population | — |
+| `examples/03-derived-outputs` | `partial` | Compartment outputs yes; flow outputs Phase 4 | — |
+| `examples/04-flow-types` | `partial` | Flow outputs Phase 4 | — |
+| `examples/06-stratification-introduction` | `partial` | Infectiousness adjustments | — |
+| `examples/07-age-stratification` | `partial` | Population split | — |
+| `examples/08-strain-stratification` | `partial` | Strain-aware FOI primitive | — |
+| `examples/09-mixing-matrices` | `none` | Mixing matrices | — |
+| `examples/10-derived-outputs-stratified` | `partial` | Flow / stratified derived outputs Phase 4 | — |
+| `examples/11-flows-between-strata` | `full` | None | — |
+| `detailed/time-varying-functions` | `partial` | Interpolation and piecewise helpers | — |
+| `detailed/InitialPopulationGraphobject` | `none` | Initial population, parameters | — |
 <!-- /ledger:summer2docs -->
 
 ## The path to 100%
@@ -149,7 +149,8 @@ above rather than against a narrative.
 WP1 (promote the flows spike into `summer4`) is **applied**. Flows, rates,
 adjustments, `EdgeMap`, `CompiledModel` and a JAX Euler ship in
 `summer4.flows`. WP2 (trajectories and a results object, including real-world
-time) is **applied**: `CompiledModel.run` returns a queryable `Result`.
+time) is **applied**: `CompiledModel.run` returns a queryable `Result`. WP7
+(adaptive solver selection via diffrax) is **applied**.
 
 `Present` and `Absent` are **non-binding** in flow pairing: they name a property
 (`selector_properties`) but do not bind it (`selector_values`). Binding is
@@ -198,12 +199,13 @@ infection is a reduction over a grouping fed back into a rate, and a mixing
 matrix weights that coupling between strata. `TraitMatrix` does **not** do this:
 it moves people, not transmission.
 
-### WP7 — Adaptive solver
+### WP7 — Adaptive solver (applied)
 
 **Closes:** V2 · **Unblocks:** textbook 7 fully
 
-A diffrax backend behind the existing solver seam, plus solver selection.
-`pyproject.toml` already declares the extra. Plan phase: `feat/diffrax-solver`.
+A diffrax backend behind the solver seam, with `solver=` selecting Euler,
+Heun, Tsit5, Dopri5, or a diffrax solver instance. Textbook chapter 7 is
+ported at `docs/textbook/07-numerical-solutions.ipynb`.
 
 ### WP9 — Contact survey data
 
@@ -243,12 +245,12 @@ table below is **computed** from these declarations by
 <!-- ledger:progression -->
 | After | API rows at `full` | Share |
 | --- | --- | --- |
-| today | 32 / 52 | 62% |
-| WP2 | 32 / 52 | 62% |
-| WP3 | 35 / 52 | 67% |
-| WP4 | 38 / 52 | 73% |
-| WP5 | 42 / 52 | 81% |
-| WP6 | 46 / 52 | 88% |
+| today | 33 / 52 | 63% |
+| WP2 | 33 / 52 | 63% |
+| WP3 | 36 / 52 | 69% |
+| WP4 | 39 / 52 | 75% |
+| WP5 | 43 / 52 | 83% |
+| WP6 | 47 / 52 | 90% |
 | WP7 | 47 / 52 | 90% |
 | WP9 | 47 / 52 | 90% |
 | WP10 | 47 / 52 | 90% |

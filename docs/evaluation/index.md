@@ -19,17 +19,17 @@ gaps
 |---|---|
 | Public API symbols | 40 |
 | Package source | taxonomy (NumPy) plus `summer4.flows` and `summer4.jax` |
-| summer2 API surface exercised by its own docs, complete in summer4 | **32 of 52 (62%)** |
-| … with any working route (complete or partial) | 39 of 52 (75%) |
+| summer2 API surface exercised by its own docs, complete in summer4 | **33 of 52 (63%)** |
+| … with any working route (complete or partial) | 40 of 52 (77%) |
 | summer2 documentation notebooks reproducible as runnable summer4 | **1 of 11** (8 partially) |
-| summer textbook chapters reproducible as runnable summer4 | **6 of 20** (5 more partially) |
+| summer textbook chapters reproducible as runnable summer4 | **7 of 20** (4 more partially) |
 | Implemented layers of the intended stack | taxonomy + flows + results |
 | Ceiling of the planned roadmap (WP2–WP10) | 47 of 52 (90%) — see {doc}`coverage-ledger` |
 
 summer4 ships a compartment taxonomy, a flows layer, and a results layer:
 declare a map, attach named flows, compile to a `CompiledModel`, and
-`run()` to a queryable `Result`. Flow-output polarity queries and an adaptive
-solver are still ahead.
+`run()` to a queryable `Result` with selectable Euler or adaptive
+diffrax solvers. Flow-output polarity queries are still ahead.
 
 ## How to read this section
 

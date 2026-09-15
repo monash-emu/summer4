@@ -508,12 +508,19 @@ class CompiledModel:
         t0: float = 0.0,
         y0: object | None = None,
         n_saves: int | None = None,
+        dt: float = 1.0,
+        steps: int | None = None,
     ) -> Any:
-        """Return output shapes and memory footprint without solving."""
+        """Return output shapes and memory footprint without solving.
+
+        Each output is sized from its own save group's ``ts`` (per-request times
+        override the plan default).
+        """
         import jax
 
         from summer4.jax.propertydata import PropertyData
         from summer4.results.eval import build_save_fn
+        from summer4.results.groups import group_requests
         from summer4.results.plan import OutputShape, PlanDescription, SavePlan
 
         expanded = self.expand(plan)
@@ -536,11 +543,16 @@ class CompiledModel:
             ) from exc
 
         if n_saves is not None:
-            n = int(n_saves)
+            default_ts = t0 + float(dt) * np.arange(int(n_saves), dtype=np.float64)
         elif expanded.ts is not None:
-            n = int(np.asarray(expanded.ts).size)
+            default_ts = np.asarray(expanded.ts, dtype=np.float64)
+        elif steps is not None:
+            default_ts = t0 + float(dt) * np.arange(int(steps) + 1, dtype=np.float64)
         else:
-            n = 1
+            default_ts = np.asarray([t0], dtype=np.float64)
+
+        groups = group_requests(expanded, default_ts)
+        key_to_n = {key: int(g.ts.size) for g in groups for key in g.keys}
 
         outputs: list[OutputShape] = []
         total = 0
@@ -549,13 +561,18 @@ class CompiledModel:
             if hasattr(leaf, "data"):
                 leaf = leaf.data
             shape = tuple(int(s) for s in getattr(leaf, "shape", ()))
+            n = key_to_n[key]
             full_shape = (n, *shape)
             dtype = str(getattr(leaf, "dtype", "float64"))
             itemsize = np.dtype(dtype).itemsize if dtype else 8
             nbytes = int(np.prod(full_shape)) * int(itemsize)
             outputs.append(OutputShape(key=key, shape=full_shape, dtype=dtype, nbytes=nbytes))
             total += nbytes
-        return PlanDescription(outputs=tuple(outputs), n_saves=n, total_nbytes=total)
+        return PlanDescription(
+            outputs=tuple(outputs),
+            n_saves=int(default_ts.size),
+            total_nbytes=total,
+        )
 
     def run(
         self,
@@ -567,26 +584,31 @@ class CompiledModel:
         dt: float,
         steps: int | None = None,
         save: Any = None,
-        solver: str = "euler",
+        solver: str | Any = "euler",
         epoch: Any = None,
+        rtol: float | None = None,
+        atol: float | None = None,
+        max_steps: int | None = None,
     ) -> Any:
         """Integrate and return a :class:`~summer4.results.Result`.
 
-        Exactly one of ``t1`` / ``steps``. ``euler`` stays the low-level seam;
-        Phase 3 swaps diffrax in behind ``solver=``.
+        Exactly one of ``t1`` / ``steps``. ``solver`` is a name (``"euler"``,
+        ``"heun"``, ``"tsit5"``, ``"dopri5"``) or a diffrax solver instance.
         """
         from summer4.results.eval import dims_for_quantity
+        from summer4.results.groups import group_requests
         from summer4.results.plan import EVERYTHING, SavePlan
-        from summer4.results.result import Result, SolverInfo
+        from summer4.results.result import Result
         from summer4.results.trace import Trace
+        from summer4.solvers.base import SolveSpec
+        from summer4.solvers.diffrax_backend import KNOWN_SOLVER_NAMES, diffrax_solve
+        from summer4.solvers.euler_backend import euler_solve
         from summer4.time import Epoch, TimeAxis
 
         if save is None:
             save = EVERYTHING
         if not isinstance(save, SavePlan):
             raise TypeError(f"save must be a SavePlan, got {type(save).__name__}.")
-        if solver != "euler":
-            raise ValueError(f"Unsupported solver {solver!r}; Phase 2 supports 'euler' only.")
         if (t1 is None) == (steps is None):
             raise ValueError("Provide exactly one of t1 or steps.")
         if steps is None:
@@ -601,31 +623,68 @@ class CompiledModel:
         expanded = self.expand(save)
         # Default save grid: include t0 and every step endpoint
         if expanded.ts is None:
-            ts = t0 + dt * np.arange(n_steps + 1, dtype=np.float64)
+            default_ts = t0 + dt * np.arange(n_steps + 1, dtype=np.float64)
         else:
-            ts = np.asarray(expanded.ts, dtype=np.float64)
+            default_ts = np.asarray(expanded.ts, dtype=np.float64)
+
+        groups = group_requests(expanded, default_ts)
+        key_to_group = {key: g for g in groups for key in g.keys}
 
         times = TimeAxis(
-            values=ts,
+            values=default_ts,
             epoch=epoch if isinstance(epoch, Epoch) else epoch,
             kind="grid",
         )
 
-        saved = _euler_save(
-            self,
-            t0=t0,
-            y0=y0,
-            params=params,
-            dt=float(dt),
+        spec = SolveSpec(
+            t0=float(t0),
+            t1=float(t1) if t1 is not None else None,
             steps=n_steps,
-            ts=ts,
-            plan=expanded,
+            dt=float(dt),
+            rtol=rtol,
+            atol=atol,
+            max_steps=max_steps,
+            dense=bool(expanded.dense),
         )
+
+        use_euler = solver == "euler" or (isinstance(solver, str) and solver.lower() == "euler")
+        if use_euler:
+            if rtol is not None or atol is not None:
+                raise ValueError("rtol/atol apply to adaptive diffrax solvers, not euler.")
+            out = euler_solve(
+                self,
+                y0=y0,
+                params=params,
+                spec=spec,
+                groups=groups,
+                plan=expanded,
+                solver_stats=bool(expanded.solver_stats),
+            )
+        else:
+            if isinstance(solver, str) and solver.lower() not in KNOWN_SOLVER_NAMES:
+                known = ", ".join(repr(n) for n in KNOWN_SOLVER_NAMES)
+                raise ValueError(f"Unknown solver {solver!r}. Known names: {known}.")
+            out = diffrax_solve(
+                self,
+                y0=y0,
+                params=params,
+                spec=spec,
+                groups=groups,
+                plan=expanded,
+                solver=solver,
+                solver_stats=bool(expanded.solver_stats),
+            )
 
         traces: dict[str, Trace] = {}
         for key, req in expanded.requests.items():
             dims = dims_for_quantity(req.what)
-            raw = saved[key]
+            raw = out.saved[key]
+            group = key_to_group[key]
+            trace_times = TimeAxis(
+                values=group.ts,
+                epoch=epoch if isinstance(epoch, Epoch) else epoch,
+                kind="grid",
+            )
             from summer4.jax.propertydata import PropertyData
             from summer4.results.plan import Compartments
 
@@ -638,12 +697,15 @@ class CompiledModel:
                     values = PropertyData(self.pmap.take(idx), raw)
             else:
                 values = raw
-            traces[key] = Trace(times=times, values=values, dims=dims)
+            traces[key] = Trace(times=trace_times, values=values, dims=dims)
 
-        solver_info = (
-            SolverInfo(solver="euler", num_steps=n_steps) if expanded.solver_stats else None
+        return Result(
+            times=times,
+            traces=traces,
+            solver=out.stats,
+            dense=out.dense,
+            _state_pmap=self.pmap if out.dense is not None else None,
         )
-        return Result(times=times, traces=traces, solver=solver_info)
 
     def __hash__(self) -> int:
         return hash(self._digest)
@@ -652,131 +714,6 @@ class CompiledModel:
         if not isinstance(other, CompiledModel):
             return NotImplemented
         return self._digest == other._digest
-
-
-def _is_arithmetic_subgrid(ts: NDArray[np.float64], t0: float, dt: float) -> bool:
-    """True when ``ts`` is an arithmetic subgrid of the Euler step grid including t0."""
-    if ts.size == 0:
-        return False
-    if abs(float(ts[0]) - float(t0)) > 1e-9 * max(1.0, abs(t0)):
-        return False
-    steps = (ts - t0) / dt
-    if not np.allclose(steps, np.round(steps), atol=1e-6):
-        return False
-    rounded = np.round(steps).astype(np.int64)
-    if rounded.size >= 2:
-        diffs = np.diff(rounded)
-        if not np.all(diffs == diffs[0]) or diffs[0] <= 0:
-            return False
-    return True
-
-
-def _euler_save(
-    model: CompiledModel,
-    *,
-    t0: float,
-    y0: object,
-    params: object,
-    dt: float,
-    steps: int,
-    ts: NDArray[np.float64],
-    plan: Any,
-) -> dict[str, Any]:
-    """Integrate with Euler and evaluate the save plan on ``ts``."""
-    import jax
-    import jax.numpy as jnp
-
-    from summer4.jax.propertydata import PropertyData
-    from summer4.jax.state import State, unpack_state
-    from summer4.results.eval import build_save_fn
-
-    save_fn = build_save_fn(plan, pmap=model.pmap, edge_maps=dict(model.edge_maps))
-    y_arr, rebox = unpack_state(y0, model.pmap)
-
-    def observe_arr(t: Any, y: Any) -> Any:
-        y_in = rebox(y)
-        return model.observe(t, y_in, params)
-
-    def snapshot(t: Any, y: Any) -> dict[str, Any]:
-        ctx = observe_arr(t, y)
-        raw = save_fn(ctx)
-        out: dict[str, Any] = {}
-        for k, v in raw.items():
-            out[k] = v.data if isinstance(v, PropertyData) else jnp.asarray(v)
-        return out
-
-    # Shape template
-    init_snap = snapshot(jnp.asarray(t0), y_arr)
-
-    # Nested scan fast path when ts is an arithmetic subgrid of the step grid.
-    if _is_arithmetic_subgrid(ts, t0, dt):
-        stride = int(round((float(ts[1]) - float(ts[0])) / dt)) if ts.size > 1 else max(steps, 1)
-        n_saves = int(ts.size)
-
-        def outer_body(
-            carry: tuple[Any, Any, Any], unused: Any
-        ) -> tuple[tuple[Any, Any, Any], dict[str, Any]]:
-            del unused
-            t, y, k = carry
-            snap = snapshot(t, y)
-
-            def step(i: Any, ty: tuple[Any, Any]) -> tuple[Any, Any]:
-                del i
-                tt, yy = ty
-                ctx = observe_arr(tt, yy)
-                dy_val = ctx.dy
-                if isinstance(dy_val, State):
-                    dy_a = dy_val.compartments.data
-                elif isinstance(dy_val, PropertyData):
-                    dy_a = dy_val.data
-                else:
-                    dy_a = dy_val
-                return tt + dt, yy + dt * dy_a
-
-            do_step = k < (n_saves - 1)
-
-            def do_stride(ty: tuple[Any, Any]) -> tuple[Any, Any]:
-                result: tuple[Any, Any] = jax.lax.fori_loop(0, stride, step, ty)
-                return result
-
-            t2, y2 = jax.lax.cond(do_step, do_stride, lambda ty: ty, (t, y))
-            return (t2, y2, k + 1), snap
-
-        (_tf, _yf, _), snaps = jax.lax.scan(
-            outer_body, (jnp.asarray(t0), y_arr, jnp.asarray(0)), xs=None, length=n_saves
-        )
-        return {k: snaps[k] for k in init_snap}
-
-    # General path: stack all step states, interpolate onto ts, vmap observe.
-    def body(carry: tuple[Any, Any], unused: Any) -> tuple[tuple[Any, Any], Any]:
-        del unused
-        t, y = carry
-        ctx = observe_arr(t, y)
-        dy_val = ctx.dy
-        if isinstance(dy_val, State):
-            dy_a = dy_val.compartments.data
-        elif isinstance(dy_val, PropertyData):
-            dy_a = dy_val.data
-        else:
-            dy_a = dy_val
-        return (t + dt, y + dt * dy_a), y
-
-    (_t_final, y_final), ys = jax.lax.scan(body, (jnp.asarray(t0), y_arr), xs=None, length=steps)
-    ys_all = jnp.concatenate([ys, y_final[None, ...]], axis=0)
-    step_ts = t0 + dt * np.arange(steps + 1, dtype=np.float64)
-
-    from summer4.time import TimeAxis
-
-    axis = TimeAxis(values=step_ts, kind="grid")
-    idx, w = axis.weights_for(ts)
-    idx_j = jnp.asarray(idx)
-    w_j = jnp.asarray(w)
-    y_left = ys_all[idx_j[:, 0]]
-    y_right = ys_all[idx_j[:, 1]]
-    y_at = w_j[:, 0:1] * y_left + w_j[:, 1:2] * y_right
-
-    snaps = jax.vmap(snapshot)(jnp.asarray(ts), y_at)
-    return {k: snaps[k] for k in init_snap}
 
 
 class FlowModel:

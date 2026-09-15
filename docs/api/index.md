@@ -104,13 +104,15 @@ compartment {class}`PropertyMap` they raise.
    FlowMass
    ComputedValue
    SaveFn
-   EVERYTHING
    Result
    Trace
    SolverInfo
    PropertyData
    State
 ```
+
+`EVERYTHING` is the empty :class:`~summer4.results.plan.SavePlan` sentinel
+(:meth:`~summer4.flows.compiled.CompiledModel.expand` fills it).
 
 ### Rates and adjustments
 
