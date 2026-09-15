@@ -54,7 +54,11 @@ def _default_notebooks() -> list[Path]:
         capture_output=True,
         text=True,
     )
-    return [ROOT / line for line in result.stdout.splitlines() if line.strip()]
+    return [
+        ROOT / line
+        for line in result.stdout.splitlines()
+        if line.strip() and (ROOT / line).is_file()
+    ]
 
 
 def main(argv: list[str] | None = None) -> int:

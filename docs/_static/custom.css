@@ -1,0 +1,27 @@
+/* summer4 documentation tweaks */
+
+.bd-main .bd-content .bd-article-container {
+    max-width: 60rem;
+}
+
+/* Compartment tables and coverage matrices are wide; let them scroll. */
+table.docutils {
+    display: block;
+    overflow-x: auto;
+    max-width: 100%;
+}
+
+/* Status markers used in the coverage matrices. */
+.status-yes { color: #1a7f37; font-weight: 600; }
+.status-partial { color: #9a6700; font-weight: 600; }
+.status-no { color: #b35900; font-weight: 600; }
+
+div.cell_output pre {
+    font-size: 0.85em;
+}
+
+/* Plotly figures emitted by the flows-spike notebooks. */
+.cell_output .plotly-graph-div {
+    max-width: 100%;
+    overflow-x: auto;
+}

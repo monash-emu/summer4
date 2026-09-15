@@ -39,3 +39,7 @@ benchmarks/results/
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Documentation build
+docs/_build/
+docs/api/generated/

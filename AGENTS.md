@@ -83,6 +83,61 @@ Cursor plans must travel with the branch so a merge automatically copies them in
 
 Do not leave the only copy of a plan outside the repository. Do not edit a plan file that was already committed as historical record; add a new plan for follow-up work.
 
+## Before planning feature work: read the coverage ledger
+
+`docs/evaluation/coverage-ledger.md` is the authoritative record of what summer4
+covers and what full coverage requires. It holds:
+
+- every summer2 API symbol exercised by the summer2 docs or the summer textbook,
+  with a single `Status` (`full` / `partial` / `none`);
+- the same for all twenty textbook chapters and eleven summer2 doc pages;
+- remaining work packages (WP2–WP10; WP1 is applied) with the ledger IDs each
+  one closes, and a computed table of coverage after each.
+
+Read it before proposing feature work, so a branch lands the next package rather
+than a duplicate of one already designed. Quote its IDs (`F1`, `D4`, `WP2`) in
+plans and PR descriptions — they are stable, and agents on other branches can
+resolve them without this context.
+
+**If your branch changes what summer4 can do, update the ledger in the same
+commit.** Change the affected rows' `Status`, then:
+
+```bash
+pixi run coverage-write   # recompute the progression table
+pixi run coverage         # verify statuses and quoted totals
+```
+
+`tests/test_coverage_ledger.py` fails if a status is misspelled, if the
+progression table is stale, or if `docs/evaluation/index.md` quotes totals the
+ledger no longer supports.
+
+Status values are exactly `full`, `partial` or `none`:
+
+| Status | Meaning |
+|---|---|
+| `full` | A documented, working way to achieve what the summer2 symbol does |
+| `partial` | Achievable, but the user supplies something summer2 supplied, or a material limitation applies |
+| `none` | No way to do it |
+
+Five rows are marked as never reaching `full` on purpose — they are summer2
+shapes summer4 has rejected, not capabilities it lacks. Do not "fix" them
+without changing that decision explicitly.
+
+## Documentation
+
+Documentation lives in `docs/` and builds with `pixi run -e docs docs`. Every
+notebook on the site executes at build time (`nb_execution_raise_on_error`), so
+a docs build is a test run — add `pixi run -e docs docs-strict` to your checks
+when a change touches documented behaviour.
+
+Two rules that are easy to get wrong:
+
+- **Do not describe planned behaviour in the present tense.** Where a summer2 or
+  textbook capability has no summer4 equivalent, say so and cite the ledger.
+- **Flows ship in `summer4`.** Document them in the user guide against
+  `from summer4 import ...` / `CompiledModel`. There is no spike copy under
+  `explorations/` or `docs/dev/flows/`.
+
 ## Feature acceptance bar
 
 A branch that adds or changes **features** (new public API, new modelling capability, or user-visible behaviour) is not complete unless it includes all three:
@@ -112,6 +167,7 @@ pixi run format-check
 pixi run check-notebooks
 pixi run test
 pixi run check-branch
+pixi run coverage
 ```
 
 `check-branch` fails if this branch changed `src/summer4` but did not also change `tests/` and (for new or changed public modules) `examples/notebooks/`, or if a feature branch has no plan under `plans/`.
