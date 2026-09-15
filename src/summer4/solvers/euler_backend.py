@@ -34,13 +34,14 @@ def _snapshot_factory(
     params: object,
     rebox: Any,
     save_fn: Any,
+    keep: frozenset[str] | None = None,
 ) -> Any:
     import jax.numpy as jnp
 
     from summer4.jax.propertydata import PropertyData
 
     def observe_arr(t: Any, y: Any) -> Any:
-        return model.observe(t, rebox(y), params)
+        return model.observe(t, rebox(y), params, keep=keep)
 
     def snapshot(t: Any, y: Any) -> dict[str, Any]:
         ctx = observe_arr(t, y)
@@ -196,7 +197,8 @@ def euler_solve(
     for group in groups:
         group_plan = _filtered_plan(plan, group.keys)
         save_fn = build_save_fn(group_plan, pmap=model.pmap, edge_maps=dict(model.edge_maps))
-        observe_arr, snapshot = _snapshot_factory(model, params, rebox, save_fn)
+        keep = group_plan.flow_reads()
+        observe_arr, snapshot = _snapshot_factory(model, params, rebox, save_fn, keep=keep)
         init_snap = snapshot(np.asarray(t0), y_arr)
 
         if _is_arithmetic_subgrid(group.ts, t0, dt):

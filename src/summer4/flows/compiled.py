@@ -30,8 +30,11 @@ from summer4.flows.rates import (
     _adjust_bytes,
     _adjust_field_paths,
     _field_paths,
+    _flow_rate_refs,
     _lookup_path,
     _rate_bytes,
+    derived_return_schema,
+    validate_computed_path,
 )
 from summer4.flows.types import FlowLike
 from summer4.properties import Property
@@ -306,6 +309,28 @@ def _flow_paths(flow: FlowEdges) -> set[tuple[str, ...]]:
     return paths
 
 
+def _rate_flow_deps(flows: Mapping[str, FlowEdges]) -> frozenset[str]:
+    """Flow names referenced by any rate / adjustment via ``FlowRef``."""
+    names: set[str] = set()
+    for flow in flows.values():
+        names |= _flow_rate_refs(flow.rate, flow.adjust)
+    return frozenset(names)
+
+
+def _validate_plan_computed(plan: Any, derived_fn: DerivedFn | None) -> None:
+    """Validate ``ComputedValue`` paths against ``derived_fn``'s return schema."""
+    from summer4.results.plan import ComputedValue, SavePlan
+
+    if not isinstance(plan, SavePlan):
+        return
+    schema = derived_return_schema(derived_fn)
+    if schema is None:
+        return
+    for req in plan.requests.values():
+        if isinstance(req.what, ComputedValue):
+            validate_computed_path(req.what.path, schema)
+
+
 def _flow_digest(flow: FlowEdges, edge_map: EdgeMap) -> bytes:
     hasher = hashlib.blake2b(digest_size=16)
     hasher.update(flow.name.encode())
@@ -400,8 +425,21 @@ class CompiledModel:
         except KeyError:
             raise KeyError(f"Unknown flow {name!r}. Known: {list(self.edge_maps)}") from None
 
-    def observe(self, t: object, y: object, params: object) -> SaveContext:
-        """Evaluate the field once and return ``dy`` plus per-flow masses."""
+    def observe(
+        self,
+        t: object,
+        y: object,
+        params: object,
+        *,
+        keep: frozenset[str] | None = None,
+    ) -> SaveContext:
+        """Evaluate the field once and return ``dy`` plus per-flow masses.
+
+        ``keep`` restricts which flow masses appear in
+        :attr:`SaveContext.flows` after the step. Rate expressions still see
+        every intermediate mass during the loop; pruning happens at the end.
+        Pass ``None`` to keep every flow (the default).
+        """
         import jax.numpy as jnp
 
         from summer4.jax.propertydata import PropertyData
@@ -453,6 +491,9 @@ class CompiledModel:
                     dy = _scatter_add(dy, src_idx, -mass)
                     dy = _scatter_add(dy, dest_idx, mass)
                     flow_values[name] = mass
+        if keep is not None:
+            retain = keep | _rate_flow_deps(self.flows)
+            flow_values = {k: v for k, v in flow_values.items() if k in retain}
         y_boxed = rebox(y_arr) if not isinstance(y, (PropertyData, State)) else y
         if isinstance(y, State):
             y_out: Any = y
@@ -485,6 +526,7 @@ class CompiledModel:
         if not isinstance(plan, SavePlan):
             raise TypeError(f"Expected SavePlan, got {type(plan).__name__}.")
         if plan.requests:
+            _validate_plan_computed(plan, self.derived_fn)
             return plan
         requests: dict[str, SaveRequest] = {
             "compartments": SaveRequest(Compartments()),
@@ -494,12 +536,14 @@ class CompiledModel:
         for path in self.computed_paths:
             key = ".".join(path)
             requests[key] = SaveRequest(ComputedValue(path=path))
-        return SavePlan(
+        expanded = SavePlan(
             requests=requests,
             ts=plan.ts,
             dense=plan.dense,
             solver_stats=plan.solver_stats,
         )
+        _validate_plan_computed(expanded, self.derived_fn)
+        return expanded
 
     def describe(
         self,
@@ -529,9 +573,10 @@ class CompiledModel:
         if y0 is None:
             y0 = PropertyData.wrap(self.pmap, np.zeros(self.pmap.size))
         save_fn = build_save_fn(expanded, pmap=self.pmap, edge_maps=dict(self.edge_maps))
+        keep = expanded.flow_reads()
 
         def _one(t: object, y: object, params: object) -> Any:
-            ctx = self.observe(t, y, params)
+            ctx = self.observe(t, y, params, keep=keep)
             return save_fn(ctx)
 
         try:
@@ -595,7 +640,7 @@ class CompiledModel:
         Exactly one of ``t1`` / ``steps``. ``solver`` is a name (``"euler"``,
         ``"heun"``, ``"tsit5"``, ``"dopri5"``) or a diffrax solver instance.
         """
-        from summer4.results.eval import dims_for_quantity
+        from summer4.results.eval import dims_for_quantity, values_for
         from summer4.results.groups import group_requests
         from summer4.results.plan import EVERYTHING, SavePlan
         from summer4.results.result import Result
@@ -685,18 +730,7 @@ class CompiledModel:
                 epoch=epoch if isinstance(epoch, Epoch) else epoch,
                 kind="grid",
             )
-            from summer4.jax.propertydata import PropertyData
-            from summer4.results.plan import Compartments
-
-            if isinstance(req.what, Compartments) and req.what.sum_over is None:
-                if req.what.where is None:
-                    values: Any = PropertyData(self.pmap, raw)
-                else:
-                    where = req.what.where
-                    idx = where if isinstance(where, np.ndarray) else self.pmap.select(where)
-                    values = PropertyData(self.pmap.take(idx), raw)
-            else:
-                values = raw
+            values = values_for(req, raw, self)
             traces[key] = Trace(times=trace_times, values=values, dims=dims)
 
         return Result(

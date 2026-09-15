@@ -142,7 +142,7 @@ def test_compartments_where_in_saveplan_stays_map_aware() -> None:
     assert narrowed.values.pmap.size == 1
     by_age = infected.sum_over(age)
     assert by_age.dims[-1] == "group"
-    assert np.asarray(res["infected_by_age"].values).shape[-1] == len(age.traits)
+    assert np.asarray(res["infected_by_age"].values.data).shape[-1] == len(age.traits)
 
 
 def test_jit_select_gather_shrinks_under_jit() -> None:
@@ -302,7 +302,8 @@ def test_flow_mass_in_plan() -> None:
     )
     res = cm.run({}, y0, t0=0.0, steps=5, dt=1.0, save=plan)
     assert res["infection"].dims == ("time", "edge")
-    assert np.asarray(res["infection"].values).ndim == 2
+    assert isinstance(res["infection"].values, PropertyData)
+    assert np.asarray(res["infection"].values.data).ndim == 2
 
 
 def test_everything_expands() -> None:

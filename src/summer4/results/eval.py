@@ -6,7 +6,7 @@ from typing import Any
 
 import numpy as np
 
-from summer4.flows.edges import EdgeMap
+from summer4.flows.edges import EdgeMap, rewrite_edge_selector, sum_over_edge
 from summer4.flows.rates import _lookup_path
 from summer4.jax.propertydata import PropertyData
 from summer4.propertymap import PropertyMap
@@ -14,46 +14,32 @@ from summer4.results.plan import Compartments, ComputedValue, FlowMass, SaveFn, 
 from summer4.selectors import Selector
 
 
-def _apply_where(data: Any, pmap: PropertyMap, where: Selector | np.ndarray | None) -> Any:
+def _select_idx(
+    pmap: PropertyMap,
+    where: Selector | np.ndarray,
+    *,
+    edge: bool = False,
+) -> np.ndarray:
+    if isinstance(where, np.ndarray):
+        arr = np.asarray(where)
+        if arr.dtype == np.bool_ or arr.dtype == bool:
+            return np.flatnonzero(arr).astype(np.int32, copy=False)
+        return arr.astype(np.int32, copy=False)
+    sel = rewrite_edge_selector(pmap, where) if edge else where
+    return pmap.select(sel)
+
+
+def _apply_where(
+    data: Any,
+    pmap: PropertyMap,
+    where: Selector | np.ndarray | None,
+    *,
+    edge: bool = False,
+) -> Any:
     if where is None:
         return data
-    if isinstance(where, np.ndarray):
-        return data[..., where]
-    idx = pmap.select(where)
+    idx = _select_idx(pmap, where, edge=edge)
     return data[..., idx]
-
-
-def _sum_over_edge(
-    mass: Any,
-    edge_map: EdgeMap,
-    prop: Any,
-    side: str,
-) -> Any:
-    import jax
-    import jax.numpy as jnp
-
-    from summer4.properties import Property
-
-    if not isinstance(prop, Property):
-        prop = edge_map.table.get_property(prop)
-    suffix = "@source" if side == "source" else "@dest"
-    mangled = edge_map.table.get_property(f"{prop.name}{suffix}")
-    col_i = edge_map.table.column_index(mangled)
-    codes = np.asarray(edge_map.table.codes[:, col_i], dtype=np.int32)
-    n_traits = len(prop.traits)
-    valid = codes >= 0
-    safe = np.where(valid, codes, 0).astype(np.int32)
-    mass_j = jnp.asarray(mass)
-    weighted = mass_j * jnp.asarray(valid)
-
-    def _row(row: Any) -> Any:
-        return jax.ops.segment_sum(row, safe, num_segments=n_traits)
-
-    if mass_j.ndim == 1:
-        return _row(weighted)
-    flat = jnp.reshape(weighted, (-1, mass_j.shape[-1]))
-    summed = jax.vmap(_row)(flat)
-    return jnp.reshape(summed, mass_j.shape[:-1] + (n_traits,))
 
 
 def eval_quantity(
@@ -76,7 +62,7 @@ def eval_quantity(
             data = y.data if isinstance(y, PropertyData) else jnp.asarray(y)
             active = pmap
             if where is not None:
-                idx = where if isinstance(where, np.ndarray) else pmap.select(where)
+                idx = _select_idx(pmap, where, edge=False)
                 active = pmap.take(idx)
                 data = data[..., idx]
             pd = PropertyData(active, data)
@@ -86,17 +72,51 @@ def eval_quantity(
                 raise KeyError(f"Flow {flow!r} not in SaveContext.flows.")
             mass = ctx.flows[flow]
             emap = edge_maps[flow]
-            mass = _apply_where(mass, emap.table, where)
+            table = emap.table
+            if where is not None:
+                idx = _select_idx(table, where, edge=True)
+                table = table.take(idx)
+                mass = mass[..., idx]
             if sum_over is None:
-                return mass
+                return PropertyData(table, mass)
             prop, side = sum_over
-            return _sum_over_edge(ctx.flows[flow], emap, prop, side)
+            return sum_over_edge(mass, table, prop, side)
         case ComputedValue(path=path):
             return _lookup_path(ctx.derived, path)
         case SaveFn(fn=fn):
             return fn(ctx)
         case _:
             raise TypeError(f"Unknown quantity {type(what).__name__}.")
+
+
+def values_for(req: Any, raw: Any, model: Any) -> Any:
+    """Re-attach :class:`PropertyMap`s to solver-saved bare arrays.
+
+    Both Euler and diffrax backends strip ``PropertyData.data`` when stacking
+    saves; this is the single place that rebuilds the maps so the backends
+    cannot disagree about a trace's ``values``.
+    """
+    what = req.what if hasattr(req, "what") else req
+    match what:
+        case Compartments(where=where, sum_over=sum_over):
+            if sum_over is not None:
+                return PropertyData(PropertyMap.from_property(sum_over), raw)
+            if where is None:
+                return PropertyData(model.pmap, raw)
+            idx = _select_idx(model.pmap, where, edge=False)
+            return PropertyData(model.pmap.take(idx), raw)
+        case FlowMass(flow=flow, where=where, sum_over=sum_over):
+            emap = model.edge_maps[flow]
+            table = emap.table
+            if where is not None:
+                idx = _select_idx(table, where, edge=True)
+                table = table.take(idx)
+            if sum_over is not None:
+                prop, _side = sum_over
+                return PropertyData(PropertyMap.from_property(prop), raw)
+            return PropertyData(table, raw)
+        case _:
+            return raw
 
 
 def build_save_fn(

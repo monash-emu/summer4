@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -82,15 +83,144 @@ def _gate(gate: Trait | None, rewritten: Selector) -> Selector:
     return gate & rewritten
 
 
-def _side_label(pmap: PropertyMap, table: PropertyMap, side: str, row: int) -> str:
+def _marker_gates(table: PropertyMap) -> tuple[Trait | None, Trait | None]:
+    """Return ``(src_gate, dest_gate)`` derived from marker columns on ``table``.
+
+    A gate is needed exactly when its marker column is ``-1`` throughout — the
+    same condition :meth:`EdgeMap.from_indices` uses at construction.
+    """
+    src_marker = table.get_property("@source")
+    dest_marker = table.get_property("@dest")
+    src_col = np.asarray(table.column("@source"))
+    dest_col = np.asarray(table.column("@dest"))
+    src_gate = src_marker.trait(_MARKER_TRAIT) if np.all(src_col == _NA) else None
+    dest_gate = dest_marker.trait(_MARKER_TRAIT) if np.all(dest_col == _NA) else None
+    return src_gate, dest_gate
+
+
+def rewrite_edge_selector(table: PropertyMap, sel: Selector) -> Selector:
+    """Lower ``Source``/``Dest`` against an edge ``table`` alone (no ``EdgeMap``).
+
+    Gates are derived from the ``@source`` / ``@dest`` marker columns so a
+    :class:`~summer4.results.trace.Trace` can select edges without holding an
+    unhashable :class:`EdgeMap` in pytree aux.
+    """
+    src_gate, dest_gate = _marker_gates(table)
+
+    def _rewrite(node: Selector) -> Selector:
+        match node:
+            case Source(inner=inner):
+                return _gate(src_gate, _rename(inner, "@source"))
+            case Dest(inner=inner):
+                return _gate(dest_gate, _rename(inner, "@dest"))
+            case And(left=left, right=right):
+                return And(_rewrite(left), _rewrite(right))
+            case Or(left=left, right=right):
+                return Or(_rewrite(left), _rewrite(right))
+            case Not(inner=inner):
+                return Not(_rewrite(inner))
+            case Everything() | Nothing():
+                return node
+            case _:
+                raise TypeError(
+                    f"{type(node).__name__} is a compartment selector; on a flow it must "
+                    "be wrapped in Source(...) or Dest(...)."
+                )
+
+    return _rewrite(sel)
+
+
+def _compartment_props_from_table(table: PropertyMap) -> tuple[Property, ...]:
+    """Recover demangled compartment properties from an edge table's columns."""
+    seen: dict[str, Property] = {}
+    for prop in table.properties:
+        name = prop.name
+        if name in ("@source", "@dest"):
+            continue
+        if name.endswith("@source"):
+            base = name[: -len("@source")]
+        elif name.endswith("@dest"):
+            base = name[: -len("@dest")]
+        else:
+            continue
+        if base not in seen:
+            seen[base] = Property._mangled(base, prop.traits)
+    return tuple(seen.values())
+
+
+def _side_label_from_table(table: PropertyMap, side: str, row: int) -> str:
     suffix = f"@{side}"
     parts: list[str] = []
-    for prop in pmap.properties:
+    for prop in _compartment_props_from_table(table):
         code = int(table.column(f"{prop.name}{suffix}")[row])
         if code == _NA:
             continue
         parts.append(f"{prop.name}={prop.traits[int(code)]}")
     return "_".join(parts)
+
+
+def edge_labels(table: PropertyMap) -> tuple[str, ...]:
+    """Demangled edge labels such as ``state=S_age=0-4 -> state=I_age=0-4``."""
+    src_col = np.asarray(table.column("@source"))
+    dest_col = np.asarray(table.column("@dest"))
+    out: list[str] = []
+    for row in range(table.size):
+        src = _side_label_from_table(table, "source", row)
+        dest = _side_label_from_table(table, "dest", row)
+        has_src = int(src_col[row]) != _NA
+        has_dest = int(dest_col[row]) != _NA
+        if not has_src:
+            out.append(f"-> {dest}")
+        elif not has_dest:
+            out.append(f"{src} ->")
+        else:
+            out.append(f"{src} -> {dest}")
+    return tuple(out)
+
+
+def sum_over_edge(
+    mass: object,
+    table: PropertyMap,
+    prop: Property | str,
+    side: str,
+) -> Any:
+    """Sum per-edge ``mass`` by trait of ``prop`` on ``side`` (``source`` or ``dest``).
+
+    Returns a :class:`~summer4.jax.propertydata.PropertyData` over
+    :meth:`PropertyMap.from_property` so group columns are labelled by trait name.
+    """
+    import jax
+    import jax.numpy as jnp
+
+    from summer4.jax.propertydata import PropertyData
+
+    if side not in ("source", "dest"):
+        raise ValueError(f"side must be 'source' or 'dest', got {side!r}.")
+    if isinstance(prop, Property):
+        resolved = prop
+    else:
+        mangled_lookup = table.get_property(f"{prop}@{side}")
+        resolved = Property(prop, mangled_lookup.traits)
+
+    mangled = table.get_property(f"{resolved.name}@{side}")
+    col_i = table.column_index(mangled)
+    codes = np.asarray(table.codes[:, col_i], dtype=np.int32)
+    n_traits = len(resolved.traits)
+    valid = codes >= 0
+    safe = np.where(valid, codes, 0).astype(np.int32)
+    mass_j = jnp.asarray(mass)
+    weighted = mass_j * jnp.asarray(valid)
+
+    def _row(row: Any) -> Any:
+        return jax.ops.segment_sum(row, safe, num_segments=n_traits)
+
+    if mass_j.ndim == 1:
+        reduced: Any = _row(weighted)
+    else:
+        flat = jnp.reshape(weighted, (-1, mass_j.shape[-1]))
+        summed = jax.vmap(_row)(flat)
+        reduced = jnp.reshape(summed, mass_j.shape[:-1] + (n_traits,))
+    return PropertyData(PropertyMap.from_property(resolved), reduced)
 
 
 @dataclass(frozen=True, slots=True)
@@ -180,24 +310,7 @@ class EdgeMap:
 
     def rewrite(self, sel: Selector) -> Selector:
         """Lower ``Source``/``Dest`` to mangled compartment selectors on ``table``."""
-        match sel:
-            case Source(inner=inner):
-                return _gate(self._src_gate, _rename(inner, "@source"))
-            case Dest(inner=inner):
-                return _gate(self._dest_gate, _rename(inner, "@dest"))
-            case And(left=left, right=right):
-                return And(self.rewrite(left), self.rewrite(right))
-            case Or(left=left, right=right):
-                return Or(self.rewrite(left), self.rewrite(right))
-            case Not(inner=inner):
-                return Not(self.rewrite(inner))
-            case Everything() | Nothing():
-                return sel
-            case _:
-                raise TypeError(
-                    f"{type(sel).__name__} is a compartment selector; on a flow it must "
-                    "be wrapped in Source(...) or Dest(...)."
-                )
+        return rewrite_edge_selector(self.table, sel)
 
     def _validate_edge_selector(self, sel: Selector) -> None:
         if not isinstance(sel, SelectorOps):
@@ -248,14 +361,4 @@ class EdgeMap:
 
     def labels(self) -> tuple[str, ...]:
         """Demangled labels such as ``state=S_age=0-4 -> state=I_age=0-4``."""
-        out: list[str] = []
-        for row in range(self.table.size):
-            src = _side_label(self.pmap, self.table, "source", row)
-            dest = _side_label(self.pmap, self.table, "dest", row)
-            if self.src_idx is None:
-                out.append(f"-> {dest}")
-            elif self.dest_idx is None:
-                out.append(f"{src} ->")
-            else:
-                out.append(f"{src} -> {dest}")
-        return tuple(out)
+        return edge_labels(self.table)
