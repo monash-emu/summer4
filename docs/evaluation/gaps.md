@@ -52,10 +52,12 @@ property".
 Request mechanisms for compartment-based, flow-based, aggregate, cumulative and
 function outputs; a results type; a dataframe view.
 
-**State:** not started. `partition` and `group_by` already produce the index sets
-that compartment outputs aggregate over, so the aggregation half is cheap; the
-request and post-integration machinery is not. This is the **binding
-constraint** now that flows ship.
+**State:** done (ledger WP2 and WP4). `CompiledModel.run` returns a `Result` of
+named `Trace`s; `SavePlan` declares what to keep; the query surface covers
+select, aggregate, cumulative, calendar resample, rolling and interpolated
+`at_times`, and `to_frame` / `to_pandas` give the dataframe view. Flow-output
+polarity queries (`sum_over(..., side=)`, `incidence`, `integrate`) and
+validated `ComputedValue` capture ship alongside.
 
 ### 1.6 `PropertyMap` must become hashable
 
@@ -130,18 +132,28 @@ Still missing:
 
 - **Vendored textbook figures.** Chapters 2–6 and 12–19 embed SVGs from the
   source repository under BSD-2-Clause.
-- **A plotting convention.** Both corpora plot every result. Choosing one
-  (Plotly, as in the source textbook, or matplotlib) and a dataframe
-  representation should happen alongside the results object in 1.5, not after.
+- ~~**A plotting convention.**~~ Settled: Plotly through the pandas plotting
+  backend over `Trace.to_pandas()`, as in the summer2 documentation. See
+  {doc}`../dev/plotting` for the decision and the Sphinx renderer it requires.
 - **A documentation CI check.** `pixi run -e docs docs-strict` should run on
   every pull request, since the site executes its own claims.
 
 ## The single highest-leverage move
 
-**Trajectories and a results object** (ledger WP2). Flows are in the package;
-`euler` still returns only the final state. Every summer2 notebook and almost
-every textbook chapter ends by plotting a trajectory. Landing WP2 is what
-converts "modelling content is expressible" into "the chapter can be published".
+**Force of infection and mixing** (ledger WP6). WP2 landed trajectories and a
+results object, WP4 landed flow outputs, WP7 landed an adaptive solver, and
+WP11 landed sparse calibration targets, so a model can now be built, run,
+queried and fitted. WP6 is what remains between that and the eight textbook
+chapters on heterogeneous mixing.
+
+Its row count (`F7` `F8` `A4` `M1`) understates it.
+{doc}`age-stratified-seirs-case-study` measures the reason: a hand-written
+homogeneous mixing matrix gives every stratum an *identical* force of infection,
+so age-varying infectiousness is not identifiable — a fit recovers an inverted
+age gradient at a lower loss than the parameters that generated the data.
+Off-diagonal mixing structure is not a convenience over hand-written coupling;
+without it a whole class of stratum-specific parameters cannot be estimated at
+all.
 
 `Present` / `Absent` binding is **settled**: they are non-binding in flow
 pairing.

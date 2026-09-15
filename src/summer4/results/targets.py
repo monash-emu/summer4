@@ -148,7 +148,7 @@ class Target:
 
 @dataclass(frozen=True, slots=True)
 class TargetSet:
-    """A small static collection of :class:`Target`s for one likelihood run."""
+    """A small static collection of :class:`Target` objects for one likelihood run."""
 
     targets: tuple[Target, ...]
 

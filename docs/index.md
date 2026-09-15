@@ -38,6 +38,13 @@ user/index
 
 ```{toctree}
 :maxdepth: 2
+:caption: Case studies
+
+case-studies/index
+```
+
+```{toctree}
+:maxdepth: 2
 :caption: Developer guide
 
 dev/index

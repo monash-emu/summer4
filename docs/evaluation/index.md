@@ -10,6 +10,7 @@ coverage-ledger
 feature-completeness
 docs-coverage
 user-satisfaction
+age-stratified-seirs-case-study
 gaps
 ```
 
@@ -48,4 +49,8 @@ workflow remain.
 - {doc}`user-satisfaction` is a heuristic evaluation: task walkthroughs for three
   user types, and an ergonomics review of the API that does exist. There is no
   user research behind it and it does not pretend otherwise.
+- {doc}`age-stratified-seirs-case-study` takes one concrete modelling problem
+  end to end and reports what it cost, requirement by requirement, against the
+  ledger. It is the only page here whose claims come from building the thing
+  rather than from reading the API.
 - {doc}`gaps` collects the blockers in priority order.

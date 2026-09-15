@@ -80,8 +80,10 @@ pygments_style = "friendly"
 html_theme = "pydata_sphinx_theme"
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]
-# User-guide flow notebooks compile a JAX vector field.
-html_js_files = ["https://cdn.plot.ly/plotly-2.35.2.min.js"]
+# Plotly figures carry their own CDN loader: notebooks set the
+# "notebook_connected" renderer, so each output embeds a script tag for the
+# plotly.js matching the installed plotly. A global html_js_files pin would
+# load a second, different major version alongside it. See dev/plotting.
 
 html_theme_options = {
     "navigation_depth": 3,

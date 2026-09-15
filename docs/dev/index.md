@@ -17,5 +17,6 @@ pixi
 testing
 benchmarking
 documentation
+plotting
 contributing
 ```

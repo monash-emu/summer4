@@ -24,3 +24,14 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
   `Trace._apply_rolling` grows the jaxpr with trajectory length.
 - [`state-ledgers-incidence.md`](state-ledgers-incidence.md) — opt-in exact
   incidence via `State.ledgers` (post-hoc trapezoid is biased for calibration).
+- [`propertydata-where-polarity.md`](propertydata-where-polarity.md) —
+  `PropertyData.where` replaces what it matches, so the natural reading is
+  silently wrong.
+- [`describe-requires-params.md`](describe-requires-params.md) —
+  `CompiledModel.describe` passes `None` for params, so it cannot size a plan
+  for any model with a real `derived_fn`.
+- [`targetset-residual-reduction.md`](targetset-residual-reduction.md) —
+  `TargetSet.residuals` cannot reduce a stratified save onto an aggregate
+  series.
+- [`trace-plot-backend-coupling.md`](trace-plot-backend-coupling.md) —
+  `Trace.plot` hardcodes matplotlib and forwards backend-specific kwargs.
