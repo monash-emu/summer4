@@ -140,6 +140,62 @@ published as written.
 | `detailed/InitialPopulationGraphobject` | `none` | Initial population, parameters | — |
 <!-- /ledger:summer2docs -->
 
+## Delivery status
+
+Where the landed work physically lives, and which of the remaining packages have
+a written plan. This section records *delivery*, not capability — the `Status`
+column of the API ledger above stays the authority on what summer4 can do.
+
+```{admonition} The flows stack is not on `main`
+:class: warning
+
+`main` carries the compartment taxonomy and CI only. Every phase below lives on
+an unmerged feature branch, each one stacked on the previous. A clone of `main`
+cannot `import summer4.flows`. Branch off the tip of the stack, not off `main`,
+until the stack is merged.
+```
+
+### Landed phases
+
+Phases of `plans/flows-derived-outputs.plan.md`, in stack order. Each branch
+contains every branch above it.
+
+| Phase | Work package | Branch | Tip | Plan on the branch |
+| --- | --- | --- | --- | --- |
+| 0 | Taxonomy prerequisites | `feat/taxonomy-prereqs-phase0` | `285365c` | `plans/taxonomy-prereqs-phase0.plan.md` |
+| 1 | WP1 — flows core | `feat/flows-core` | `fd10502` | `plans/flows-core.plan.md` |
+| 2 | WP2 — trajectories and `Result` | `feat/results` | `2e66774` | `plans/results.plan.md` |
+| 2a | WP2 follow-up — `Trace.select` gather | `feat/trace-select-submap` | `50e0a31` | `plans/trace-select-submap.plan.md` |
+| 3 | WP7 — diffrax backend | `feat/diffrax-solver` | `32b3e00` | `plans/diffrax-solver.plan.md` |
+| 4 | WP4 — flow outputs and polarity | `feat/flow-outputs` | `088814a` | `plans/flow-outputs.plan.md` |
+| 5 | WP11 — sparse targets | `feat/sparse-targets` | `3c0139c` | `plans/sparse-targets.plan.md` |
+| — | Case study (not a work package) | `docs/age-stratified-seirs-case-study` | `2b1a6ab` | `plans/age-stratified-seirs-case-study.plan.md` |
+
+Every phase shipped its notebook: `examples/notebooks/01-taxonomy.ipynb`
+through `07-targets.ipynb`, plus `docs/textbook/02`, `docs/textbook/07` and
+`docs/case-studies/age-stratified-seirs.ipynb`.
+
+### Planning status of the remaining packages
+
+**No remaining work package has a detailed plan yet.** What exists for each is
+its paragraph in *The path to 100%* above and one line in the
+*Remaining to the 46/52 ceiling* section of
+`plans/flows-derived-outputs.plan.md`. That is a scope statement, not a plan:
+none of them names modules, types, tests or a notebook, which is what the
+landed phases each had before they were built.
+
+| WP | Name | Planning artifact | What a plan must still settle |
+| --- | --- | --- | --- |
+| WP3 | Initial population | Ledger paragraph only | Whether `set_initial_population` is a `FlowModel` method or a free function over `parent_row`; how a split interacts with `stratify(where=)` on ragged maps |
+| WP5 | Time-varying function library | Ledger paragraph only | The JAX-traceable form of interpolation and piecewise functions; whether P5 `Data` is a loading surface at all |
+| WP6 | Force of infection and mixing | Ledger paragraph only | **The largest unprototyped design problem left.** How a reduction over a grouping feeds back into a per-edge rate, and how a mixing matrix weights that coupling. No spike exists |
+| WP9 | Contact survey data | Ledger paragraph only | Depends on WP6; loading, validating and scaling empirical matrices |
+| WP10 | Calibration | Ledger paragraph only | The numpyro/optax workflow over `TargetSet`; probabilistic likelihoods were deliberately left out of WP11 |
+
+WP6 is the ordering constraint: WP9 and WP10 both sit behind it, and it closes
+four API rows (F7 F8 A4 M1) plus textbook chapters 12–15. Deferred gotchas that
+a plan for these should read first are in `futureplans/`.
+
 ## The path to 100%
 
 Work packages in the order that maximises coverage gained per unit of effort.
@@ -150,7 +206,10 @@ WP1 (promote the flows spike into `summer4`) is **applied**. Flows, rates,
 adjustments, `EdgeMap`, `CompiledModel` and a JAX Euler ship in
 `summer4.flows`. WP2 (trajectories and a results object, including real-world
 time) is **applied**: `CompiledModel.run` returns a queryable `Result`. WP7
-(adaptive solver selection via diffrax) is **applied**.
+(adaptive solver selection via diffrax) is **applied**. WP4 (flow outputs and
+polarity queries) and WP11 (sparse outputs and calibration targets) are
+**applied**. See [Delivery status](#delivery-status) for the branch each one
+landed on and for which of the remaining packages have a written plan.
 
 `Present` and `Absent` are **non-binding** in flow pairing: they name a property
 (`selector_properties`) but do not bind it (`selector_values`). Binding is
@@ -174,7 +233,7 @@ aggregate, cumulative, calendar resample, rolling, and interpolated `at_times`.
 {doc}`../user/06-immutability-and-provenance`. This is an API wrapper over
 mechanics that exist.
 
-### WP4 — Flow outputs and polarity queries
+### WP4 — Flow outputs and polarity queries (applied)
 
 **Closes:** D1 D6 D7 · **Unblocks:** textbook 4, 8 (API); textbook 10 still
 needs WP5 for time-varying $R_t$; summer2 `03-derived-outputs`,
@@ -224,7 +283,7 @@ A Bayesian workflow over JAX-differentiable models. `numpyro` and `optax` are
 declared extras; `optax` is exercised by sparse-target fits (WP11). Depends on
 everything above, including WP11's declarative targets.
 
-### WP11 — Sparse outputs and calibration targets
+### WP11 — Sparse outputs and calibration targets (applied)
 
 **Closes:** *(no API rows)* · **Unblocks:** WP10 / textbook 20
 
