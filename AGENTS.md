@@ -31,6 +31,48 @@ unless this file or the tooling below says otherwise.
   including tests and scripts. mypy `--strict` on `src/summer4` enforces this
   for the package.
 
+## JAX is the primary runtime target
+
+Compiled models, the results query surface, and calibration losses are expected
+to run under **`jax.jit`** (and friends). NumPy remains fine for host-side index
+arithmetic and taxonomy code that must stay JAX-free at import time; it is not
+the default path for traced numerics going forward.
+
+When changing or reviewing JAX-facing code (vector fields, `Trace` ops, save
+evaluation, losses):
+
+1. Prefer **vectorized** gathers, `segment_*`, and `lax.scan` over Python loops
+   that emit one JAX op per iteration.
+2. Where possible or useful, validate with **`jax.make_jaxpr`** (or
+   `jax.make_jaxpr(... )(...).jaxpr` size / pretty-print) so the program handed
+   to XLA does not explode with trajectory length, compartment count, or similar
+   static sizes. Complement that with timing / profiling benchmarks when the
+   change is performance-sensitive.
+3. Host-side Python that builds **constant** index arrays (then one batched
+   gather) is fine and does *not* grow the jaxpr with those loops. Python
+   iteration over a small static set of named targets/groups inside a jitted
+   loss *does* unroll — keep that set small, or fold it into one batched op.
+
+Gotchas and deferred jaxpr/XLA risks live in [`futureplans/`](futureplans/);
+read that folder when planning, and add a short note there when you flag
+something for later rather than fixing it on the current branch.
+
+## Future plans (deferred gotchas)
+
+[`futureplans/`](futureplans/) is an agent-maintained scratch archive of issues
+noticed during normal plan building that are **out of scope for the current
+branch** but should not be forgotten (compile-time jaxpr blow-ups, API sharp
+edges, follow-up refactors).
+
+- **Read** it before proposing or extending feature work, alongside the coverage
+  ledger.
+- **Write** a short markdown note when you discover a gotcha you are not fixing
+  now: one concern per file, concrete pointers into the code, and what “done”
+  would look like.
+- Do not treat these notes as accepted design plans — those still belong under
+  `plans/`. When a note is ready to implement, promote it into a real
+  `plans/<slug>.plan.md` on a feature branch.
+
 ## Plans land in the workspace on merge
 
 Cursor plans must travel with the branch so a merge automatically copies them into the repo.
