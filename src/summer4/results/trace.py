@@ -16,11 +16,14 @@ from typing import Any, Literal
 
 import numpy as np
 
+from summer4.flows.edges import edge_labels, rewrite_edge_selector, sum_over_edge
 from summer4.jax.propertydata import PropertyData
 from summer4.properties import Property, Trait
 from summer4.propertymap import Groups, PropertyMap
 from summer4.selectors import Selector
 from summer4.time import CalendarRule, RollingSpec, TimeAxis, TimeGrouping, When
+
+type QuadMethod = Literal["trapezoid", "simpson"]
 
 
 def _xp() -> Any:
@@ -49,6 +52,38 @@ def _aligned_axis_index(dims: tuple[str, ...]) -> int | None:
     return None
 
 
+def _is_edge_trace(dims: tuple[str, ...]) -> bool:
+    return "edge" in dims
+
+
+def _wrap_like(template: PropertyData | Any, data: Any) -> PropertyData | Any:
+    if isinstance(template, PropertyData):
+        return PropertyData(template.pmap, data)
+    return data
+
+
+def _column_labels(pmap: PropertyMap, dims: tuple[str, ...]) -> tuple[str, ...]:
+    if _is_edge_trace(dims):
+        return edge_labels(pmap)
+    return pmap.labels()
+
+
+def _require_uniform_odd(times: np.ndarray, *, op: str) -> float:
+    """Return the common ``dt`` or raise for Simpson's rule."""
+    if times.size < 3:
+        raise ValueError(f"{op}(method='simpson') needs at least 3 time points, got {times.size}.")
+    if times.size % 2 == 0:
+        raise ValueError(
+            f"{op}(method='simpson') requires an odd number of time points "
+            f"(even number of intervals), got {times.size}."
+        )
+    dts = np.diff(times)
+    dt0 = float(dts[0])
+    if not np.allclose(dts, dt0, rtol=1e-9, atol=1e-12):
+        raise ValueError(f"{op}(method='simpson') requires a uniform time grid.")
+    return dt0
+
+
 @dataclass(frozen=True, slots=True)
 class Trace:
     """One named quantity over time — the unit the query surface operates on."""
@@ -75,28 +110,57 @@ class Trace:
 
     # --- compartment / edge selection -------------------------------------------------
 
-    def select(self, sel: Selector) -> Trace:
-        """Return a Trace restricted to compartments where ``sel`` is Kleene-true.
+    def select(self, sel: Selector | np.ndarray) -> Trace:
+        """Return a Trace restricted where ``sel`` is Kleene-true.
 
-        Gathers onto a sub-:class:`~summer4.propertymap.PropertyMap` via
-        :meth:`~summer4.propertymap.PropertyMap.take`. Index selection is
-        host-side and static; only the gather is traced (JIT-safe).
+        On an edge trace (``\"edge\"`` in ``dims``), ``Source`` / ``Dest``
+        selectors are rewritten against the edge table. A boolean mask of
+        length ``pmap.size`` is also accepted (e.g. ``EdgeMap.moves_mask``).
+        Index selection is host-side and static; only the gather is traced.
         """
         pmap = self._pmap()
         if pmap is None:
             raise TypeError("select() requires PropertyData values.")
-        idx = pmap.select(sel)
+        if isinstance(sel, np.ndarray):
+            if sel.shape != (pmap.size,):
+                raise ValueError(
+                    f"Boolean mask shape {sel.shape} does not match aligned size {pmap.size}."
+                )
+            idx = np.flatnonzero(np.asarray(sel, dtype=np.bool_)).astype(np.int32, copy=False)
+        elif _is_edge_trace(self.dims):
+            idx = pmap.select(rewrite_edge_selector(pmap, sel))
+        else:
+            idx = pmap.select(sel)
         submap = pmap.take(idx)
         data = _as_array(self.values)[..., idx]
         return self._with(values=PropertyData(submap, data))
 
-    def sum_over(self, prop: Property | str) -> Trace:
-        """Sum the aligned axis by trait of ``prop`` (compartments only in Phase 2)."""
+    def sum_over(
+        self,
+        prop: Property | str,
+        side: Literal["source", "dest"] | None = None,
+    ) -> Trace:
+        """Sum the aligned axis by trait of ``prop``.
+
+        On an edge trace, ``side`` is required (``\"source\"`` or ``\"dest\"``) —
+        there is no safe default. On a compartment trace, ``side`` must be
+        omitted.
+        """
         pmap = self._pmap()
         if pmap is None:
             raise TypeError("sum_over() requires PropertyData values.")
-        reduced = PropertyData(pmap, _as_array(self.values)).sum_over(prop)
-        dims = tuple(d if d != "compartment" else "group" for d in self.dims)
+        if _is_edge_trace(self.dims):
+            if side is None:
+                raise ValueError(
+                    "sum_over() on a flow (edge) trace requires side='source' or "
+                    "side='dest'; neither is a safe default."
+                )
+            reduced = sum_over_edge(_as_array(self.values), pmap, prop, side)
+        else:
+            if side is not None:
+                raise ValueError("side= is only valid on edge traces.")
+            reduced = PropertyData(pmap, _as_array(self.values)).sum_over(prop)
+        dims = tuple("group" if d in ("compartment", "edge") else d for d in self.dims)
         if "group" not in dims:
             dims = self.dims[:-1] + ("group",)
         return self._with(values=reduced, dims=dims)
@@ -174,7 +238,6 @@ class Trace:
         idx, w = self.times.weights_for(targets)
         t_ax = _time_axis_index(self.dims)
         data = _as_array(self.values)
-        # Move time axis to 0 for gather, then restore
         data_t = xp.moveaxis(data, t_ax, 0)
         left = data_t[idx[:, 0]]
         right = data_t[idx[:, 1]]
@@ -238,7 +301,6 @@ class Trace:
         data = _as_array(self.values)
         data_t = xp.moveaxis(data, t_ax, 0)
         n = data_t.shape[0]
-        # Prefix sums along time; pad a leading zero
         zeros = xp.zeros((1,) + data_t.shape[1:], dtype=data_t.dtype)
         csum = xp.concatenate([zeros, xp.cumsum(data_t, axis=0)], axis=0)
         out_rows: list[Any] = []
@@ -273,6 +335,84 @@ class Trace:
             out = PropertyData(self.values.pmap, out)
         return self._with(values=out)
 
+    def incidence(self, method: QuadMethod = "trapezoid") -> Trace:
+        """Integrate instantaneous rates over each save interval.
+
+        Returns ``T-1`` rows (trapezoid) or ``(T-1)/2`` Simpson panels, with
+        times at each panel's right edge.
+
+        **Quadrature error.** Trapezoid over a save interval is second-order
+        accurate; summer2's accumulated incidence is exact for the solver's own
+        quadrature. For calibration against case counts that bias is real and
+        is **not** recoverable from a :class:`~summer4.results.result.Result`.
+        Mitigations: save finer than you calibrate and :meth:`resample`; use
+        ``method='simpson'``; eventually an opt-in accumulator in
+        ``State.ledgers`` (not implemented).
+        """
+        xp = _xp()
+        t_ax = _time_axis_index(self.dims)
+        times = np.asarray(self.times.values, dtype=np.float64)
+        data = _as_array(self.values)
+        data_t = xp.moveaxis(data, t_ax, 0)
+
+        if method == "trapezoid":
+            if times.size < 2:
+                raise ValueError("incidence() needs at least 2 time points.")
+            dt = xp.asarray(np.diff(times)).reshape((-1,) + (1,) * (data_t.ndim - 1))
+            panels = (data_t[:-1] + data_t[1:]) * (0.5 * dt)
+            new_t = times[1:]
+        elif method == "simpson":
+            dt0 = _require_uniform_odd(times, op="incidence")
+            y0 = data_t[:-2:2]
+            y1 = data_t[1:-1:2]
+            y2 = data_t[2::2]
+            panels = (dt0 / 3.0) * (y0 + 4.0 * y1 + y2)
+            new_t = times[2::2]
+        else:
+            raise ValueError(f"Unknown incidence method {method!r}.")
+
+        out = xp.moveaxis(panels, 0, t_ax)
+        new_times = TimeAxis(values=new_t, epoch=self.times.epoch, kind="explicit")
+        return self._with(values=_wrap_like(self.values, out), times=new_times)
+
+    def integrate(self, method: QuadMethod = "trapezoid") -> Trace:
+        """Integrate over the whole time window; drops the ``time`` axis.
+
+        See :meth:`incidence` for the quadrature-error caveats. Simpson
+        requires a uniform grid with an odd point count.
+        """
+        xp = _xp()
+        t_ax = _time_axis_index(self.dims)
+        times = np.asarray(self.times.values, dtype=np.float64)
+        data = _as_array(self.values)
+        data_t = xp.moveaxis(data, t_ax, 0)
+
+        if method == "trapezoid":
+            if times.size < 2:
+                raise ValueError("integrate() needs at least 2 time points.")
+            dt = xp.asarray(np.diff(times)).reshape((-1,) + (1,) * (data_t.ndim - 1))
+            panels = (data_t[:-1] + data_t[1:]) * (0.5 * dt)
+            total = xp.sum(panels, axis=0)
+        elif method == "simpson":
+            dt0 = _require_uniform_odd(times, op="integrate")
+            weights = np.empty(times.size, dtype=np.float64)
+            weights[0] = 1.0
+            weights[-1] = 1.0
+            weights[1:-1:2] = 4.0
+            weights[2:-1:2] = 2.0
+            w = xp.asarray(weights).reshape((-1,) + (1,) * (data_t.ndim - 1))
+            total = (dt0 / 3.0) * xp.sum(w * data_t, axis=0)
+        else:
+            raise ValueError(f"Unknown integrate method {method!r}.")
+
+        dims = self.dims[:t_ax] + self.dims[t_ax + 1 :]
+        new_times = TimeAxis(
+            values=np.asarray([float(times[-1])], dtype=np.float64),
+            epoch=self.times.epoch,
+            kind="explicit",
+        )
+        return Trace(times=new_times, values=_wrap_like(self.values, total), dims=dims)
+
     # --- host-side export -------------------------------------------------------------
 
     def to_frame(self) -> object:
@@ -281,19 +421,29 @@ class Trace:
 
         values = np.asarray(_as_array(self.values))
         times = np.asarray(self.times.values, dtype=np.float64)
+        pmap = self._pmap()
+
+        if "time" not in self.dims:
+            flat = values.reshape(1, -1) if values.size else np.zeros((1, 0))
+            cols: dict[str, Any] = {"time": times[:1]}
+            if pmap is not None and flat.shape[1] == pmap.size:
+                for j, lab in enumerate(_column_labels(pmap, self.dims)):
+                    cols[lab] = flat[:, j]
+            else:
+                for j in range(flat.shape[1]):
+                    cols[f"v{j}"] = flat[:, j]
+            return pl.DataFrame(cols)
+
         t_ax = _time_axis_index(self.dims)
         if values.ndim == 1 and t_ax == 0:
             return pl.DataFrame({"time": times, "value": values})
-        # Flatten trailing axes into columns
         if t_ax != 0:
             values = np.moveaxis(values, t_ax, 0)
         n_t = values.shape[0]
         flat = values.reshape(n_t, -1)
-        cols: dict[str, Any] = {"time": times[:n_t]}
-        pmap = self._pmap()
+        cols = {"time": times[:n_t]}
         if pmap is not None and flat.shape[1] == pmap.size:
-            labels = pmap.labels()
-            for j, lab in enumerate(labels):
+            for j, lab in enumerate(_column_labels(pmap, self.dims)):
                 cols[lab] = flat[:, j]
         else:
             for j in range(flat.shape[1]):

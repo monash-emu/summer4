@@ -271,6 +271,60 @@ def _lookup_path(root: object, path: tuple[str, ...]) -> object:
     return current
 
 
+def _schema_paths(schema: type, prefix: tuple[str, ...] = ()) -> list[tuple[str, ...]]:
+    """List every leaf path on a NamedTuple schema (including nested bundles)."""
+    if not _is_namedtuple_class(schema):
+        return []
+    out: list[tuple[str, ...]] = []
+    fields = cast(tuple[str, ...], cast(Any, schema)._fields)
+    for name in fields:
+        path = (*prefix, name)
+        nested = _nested_schema(schema, name)
+        if nested is not None:
+            out.extend(_schema_paths(nested, path))
+        else:
+            out.append(path)
+    return out
+
+
+def derived_return_schema(derived_fn: Callable[..., Any] | None) -> type | None:
+    """Return the NamedTuple annotation on ``derived_fn``'s return, if any.
+
+    Unannotated hooks skip validation. Annotations that cannot be resolved
+    (e.g. a class local to the defining function under
+    ``from __future__ import annotations``) are treated as absent.
+    """
+    if derived_fn is None:
+        return None
+    raw = getattr(derived_fn, "__annotations__", {}).get("return")
+    if isinstance(raw, type) and _is_namedtuple_class(raw):
+        return raw
+    try:
+        hints = get_type_hints(derived_fn)
+    except (NameError, TypeError, AttributeError):
+        hints = {}
+    ret = hints.get("return")
+    if isinstance(ret, type) and _is_namedtuple_class(ret):
+        return ret
+    if isinstance(raw, str):
+        candidate = derived_fn.__globals__.get(raw)
+        if isinstance(candidate, type) and _is_namedtuple_class(candidate):
+            return candidate
+    return None
+
+
+def validate_computed_path(path: tuple[str, ...], schema: type) -> None:
+    """Raise if ``path`` is not a leaf on ``schema``, listing available paths."""
+    available = _schema_paths(schema)
+    if path in available:
+        return
+    pretty = ", ".join(".".join(p) for p in available) or "(none)"
+    raise ValueError(
+        f"ComputedValue path {'.'.join(path)!r} is not a field of the derived "
+        f"schema {schema.__name__}. Available paths: {pretty}."
+    )
+
+
 def _rate_bytes(expr: RateOps) -> bytes:
     match expr:
         case Const(value=value):

@@ -30,9 +30,8 @@ class FlowMass:
     """Per-edge mass. Reduce *here* so the buffer is ``(n_saves, n_kept)``.
 
     A 200k-edge flow over 3650 days is ~5.8 GB dense and ~470 kB when summed
-    over age. The edge query surface (``sum_over`` / ``integrate`` /
-    ``incidence`` on a :class:`~summer4.results.trace.Trace`) is Phase 4;
-    Phase 2 offers reduction inside the request only.
+    over age. Post-hoc edge queries use ``Trace.sum_over(..., side=)``,
+    ``integrate``, and ``incidence``.
     """
 
     flow: str

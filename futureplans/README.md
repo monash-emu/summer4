@@ -17,3 +17,10 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
   should look like.
 - Agents: read this folder when planning; append or update notes when you flag
   something for later. See `AGENTS.md` (§ Future plans, § JAX).
+
+## Notes
+
+- [`trace-rolling-jaxpr.md`](trace-rolling-jaxpr.md) — Python loop in
+  `Trace._apply_rolling` grows the jaxpr with trajectory length.
+- [`state-ledgers-incidence.md`](state-ledgers-incidence.md) — opt-in exact
+  incidence via `State.ledgers` (post-hoc trapezoid is biased for calibration).

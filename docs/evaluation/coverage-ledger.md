@@ -77,13 +77,13 @@ reach, and it is the denominator for every percentage on this site.
 | P7 | `get_sigmoidal_interpolation_function` | parameters | `none` | — |  |
 | P8 | `get_piecewise_function` | parameters | `none` | — |  |
 | P9 | `get_time_callable` | parameters | `partial` | `compile() -> vf(t, y, params)` | A time callable, but not summer2's graph wrapper |
-| D1 | `request_output_for_flow` | outputs | `none` | — | FlowMass saves exist; edge query surface is Phase 4 |
+| D1 | `request_output_for_flow` | outputs | `full` | `FlowMass` / `Trace` edge queries | `sum_over(..., side=)`, `incidence`, `integrate` |
 | D2 | `request_output_for_compartments` | outputs | `full` | `Compartments(where=)` / `Trace.select` |  |
 | D3 | `request_aggregate_output` | outputs | `full` | `Trace.sum_over` / `total` / `partition` |  |
 | D4 | `request_cumulative_output` | outputs | `full` | `Trace.cumulative()` |  |
 | D5 | `request_function_output` | outputs | `full` | `SaveFn` plus trace arithmetic |  |
-| D6 | `request_computed_value_output` | outputs | `none` | — | `ComputedValue` saves; Phase 4 |
-| D7 | `request_track_modelled_value` | outputs | `none` | — |  |
+| D6 | `request_computed_value_output` | outputs | `full` | `ComputedValue` | Path validated against `derived_fn` return schema |
+| D7 | `request_track_modelled_value` | outputs | `full` | `ComputedValue` | Same capture path as D6 |
 | D8 | `add_computed_value_func` | outputs | `full` | `derived_fn hook` | compute_derived_params runs every step |
 | V1 | `solve_ode` | solver | `full` | `CompiledModel.run` over `euler` | Fixed step; adaptive is V2 |
 | V2 | `SolverType / solver selection` | solver | `full` | `solver=` name or diffrax instance | Euler kept as reference stepper |
@@ -103,13 +103,13 @@ published as written.
 | 1 | Infectious disease modelling | `full` | None - prose | `textbook/01-introduction.md` |
 | 2 | Basic model construction | `partial` | Initial population | `textbook/02-model-structures.ipynb` |
 | 3 | Thinking about flows | `full` | None | — |
-| 4 | Thinking about flow rates | `partial` | Sojourn-time / flow outputs (Phase 4) | — |
+| 4 | Thinking about flow rates | `partial` | Port not yet written (API ready: flow outputs / sojourn) | — |
 | 5 | Series compartments and latency | `full` | None | — |
 | 6 | Post-infection immunity | `full` | None | — |
 | 7 | Obtaining numerical solutions | `full` | None | `textbook/07-numerical-solutions.ipynb` |
-| 8 | Derived outputs | `partial` | Compartment outputs yes; flow outputs Phase 4 | — |
+| 8 | Derived outputs | `partial` | Port not yet written (API ready: FlowMass + ComputedValue) | — |
 | 9 | Transmission assumptions | `full` | None | — |
-| 10 | The reproduction number | `partial` | Rt as a derived / flow output (Phase 4) | — |
+| 10 | The reproduction number | `partial` | Time-varying parameters for $R_t$ (WP5) | — |
 | 11 | Cyclical epidemic dynamics | `full` | None | — |
 | 12 | Heterogeneous mixing introduction | `none` | Mixing matrices | — |
 | 13 | Mixing and transmission types | `none` | Mixing matrices, population split | — |
@@ -128,13 +128,13 @@ published as written.
 | Page | Status | Blocker | Ported |
 | --- | --- | --- | --- |
 | `examples/01-basic-model` | `partial` | Initial population | — |
-| `examples/03-derived-outputs` | `partial` | Compartment outputs yes; flow outputs Phase 4 | — |
-| `examples/04-flow-types` | `partial` | Flow outputs Phase 4 | — |
+| `examples/03-derived-outputs` | `partial` | Port not yet written (API ready) | — |
+| `examples/04-flow-types` | `partial` | Port not yet written (API ready) | — |
 | `examples/06-stratification-introduction` | `partial` | Infectiousness adjustments | — |
 | `examples/07-age-stratification` | `partial` | Population split | — |
 | `examples/08-strain-stratification` | `partial` | Strain-aware FOI primitive | — |
 | `examples/09-mixing-matrices` | `none` | Mixing matrices | — |
-| `examples/10-derived-outputs-stratified` | `partial` | Flow / stratified derived outputs Phase 4 | — |
+| `examples/10-derived-outputs-stratified` | `partial` | Port not yet written (API ready) | — |
 | `examples/11-flows-between-strata` | `full` | None | — |
 | `detailed/time-varying-functions` | `partial` | Interpolation and piecewise helpers | — |
 | `detailed/InitialPopulationGraphobject` | `none` | Initial population, parameters | — |
@@ -176,12 +176,14 @@ mechanics that exist.
 
 ### WP4 — Flow outputs and polarity queries
 
-**Closes:** D1 D6 D7 · **Unblocks:** textbook 8, 10 fully; summer2
-`03-derived-outputs`, `10-derived-outputs-stratified`
+**Closes:** D1 D6 D7 · **Unblocks:** textbook 4, 8 (API); textbook 10 still
+needs WP5 for time-varying $R_t$; summer2 `03-derived-outputs`,
+`04-flow-types`, `10-derived-outputs-stratified`
 
-`FlowMass` saves already materialise per-edge mass. The edge query surface
-(`sum_over(..., side=)`, `.integrate()`, `.incidence()`) and computed-value
-capture are the remaining work. Plan phase: `feat/flow-outputs`.
+`FlowMass` traces are `PropertyData` over the edge table. `sum_over(..., side=)`,
+`.integrate()`, `.incidence()`, and validated `ComputedValue` paths are live.
+Textbook ports for 4 and 8 remain to write; chapter 10's honest blocker is WP5.
+Plan phase: `feat/flow-outputs`.
 
 ### WP5 — Time-varying function library
 
@@ -245,9 +247,9 @@ table below is **computed** from these declarations by
 <!-- ledger:progression -->
 | After | API rows at `full` | Share |
 | --- | --- | --- |
-| today | 33 / 52 | 63% |
-| WP2 | 33 / 52 | 63% |
-| WP3 | 36 / 52 | 69% |
+| today | 36 / 52 | 69% |
+| WP2 | 36 / 52 | 69% |
+| WP3 | 39 / 52 | 75% |
 | WP4 | 39 / 52 | 75% |
 | WP5 | 43 / 52 | 83% |
 | WP6 | 47 / 52 | 90% |

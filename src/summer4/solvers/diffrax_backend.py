@@ -74,15 +74,17 @@ def _group_fn(
     from summer4.jax.propertydata import PropertyData
     from summer4.results.eval import build_save_fn
 
+    group_plan = _filtered_plan(plan, group.keys)
     save_fn = build_save_fn(
-        _filtered_plan(plan, group.keys),
+        group_plan,
         pmap=model.pmap,
         edge_maps=dict(model.edge_maps),
     )
+    keep = group_plan.flow_reads()
 
     def fn(t: Any, y: Any, args: Any) -> dict[str, Any]:
         del args  # params closed over; diffeqsolve still passes args
-        ctx = model.observe(t, rebox(y), params)
+        ctx = model.observe(t, rebox(y), params, keep=keep)
         raw = save_fn(ctx)
         out: dict[str, Any] = {}
         for k, v in raw.items():
