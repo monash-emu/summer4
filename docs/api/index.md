@@ -107,12 +107,16 @@ compartment {class}`PropertyMap` they raise.
    Result
    Trace
    SolverInfo
+   Target
+   TargetSet
    PropertyData
    State
 ```
 
 `EVERYTHING` is the empty :class:`~summer4.results.plan.SavePlan` sentinel
 (:meth:`~summer4.flows.compiled.CompiledModel.expand` fills it).
+:class:`~summer4.results.targets.Target` / :class:`~summer4.results.targets.TargetSet`
+merge observation times into a save plan for sparse calibration runs.
 
 ### Rates and adjustments
 
@@ -137,8 +141,8 @@ compartment {class}`PropertyMap` they raise.
 
 ## What is not here
 
-There is no flow-output polarity query surface (incidence by edge with
-`side=`), mixing matrix, force-of-infection primitive, interpolation helpers,
-initial-population wrapper, or adaptive solver selection. See
+There is no mixing matrix, force-of-infection primitive, interpolation helpers,
+initial-population wrapper, or Bayesian calibration likelihood. Sparse
+`Target` / `TargetSet` gathering ships; probabilistic priors are WP10. See
 {doc}`../evaluation/feature-completeness` for the full accounting and
 {doc}`../user/07-from-summer2` for the summer2 symbols that have no equivalent.

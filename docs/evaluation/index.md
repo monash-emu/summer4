@@ -24,13 +24,15 @@ gaps
 | summer2 documentation notebooks reproducible as runnable summer4 | **1 of 11** (8 partially) |
 | summer textbook chapters reproducible as runnable summer4 | **7 of 20** (4 more partially) |
 | Implemented layers of the intended stack | taxonomy + flows + results |
-| Ceiling of the planned roadmap (WP2–WP10) | 47 of 52 (90%) — see {doc}`coverage-ledger` |
+| Ceiling of the planned roadmap (WP2–WP11) | 47 of 52 (90%) — see {doc}`coverage-ledger` |
 
 summer4 ships a compartment taxonomy, a flows layer, and a results layer:
 declare a map, attach named flows, compile to a `CompiledModel`, and
 `run()` to a queryable `Result` with selectable Euler or adaptive
-diffrax solvers. Flow-output polarity queries (`side=`, incidence) are
-available; textbook ports for derived-output chapters remain.
+diffrax solvers. Flow-output polarity queries (`side=`, incidence) and
+sparse calibration targets (`Target` / `TargetSet`) are available;
+textbook ports for derived-output chapters and a Bayesian calibration
+workflow remain.
 
 ## How to read this section
 

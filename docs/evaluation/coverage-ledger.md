@@ -221,7 +221,16 @@ Depends on WP6.
 **Unblocks:** textbook 20
 
 A Bayesian workflow over JAX-differentiable models. `numpyro` and `optax` are
-declared extras and unused. Depends on everything above.
+declared extras; `optax` is exercised by sparse-target fits (WP11). Depends on
+everything above, including WP11's declarative targets.
+
+### WP11 — Sparse outputs and calibration targets
+
+**Closes:** *(no API rows)* · **Unblocks:** WP10 / textbook 20
+
+`Target` / `TargetSet` merge observation times into a `SavePlan` so a
+likelihood run never materialises dense outputs. Gathering and residuals ship
+here; probabilistic likelihoods stay in WP10. Plan phase: `feat/sparse-targets`.
 
 ## Work packages, declared
 
@@ -240,6 +249,7 @@ table below is **computed** from these declarations by
 | WP7 | Adaptive solver | V2 |
 | WP9 | Contact survey data | *(no API rows; unblocks textbook 16-19)* |
 | WP10 | Calibration | *(no API rows; unblocks textbook 20)* |
+| WP11 | Sparse outputs and calibration targets | *(no API rows; unblocks WP10 / textbook 20)* |
 <!-- /ledger:packages -->
 
 ## Coverage after each package
@@ -256,6 +266,7 @@ table below is **computed** from these declarations by
 | WP7 | 47 / 52 | 90% |
 | WP9 | 47 / 52 | 90% |
 | WP10 | 47 / 52 | 90% |
+| WP11 | 47 / 52 | 90% |
 <!-- /ledger:progression -->
 
 ## What never reaches `full`, and why that is fine

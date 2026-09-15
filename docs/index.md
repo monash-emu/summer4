@@ -12,8 +12,8 @@ The public API of summer4 today is the taxonomy (`Property`, `Trait`,
 `Selector`, `PropertyMap`, `Stratification`, `Groups`), flows
 (`FlowModel`, `CompiledModel`, `TransitionFlow` / `ExitFlow` / `EntryFlow`,
 `EdgeMap`, `Source` / `Dest`, rates and adjustments), and results
-(`SavePlan`, `Result`, `Trace`, `Epoch` / `TimeAxis`). Flow-output polarity
-queries (incidence by edge, `side=`) and an adaptive solver are still ahead.
+(`SavePlan`, `Result`, `Trace`, `Epoch` / `TimeAxis`, `Target` / `TargetSet`).
+Bayesian calibration (likelihoods / priors) is still ahead.
 
 Material from the [summer2 documentation](https://summer2.readthedocs.io) and
 the [summer textbook](https://github.com/monash-emu/summer-textbook) that needs

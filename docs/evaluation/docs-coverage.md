@@ -87,7 +87,7 @@ the implemented layer completely and states the gap explicitly:
 | Section | Pages | All code executed at build time |
 |---|---|---|
 | Getting started | 2 | Yes |
-| User guide | 8 (7 notebooks + migration guide) | Yes |
+| User guide | 9 (8 notebooks + migration guide) | Yes |
 | Developer guide | (Markdown + performance notebook) | Yes |
 | Textbook | 3 (1 notebook) | Yes |
 | Evaluation | 5 | n/a — prose |

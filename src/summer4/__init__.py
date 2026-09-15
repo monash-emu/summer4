@@ -40,6 +40,8 @@ from summer4.results import (
     SavePlan,
     SaveRequest,
     SolverInfo,
+    Target,
+    TargetSet,
     Trace,
 )
 from summer4.selectors import (
@@ -99,6 +101,8 @@ __all__ = [
     "Source",
     "State",
     "Stratification",
+    "Target",
+    "TargetSet",
     "TimeAxis",
     "TimeGrouping",
     "Trace",

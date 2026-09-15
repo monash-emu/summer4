@@ -13,6 +13,7 @@ from summer4.results.plan import (
     SaveRequest,
 )
 from summer4.results.result import Result, ResultWithParams, SolverInfo
+from summer4.results.targets import Target, TargetSet
 from summer4.results.trace import Trace
 
 __all__ = [
@@ -29,6 +30,8 @@ __all__ = [
     "SavePlan",
     "SaveRequest",
     "SolverInfo",
+    "Target",
+    "TargetSet",
     "Trace",
     "group_requests",
 ]

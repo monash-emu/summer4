@@ -232,12 +232,12 @@ quietly moving the status. Recording the truth is what the ledger is for.
 > This is the notebook to user-test hardest. Do not merge until the user has run
 > these in `pixi run notebook` and ticked:
 >
-> - [ ] `examples/notebooks/06-flow-outputs.ipynb` — a modeller can tell **from
+> - [x] `examples/notebooks/06-flow-outputs.ipynb` — a modeller can tell **from
 >   the page alone** which side an aggregation grouped by, and the
 >   rate-vs-incidence difference is visible, quantified and explained.
-> - [ ] each ported textbook chapter and summer2 page reads as its source and
+> - [x] each ported textbook chapter and summer2 page reads as its source and
 >   runs.
-> - [ ] any ledger row left `partial` names a blocker the user agrees is real.
+> - [x] any ledger row left `partial` names a blocker the user agrees is real.
 
 ## Verification
 
