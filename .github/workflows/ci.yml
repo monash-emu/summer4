@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: Which CI suite to run
+        type: choice
+        options:
+          - quick
+          - full
+        default: full
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quick:
+    name: Quick
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && inputs.suite == 'quick')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: prefix-dev/setup-pixi@v0.10.1
+        with:
+          pixi-version: v0.80.0
+          cache: true
+          cache-write: ${{ github.ref_name == 'main' }}
+          locked: true
+      - run: pixi run lint
+      - run: pixi run format-check
+      - run: pixi run test-quick
+
+  quality:
+    name: Quality
+    if: >-
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'workflow_dispatch' && inputs.suite == 'full')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: prefix-dev/setup-pixi@v0.10.1
+        with:
+          pixi-version: v0.80.0
+          cache: true
+          locked: true
+      - run: pixi run lint
+      - run: pixi run format-check
+      - run: pixi run check-notebooks
+      - run: pixi run check-branch -- --base origin/${{ github.base_ref || 'main' }}
+
+  test:
+    name: Test (${{ matrix.environment }})
+    if: >-
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'workflow_dispatch' && inputs.suite == 'full')
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [default, latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: prefix-dev/setup-pixi@v0.10.1
+        with:
+          pixi-version: v0.80.0
+          environments: ${{ matrix.environment }}
+          cache: true
+          locked: true
+      - run: pixi run --environment ${{ matrix.environment }} test

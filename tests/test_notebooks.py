@@ -28,6 +28,7 @@ def test_example_notebooks_exist() -> None:
     assert _notebook_paths(), "examples/notebooks/ must contain at least one .ipynb"
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("path", _notebook_paths(), ids=lambda path: path.name)
 def test_notebook_executes(path: Path) -> None:
     """Run every code cell in-process (plain Python; no IPython magics)."""

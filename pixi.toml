@@ -82,6 +82,7 @@ setup = { cmd = "python scripts/setup_hooks.py", description = "Install git hook
 register-kernel = { cmd = "python -m ipykernel install --user --name summer4 --display-name 'Python (summer4)'", description = "Register the default env as a Jupyter kernel for VS Code/Cursor" }
 check-branch = { cmd = "python scripts/check_feature_branch.py", description = "Require tests, a notebook, and a plan on feature branches that change src/" }
 test = { cmd = "pytest tests/ -v", description = "Run unit, property, and notebook smoke tests" }
+test-quick = { cmd = "pytest tests/ -v -m 'not slow'", description = "Run fast tests (skip slow notebook smoke tests)" }
 test-all = { cmd = "pixi run --environment default test && pixi run --environment latest test", description = "Run tests in every JAX environment" }
 lint = { cmd = "ruff check src tests benchmarks scripts && mypy src/summer4", description = "Lint and type-check" }
 format = { cmd = "black src tests benchmarks scripts", description = "Format Python with Black (line length 100)" }
