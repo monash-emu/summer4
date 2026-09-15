@@ -68,15 +68,123 @@ def test_euler_fast_path_matches_final_euler() -> None:
 
 
 def test_query_select_sum_between_dates() -> None:
-    state, age, _pmap, cm, y0 = _compiled_sir()
+    state, age, pmap, cm, y0 = _compiled_sir()
     epoch = Epoch(date(2020, 1, 1))
     plan = SavePlan(requests={"compartments": SaveRequest(Compartments())})
     res = cm.run({}, y0, t0=0.0, steps=30, dt=1.0, save=plan, epoch=epoch)
-    infected = res["compartments"].select(state["I"]).sum_over(age)
+    selected = res["compartments"].select(state["I"])
+    assert selected.values.pmap.size == len(age.traits)
+    assert selected.values.pmap.size < pmap.size
+    infected = selected.sum_over(age)
     windowed = infected.between(date(2020, 1, 5), date(2020, 1, 15))
     assert np.asarray(windowed.times.values).size == 11
-    total_i = res["compartments"].select(state["I"]).total()
+    total_i = selected.total()
     assert float(np.asarray(total_i.at(date(2020, 1, 10)).values)) > 0
+
+
+def test_select_gathers_not_masks() -> None:
+    """select shrinks the map; to_pandas columns match selected compartments only."""
+    pytest.importorskip("pandas")
+    state, _age, pmap, cm, y0 = _compiled_sir()
+    plan = SavePlan(requests={"compartments": SaveRequest(Compartments())})
+    res = cm.run({}, y0, t0=0.0, steps=5, dt=1.0, save=plan)
+    full = res["compartments"]
+    selected = full.select(state["I"])
+    idx = pmap.select(state["I"])
+    assert selected.values.pmap.size == idx.size
+    np.testing.assert_allclose(
+        np.asarray(selected.values.data),
+        np.asarray(full.values.data)[..., idx],
+        rtol=1e-5,
+    )
+    pdf = selected.to_pandas()
+    assert list(pdf.columns) == list(selected.values.pmap.labels())
+    assert all("state=I" in c for c in pdf.columns)
+    assert not any("state=S" in c or "state=R" in c for c in pdf.columns)
+
+
+def test_select_then_partition_is_restricted() -> None:
+    """partition after select must only see rows on the sub-map."""
+    state, age, pmap, cm, y0 = _compiled_sir()
+    plan = SavePlan(requests={"compartments": SaveRequest(Compartments())})
+    res = cm.run({}, y0, t0=0.0, steps=3, dt=1.0, save=plan)
+    selected = res["compartments"].select(state["I"])
+    assert selected.values.pmap.size == len(age.traits)
+    parts = selected.partition(age)
+    assert set(parts) == {age[t] for t in age.traits}
+    for _trait, tr in parts.items():
+        # One column per age band on the I-only sub-map (not S/I/R × age).
+        assert np.asarray(tr.values).shape[-1] == 1
+    # Full-map partition still has three disease states per age — the old mask
+    # bug would have used those wider index arrays after select.
+    for _trait, idx in pmap.partition(age).items():
+        assert idx.size == len(state.traits)
+    for _trait, idx in selected.values.pmap.partition(age).items():
+        assert idx.size == 1
+        assert "state=I" in selected.values.pmap.labels()[int(idx[0])]
+
+
+def test_compartments_where_in_saveplan_stays_map_aware() -> None:
+    state, age, pmap, cm, y0 = _compiled_sir()
+    plan = SavePlan(
+        requests={
+            "infected": SaveRequest(Compartments(where=state["I"])),
+            "infected_by_age": SaveRequest(Compartments(where=state["I"], sum_over=age)),
+        }
+    )
+    res = cm.run({}, y0, t0=0.0, steps=4, dt=1.0, save=plan)
+    infected = res["infected"]
+    assert isinstance(infected.values, PropertyData)
+    assert infected.values.pmap.size == len(age.traits)
+    assert infected.values.pmap.size < pmap.size
+    # Still queryable after a where=-restricted save.
+    narrowed = infected.select(age["0-4"])
+    assert narrowed.values.pmap.size == 1
+    by_age = infected.sum_over(age)
+    assert by_age.dims[-1] == "group"
+    assert np.asarray(res["infected_by_age"].values).shape[-1] == len(age.traits)
+
+
+def test_jit_select_gather_shrinks_under_jit() -> None:
+    """Trace.select gather must stay usable as the default jax.jit target path."""
+    state, age, pmap, cm, y0 = _compiled_sir()
+
+    def loss(scale: object) -> Any:
+        y = PropertyData(pmap, y0.data * scale)
+        plan = SavePlan(requests={"compartments": SaveRequest(Compartments())})
+        res = cm.run({}, y, t0=0.0, steps=5, dt=1.0, save=plan)
+        selected = res["compartments"].select(state["I"])
+        # Shape is concrete under jit (static sub-map size).
+        assert selected.values.pmap.size == len(age.traits)
+        pred = selected.total().at_times(np.array([5.0]))
+        return jnp.sum(jnp.asarray(pred.values) ** 2)
+
+    jitted = jax.jit(loss)
+    val = float(jitted(1.0))
+    g = float(jax.grad(loss)(1.0))
+    assert np.isfinite(val) and np.isfinite(g)
+    # Eager and jitted agree.
+    np.testing.assert_allclose(val, float(loss(1.0)), rtol=1e-5)
+
+
+def test_jit_saveplan_where_gather() -> None:
+    """Compartments(where=) save path gathers under jax.jit, not mask-zero."""
+    state, age, pmap, cm, y0 = _compiled_sir()
+    plan = SavePlan(requests={"infected": SaveRequest(Compartments(where=state["I"]))})
+
+    def run(scale: object) -> Any:
+        y = PropertyData(pmap, y0.data * scale)
+        res = cm.run({}, y, t0=0.0, steps=4, dt=1.0, save=plan)
+        data = res["infected"].values.data
+        assert res["infected"].values.pmap.size == len(age.traits)
+        return jnp.sum(data)
+
+    jitted = jax.jit(run)
+    out = jitted(1.0)
+    assert np.isfinite(float(out))
+    # describe reports the shrunk compartment axis
+    desc = cm.describe(plan, y0=y0, n_saves=5)
+    assert desc.outputs[0].shape == (5, len(age.traits))
 
 
 def test_resample_me_matches_host_reference() -> None:

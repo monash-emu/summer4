@@ -74,16 +74,13 @@ def eval_quantity(
             if isinstance(y, State):
                 y = y.compartments
             data = y.data if isinstance(y, PropertyData) else jnp.asarray(y)
-            if sum_over is not None:
-                pd = PropertyData(pmap, data)
-                if where is not None:
-                    mask = pmap.mask(where)
-                    pd = PropertyData(pmap, jnp.where(mask, pd.data, 0))
-                return pd.sum_over(sum_over)
-            data = _apply_where(data, pmap, where)
-            if where is None:
-                return PropertyData(pmap, data)
-            return data
+            active = pmap
+            if where is not None:
+                idx = where if isinstance(where, np.ndarray) else pmap.select(where)
+                active = pmap.take(idx)
+                data = data[..., idx]
+            pd = PropertyData(active, data)
+            return pd.sum_over(sum_over) if sum_over is not None else pd
         case FlowMass(flow=flow, where=where, sum_over=sum_over):
             if flow not in ctx.flows:
                 raise KeyError(f"Flow {flow!r} not in SaveContext.flows.")

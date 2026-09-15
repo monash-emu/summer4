@@ -76,14 +76,19 @@ class Trace:
     # --- compartment / edge selection -------------------------------------------------
 
     def select(self, sel: Selector) -> Trace:
-        """Zero compartments/edges where ``sel`` is not Kleene-true (keeps the map)."""
-        xp = _xp()
+        """Return a Trace restricted to compartments where ``sel`` is Kleene-true.
+
+        Gathers onto a sub-:class:`~summer4.propertymap.PropertyMap` via
+        :meth:`~summer4.propertymap.PropertyMap.take`. Index selection is
+        host-side and static; only the gather is traced (JIT-safe).
+        """
         pmap = self._pmap()
         if pmap is None:
             raise TypeError("select() requires PropertyData values.")
-        mask = pmap.mask(sel)
-        data = xp.where(mask, _as_array(self.values), 0)
-        return self._with(values=PropertyData(pmap, data))
+        idx = pmap.select(sel)
+        submap = pmap.take(idx)
+        data = _as_array(self.values)[..., idx]
+        return self._with(values=PropertyData(submap, data))
 
     def sum_over(self, prop: Property | str) -> Trace:
         """Sum the aligned axis by trait of ``prop`` (compartments only in Phase 2)."""

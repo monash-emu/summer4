@@ -272,6 +272,47 @@ def test_equal_maps_share_hash() -> None:
     assert {a: "ok"}[b] == "ok"
 
 
+def test_take_gathers_rows_and_sets_parent_row() -> None:
+    state, pm = _sir()
+    age = Property("age", ("child", "adult"))
+    pm = pm.stratify(age)
+    idx = pm.select(state["I"])
+    sub = pm.take(idx)
+    assert sub.size == idx.size
+    assert sub.properties == pm.properties
+    assert sub.history == pm.history
+    np.testing.assert_array_equal(sub.parent_row, idx)
+    np.testing.assert_array_equal(sub.codes, pm.codes[idx])
+    assert sub.labels() == tuple(pm.labels()[i] for i in idx.tolist())
+    assert set(sub.select(state["I"]).tolist()) == set(range(sub.size))
+    assert sub.select(state["S"]).size == 0
+
+
+def test_take_hash_differs_by_subset() -> None:
+    state, pm = _sir()
+    age = Property("age", ("child", "adult"))
+    pm = pm.stratify(age)
+    i_only = pm.take(pm.select(state["I"]))
+    s_only = pm.take(pm.select(state["S"]))
+    assert i_only != s_only
+    assert hash(i_only) != hash(s_only)
+    assert i_only != pm
+
+
+def test_take_composes_with_partition_and_to_frame() -> None:
+    state, pm = _sir()
+    age = Property("age", ("child", "adult"))
+    pm = pm.stratify(age)
+    sub = pm.take(pm.select(state["I"]))
+    parts = sub.partition(age)
+    assert set(parts) == {age[t] for t in age.traits}
+    for trait, idx in parts.items():
+        assert set(idx.tolist()) == set(sub.select(age[trait.name]).tolist())
+    frame = sub.to_frame()
+    assert frame.height == sub.size
+    assert set(frame["state"].to_list()) == {"I"}
+
+
 def test_rebuilt_map_hits_jit_cache() -> None:
     from functools import partial
 

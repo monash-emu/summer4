@@ -232,6 +232,21 @@ class PropertyMap:
             parent_row=row_src,
         )
 
+    def take(self, idx: NDArray[np.int32]) -> PropertyMap:
+        """Return a sub-map containing only rows ``idx`` (gather, not stratify).
+
+        ``idx`` indexes rows of this map. ``parent_row`` on the result is ``idx``
+        itself — one hop back to this map — matching the convention used by
+        :meth:`stratify`. Pair with the same ``idx`` to gather an aligned data array.
+        """
+        idx = np.asarray(idx, dtype=np.int32)
+        return PropertyMap(
+            properties=self.properties,
+            codes=self.codes[idx],
+            history=self.history,
+            parent_row=idx,
+        )
+
     def mask(self, sel: Selector) -> NDArray[np.bool_]:
         """Return a boolean mask of compartments where ``sel`` is true."""
         self._validate_selector(sel)

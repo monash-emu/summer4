@@ -629,12 +629,13 @@ class CompiledModel:
             from summer4.jax.propertydata import PropertyData
             from summer4.results.plan import Compartments
 
-            if (
-                isinstance(req.what, Compartments)
-                and req.what.sum_over is None
-                and req.what.where is None
-            ):
-                values: Any = PropertyData(self.pmap, raw)
+            if isinstance(req.what, Compartments) and req.what.sum_over is None:
+                if req.what.where is None:
+                    values: Any = PropertyData(self.pmap, raw)
+                else:
+                    where = req.what.where
+                    idx = where if isinstance(where, np.ndarray) else self.pmap.select(where)
+                    values = PropertyData(self.pmap.take(idx), raw)
             else:
                 values = raw
             traces[key] = Trace(times=times, values=values, dims=dims)
