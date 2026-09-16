@@ -110,12 +110,26 @@ class PropertyData:
         return self.data[..., self.pmap.select(sel)]
 
     def where(self, sel: Selector, other: Any) -> PropertyData:
-        """Replace matching compartments with ``other`` (scalar or PropertyData)."""
+        """Replace matching compartments with ``other`` (scalar or PropertyData).
+
+        Polarity note: this *replaces* what ``sel`` matches (pandas
+        ``Series.mask`` semantics). To *keep* matches and zero the rest, use
+        :meth:`keep` or write ``where(~sel, other)``.
+        """
         mask = self.pmap.mask(sel)
         other_data = other.data if isinstance(other, PropertyData) else other
         if isinstance(other, PropertyData):
             _require_same_map(self.pmap, other.pmap)
         return self._with_data(jnp.where(mask, other_data, self.data))
+
+    def keep(self, sel: Selector, other: Any = 0.0) -> PropertyData:
+        """Keep matching compartments; replace the rest with ``other``.
+
+        Equivalent to ``where(~sel, other)``. Prefer this spelling when summing
+        a subset (e.g. infectious prevalence) so the polarity matches
+        ``select`` / ``sum_over`` / :class:`~summer4.flows.rates.Reduce`.
+        """
+        return self.where(~sel, other)
 
     def partition(self, prop: Property | str) -> dict[Trait, Any]:
         """Gather values for each trait of ``prop``."""

@@ -24,9 +24,6 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
   `Trace._apply_rolling` grows the jaxpr with trajectory length.
 - [`state-ledgers-incidence.md`](state-ledgers-incidence.md) — opt-in exact
   incidence via `State.ledgers` (post-hoc trapezoid is biased for calibration).
-- [`propertydata-where-polarity.md`](propertydata-where-polarity.md) —
-  `PropertyData.where` replaces what it matches, so the natural reading is
-  silently wrong.
 - [`targetset-residual-reduction.md`](targetset-residual-reduction.md) —
   `TargetSet.residuals` cannot reduce a stratified save onto an aggregate
   series.

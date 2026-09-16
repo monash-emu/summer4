@@ -10,11 +10,36 @@ from typing import Any, Literal, NamedTuple, cast, get_type_hints
 import numpy as np
 
 from summer4.properties import Property
-from summer4.selectors import Selector
+from summer4.selectors import (
+    Absent,
+    And,
+    Dest,
+    Everything,
+    IsIn,
+    Not,
+    Nothing,
+    Or,
+    Present,
+    Selector,
+    Source,
+)
 
 type FlowReduce = Literal["identity", "sum"] | tuple[Literal["sum_over"], str]
 type Adjustment = Multiply | Overwrite | Transform
 type AdjustSpec = Sequence[object] | None
+
+# Extension point for rate nodes defined outside ``summer4.flows`` (e.g. epi).
+_RATE_EVALUATORS: dict[type, Callable[..., Any]] = {}
+
+
+def register_rate_eval[T](cls: type[T]) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    """Register an evaluator for a :class:`RateOps` subclass defined elsewhere."""
+
+    def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
+        _RATE_EVALUATORS[cls] = fn
+        return fn
+
+    return decorator
 
 
 class RateOps:
@@ -103,6 +128,15 @@ class FieldRef(RateOps):
         return FieldRef((*self.path, name))
 
 
+def Param(name: str) -> FieldRef:
+    """Named parameter: thin alias for ``FieldRef((name,))``.
+
+    Resolves against a plain dict or NamedTuple params the same way a
+    one-element :class:`FieldRef` path already does.
+    """
+    return FieldRef((name,))
+
+
 @dataclass(frozen=True, slots=True)
 class FlowRef(RateOps):
     """Reference to another flow's already-computed contribution."""
@@ -127,6 +161,43 @@ class BinOp(RateOps):
     op: Literal["add", "sub", "mul", "div"]
     left: RateOps
     right: RateOps
+
+
+@dataclass(frozen=True, slots=True)
+class Reduce(RateOps):
+    """Reduce compartment state over a grouping; ``where`` means KEEP.
+
+    ``Reduce(where=sel, sum_over=prop)`` sums only compartments matching
+    ``sel``. That is the opposite polarity of :meth:`PropertyData.where`,
+    which *replaces* matches — use :meth:`PropertyData.keep` for the same
+    keep-shaped reading on a :class:`PropertyData`.
+    """
+
+    sum_over: Property | str
+    where: Selector | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class Capture(RateOps):
+    """Evaluate ``inner`` (typically a :class:`GroupedRate`) and stash it by name.
+
+    Saved via :class:`~summer4.results.plan.GroupedOutput` so a force of
+    infection (or any other grouped quantity) is inspectable as a
+    properly-dimensioned trace without re-slicing a broadcast array.
+    """
+
+    name: str
+    inner: RateOps
+
+
+@dataclass(frozen=True, slots=True)
+class ArrayConst(RateOps):
+    """Literal array rate (e.g. a static mixing matrix)."""
+
+    value: Any
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "value", np.asarray(self.value, dtype=np.float64))
 
 
 @dataclass(frozen=True, slots=True)
@@ -264,9 +335,14 @@ def _flow_refs(expr: RateOps) -> set[str]:
             return refs | _flow_refs(arg)
         case GaussianPulse(arg=arg, centre=centre, width=width, height=height):
             return _flow_refs(arg) | _flow_refs(centre) | _flow_refs(width) | _flow_refs(height)
-        case Time():
+        case Time() | Const() | FieldRef() | Reduce() | ArrayConst():
             return set()
+        case Capture(inner=inner):
+            return _flow_refs(inner)
         case _:
+            custom = getattr(expr, "__flow_refs__", None)
+            if callable(custom):
+                return set(custom())
             return set()
 
 
@@ -306,9 +382,14 @@ def _field_paths(expr: RateOps) -> set[tuple[str, ...]]:
                 | _field_paths(width)
                 | _field_paths(height)
             )
-        case Time():
+        case Time() | Const() | FlowRef() | Reduce() | ArrayConst():
             return set()
+        case Capture(inner=inner):
+            return _field_paths(inner)
         case _:
+            custom = getattr(expr, "__field_paths__", None)
+            if callable(custom):
+                return set(custom())
             return set()
 
 
@@ -391,6 +472,37 @@ def validate_computed_path(path: tuple[str, ...], schema: type) -> None:
     )
 
 
+def _selector_bytes(sel: Selector) -> bytes:
+    """Stable encoding of a selector AST for digests / jit cache keys."""
+    from summer4.properties import Trait
+
+    match sel:
+        case Trait(property=prop, name=name):
+            return b"trait" + prop.encode() + b"\0" + name.encode()
+        case IsIn(property=prop, names=names):
+            return b"isin" + prop.encode() + b"\0" + repr(names).encode()
+        case Present(property=prop):
+            return b"present" + prop.encode()
+        case Absent(property=prop):
+            return b"absent" + prop.encode()
+        case Everything():
+            return b"everything"
+        case Nothing():
+            return b"nothing"
+        case And(left=left, right=right):
+            return b"and" + _selector_bytes(left) + _selector_bytes(right)
+        case Or(left=left, right=right):
+            return b"or" + _selector_bytes(left) + _selector_bytes(right)
+        case Not(inner=inner):
+            return b"not" + _selector_bytes(inner)
+        case Source(inner=inner):
+            return b"source" + _selector_bytes(inner)
+        case Dest(inner=inner):
+            return b"dest" + _selector_bytes(inner)
+        case _:
+            raise TypeError(f"Unsupported selector {type(sel).__name__}.")
+
+
 def _rate_bytes(expr: RateOps) -> bytes:
     match expr:
         case Const(value=value):
@@ -426,7 +538,23 @@ def _rate_bytes(expr: RateOps) -> bytes:
                 + _rate_bytes(width)
                 + _rate_bytes(height)
             )
+        case Reduce(sum_over=sum_over, where=where):
+            prop_name = sum_over.name if isinstance(sum_over, Property) else sum_over
+            body = b"reduce" + prop_name.encode()
+            if where is None:
+                return body + b"nowhere"
+            return body + _selector_bytes(where)
+        case Capture(name=name, inner=inner):
+            return b"capture" + name.encode() + _rate_bytes(inner)
+        case ArrayConst(value=value):
+            return b"array" + np.ascontiguousarray(value, dtype=np.float64).tobytes()
         case _:
+            # Extension nodes (e.g. epi) must register a stable encoding via
+            # ``_rate_bytes`` fallback on class name + ``repr`` of fields is
+            # unsafe; require ``__rate_bytes__`` when registered evaluators exist.
+            custom = getattr(expr, "__rate_bytes__", None)
+            if callable(custom):
+                return bytes(custom())
             return type(expr).__name__.encode()
 
 

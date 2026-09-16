@@ -62,27 +62,24 @@ summer2 queries are conjunction-only dictionaries. summer4 queries are an
 algebra with `&`, `|`, `~`, multi-trait membership, and explicit presence and
 absence. Flow-edge queries use the same algebra, polarity-wrapped.
 
-### Flows — 6 of 8 complete (8 covered)
+### Flows — 8 of 8 complete (8 covered)
 
 `TransitionFlow`, `ExitFlow` and `EntryFlow` cover transition, death, universal
-death, crude birth, replacement birth and importation. The two infection
-constructors are expressible but not primitives: the user writes
-`contact * I / N` (or `contact * I`) in `derived_fn` and passes a `FieldRef` as
-the rate (F7, F8 `partial`).
+death, crude birth, replacement birth and importation. Infection frequency and
+density are `ForceOfInfection(kind="frequency"|"density")` (F7, F8 `full`),
+also via `EpiModel.add_infection_*_flow`.
 
-### Flow adjustments — 3 of 4
+### Flow adjustments — 4 of 4
 
 `adjust=` with `Multiply` / `Overwrite` / `Transform` and a selector `where`
 covers `set_flow_adjustments`. Adjustments belong to the flow, not to a
-`Stratification`. `add_infectiousness_adjustments` does not translate: it
-weights a compartment's contribution to a force of infection that is not a
-library concept.
+`Stratification`. Infectiousness weights are FOI-owned:
+`ForceOfInfection(infectiousness=...)` (A4 `full`).
 
-### Mixing — 0 of 1
+### Mixing — 1 of 1
 
-`Stratification.set_mixing_matrix`. `TraitMatrix` looks superficially similar
-and is a different thing: it moves *people* between strata (migration), whereas
-a mixing matrix weights *transmission* between strata.
+`summer4.epi.MixingMatrix` weights transmission between strata (M1 `full`).
+`TraitMatrix` remains a different thing: it moves *people* between strata.
 
 ### Parameters and time-varying functions — 8 of 9 complete (9 covered)
 
@@ -113,9 +110,9 @@ flows* inside the vector field, not to the caller.
 | Model lifecycle | 1 / 7 |
 | Compartments and stratification | 4 / 8 |
 | Compartment queries | 3 / 3 |
-| Flows | 6 / 8 |
-| Flow adjustments | 3 / 4 |
-| Mixing | 0 / 1 |
+| Flows | 8 / 8 |
+| Flow adjustments | 4 / 4 |
+| Mixing | 1 / 1 |
 | Parameters and time-varying functions | 8 / 9 |
 | Derived outputs | 1 / 8 |
 | Solver | 0 / 2 |
@@ -139,7 +136,7 @@ outputs, mixing, calibration) still absent or partial.
 | Edge queries | **Implemented** | `EdgeMap`, `Source` / `Dest` |
 | Compiled model + fixed-step integrator | **Implemented** | `CompiledModel`, `euler` (final state) |
 | Adaptive solver seam (diffrax) | Not started | `pyproject.toml` extra only |
-| Force of infection / mixing | Not started | F7/F8 hand-written |
+| Force of infection / mixing | **Implemented** | `summer4.epi` (`ForceOfInfection`, `MixingMatrix`, `EpiModel`) |
 | Derived outputs and results | Not started | — |
 | Real-world time | Not started | — |
 | Calibration | Not started | `pyproject.toml` extra only |

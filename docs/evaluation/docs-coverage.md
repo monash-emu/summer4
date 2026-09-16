@@ -14,10 +14,10 @@ The site has four notebook-bearing sections plus prose and an API reference.
 | `examples/01-basic-model` | SIR model, run, plot | **Partial** | Trajectory, initial population, results frame |
 | `examples/03-derived-outputs` | Five `request_*` output types | **No** | Derived outputs |
 | `examples/04-flow-types` | All eight flow constructors | **Partial** | Trajectory, flow outputs |
-| `examples/06-stratification-introduction` | Stratify, adjust flows, infectiousness | **Partial** | Infectiousness adjustments, trajectory |
+| `examples/06-stratification-introduction` | Stratify, adjust flows, infectiousness | **Partial** | Trajectory; infectiousness via FOI |
 | `examples/07-age-stratification` | Age strata, population split, ageing | **Partial** | Population split, trajectory |
-| `examples/08-strain-stratification` | Strain strata, strain-specific flows | **Partial** | Strain-aware FOI primitive, trajectory |
-| `examples/09-mixing-matrices` | Contact matrices | **No** | Mixing matrices |
+| `examples/08-strain-stratification` | Strain strata, strain-specific flows | **Partial** | Trajectory; FOI via `per_trait` |
+| `examples/09-mixing-matrices` | Contact matrices | **Partial** | `MixingMatrix` ready; page not yet ported |
 | `examples/10-derived-outputs-stratified` | Stratified outputs | **No** | Derived outputs |
 | `examples/11-flows-between-strata` | Inter-stratum flows | **Partial** | Trajectory, compartment outputs |
 | `detailed/time-varying-functions` | Interpolation, piecewise, `Time` | **Full** | `docs/summer2/time-varying-functions.ipynb` |

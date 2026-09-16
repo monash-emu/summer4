@@ -28,6 +28,7 @@ from summer4.flows.rates import (
     Interp,
     Overwrite,
     RateOps,
+    Reduce,
     Time,
     Transform,
     _adjust_bytes,
@@ -53,11 +54,70 @@ class DerivedFn(Protocol):
 
 
 @dataclass(frozen=True, slots=True)
-class _SubmapRate:
-    """Rate whose last axis is aligned to one property's traits."""
+class GroupedRate:
+    """Rate whose last axis is aligned to one or more properties' traits.
+
+    Arithmetic preserves ``properties``. Two :class:`GroupedRate`s combine only
+    when their groupings match; combining with a scalar keeps this grouping.
+    Mismatched groupings raise rather than broadcasting silently.
+    """
 
     data: object
     properties: tuple[Property, ...]
+    __array_priority__ = 1000
+    __array_ufunc__ = None  # force ``__rmatmul__`` / arithmetic over NumPy coercion
+
+    def _require_same_grouping(self, other: GroupedRate) -> None:
+        if self.properties != other.properties:
+            left = ", ".join(p.name for p in self.properties) or "(none)"
+            right = ", ".join(p.name for p in other.properties) or "(none)"
+            raise ValueError(f"GroupedRate groupings differ: ({left}) vs ({right}).")
+
+    def _combine(self, other: object, op: Any) -> GroupedRate:
+        if isinstance(other, GroupedRate):
+            self._require_same_grouping(other)
+            return GroupedRate(op(self.data, other.data), self.properties)
+        return GroupedRate(op(self.data, other), self.properties)
+
+    def __add__(self, other: object) -> GroupedRate:
+        return self._combine(other, lambda a, b: a + b)
+
+    def __radd__(self, other: object) -> GroupedRate:
+        return self._combine(other, lambda a, b: b + a)
+
+    def __sub__(self, other: object) -> GroupedRate:
+        return self._combine(other, lambda a, b: a - b)
+
+    def __rsub__(self, other: object) -> GroupedRate:
+        return self._combine(other, lambda a, b: b - a)
+
+    def __mul__(self, other: object) -> GroupedRate:
+        return self._combine(other, lambda a, b: a * b)
+
+    def __rmul__(self, other: object) -> GroupedRate:
+        return self._combine(other, lambda a, b: b * a)
+
+    def __truediv__(self, other: object) -> GroupedRate:
+        return self._combine(other, lambda a, b: a / b)
+
+    def __rtruediv__(self, other: object) -> GroupedRate:
+        return self._combine(other, lambda a, b: b / a)
+
+    def __matmul__(self, other: object) -> GroupedRate:
+        """``grouped @ M`` — right-multiply the last axis by a square matrix."""
+        import jax.numpy as jnp
+
+        data = jnp.asarray(self.data)
+        mat = jnp.asarray(other)
+        return GroupedRate(data @ mat, self.properties)
+
+    def __rmatmul__(self, other: object) -> GroupedRate:
+        """``M @ grouped`` — left-multiply the last axis by a square matrix."""
+        import jax.numpy as jnp
+
+        data = jnp.asarray(self.data)
+        mat = jnp.asarray(other)
+        return GroupedRate(mat @ data, self.properties)
 
 
 def _gather_idx(flow: FlowEdges) -> NDArray[np.int32]:
@@ -167,8 +227,25 @@ def _eval_rate(
     flow_meta: Mapping[str, FlowEdges],
     pmap: PropertyMap,
     t: object,
+    y_arr: Any,
+    captures: dict[str, GroupedRate],
 ) -> Any:
     import jax.numpy as jnp
+
+    from summer4.flows.rates import _RATE_EVALUATORS, ArrayConst, Capture
+    from summer4.jax.propertydata import PropertyData
+
+    def child(node: RateOps) -> Any:
+        return _eval_rate(
+            node,
+            derived=derived,
+            flow_values=flow_values,
+            flow_meta=flow_meta,
+            pmap=pmap,
+            t=t,
+            y_arr=y_arr,
+            captures=captures,
+        )
 
     match expr:
         case Const(value=value):
@@ -177,6 +254,8 @@ def _eval_rate(
             return t
         case FieldRef(path=path):
             return _lookup_path(derived, path)
+        case ArrayConst(value=value):
+            return jnp.asarray(value)
         case FlowRef(name=name, reduce=reduce):
             if name not in flow_values:
                 raise KeyError(f"Flow {name!r} has not been evaluated yet.")
@@ -188,25 +267,28 @@ def _eval_rate(
                 edge_idx = _gather_idx(producer)
                 prop = pmap.get_property(reduce[1])
                 data = _sum_mass_over(values, edge_idx, pmap, prop)
-                return _SubmapRate(data=data, properties=(prop,))
+                return GroupedRate(data=data, properties=(prop,))
             return values
+        case Reduce(sum_over=sum_over, where=where):
+            prop = pmap.get_property(sum_over.name if isinstance(sum_over, Property) else sum_over)
+            pd = PropertyData(pmap, y_arr)
+            if where is not None:
+                pd = pd.keep(where, 0.0)
+            reduced = pd.sum_over(prop)
+            return GroupedRate(data=reduced.data, properties=(prop,))
+        case Capture(name=name, inner=inner):
+            value = child(inner)
+            if isinstance(value, GroupedRate):
+                captures[name] = value
+            else:
+                raise TypeError(
+                    f"Capture({name!r}) inner must evaluate to GroupedRate, "
+                    f"got {type(value).__name__}."
+                )
+            return value
         case BinOp(op=op, left=left, right=right):
-            left_v = _eval_rate(
-                left,
-                derived=derived,
-                flow_values=flow_values,
-                flow_meta=flow_meta,
-                pmap=pmap,
-                t=t,
-            )
-            right_v = _eval_rate(
-                right,
-                derived=derived,
-                flow_values=flow_values,
-                flow_meta=flow_meta,
-                pmap=pmap,
-                t=t,
-            )
+            left_v = child(left)
+            right_v = child(right)
             if op == "add":
                 return left_v + right_v
             if op == "sub":
@@ -221,80 +303,27 @@ def _eval_rate(
             arg=arg,
             sharpness=sharpness,
         ):
-            stacked_bps = jnp.stack(
-                [
-                    jnp.asarray(
-                        _eval_rate(
-                            bp,
-                            derived=derived,
-                            flow_values=flow_values,
-                            flow_meta=flow_meta,
-                            pmap=pmap,
-                            t=t,
-                        )
-                    )
-                    for bp in breakpoints
-                ]
-            )
-            stacked = jnp.stack(
-                [
-                    jnp.asarray(
-                        _eval_rate(
-                            value,
-                            derived=derived,
-                            flow_values=flow_values,
-                            flow_meta=flow_meta,
-                            pmap=pmap,
-                            t=t,
-                        )
-                    )
-                    for value in values
-                ]
-            )
-            x = _eval_rate(
-                arg,
-                derived=derived,
-                flow_values=flow_values,
-                flow_meta=flow_meta,
-                pmap=pmap,
-                t=t,
-            )
-            return _eval_interp(kind, stacked_bps, stacked, x, sharpness)
+            stacked_bps = jnp.stack([jnp.asarray(child(bp)) for bp in breakpoints])
+            stacked = jnp.stack([jnp.asarray(child(value)) for value in values])
+            return _eval_interp(kind, stacked_bps, stacked, child(arg), sharpness)
         case GaussianPulse(arg=arg, centre=centre, width=width, height=height):
-            x = _eval_rate(
-                arg,
-                derived=derived,
-                flow_values=flow_values,
-                flow_meta=flow_meta,
-                pmap=pmap,
-                t=t,
-            )
-            c = _eval_rate(
-                centre,
-                derived=derived,
-                flow_values=flow_values,
-                flow_meta=flow_meta,
-                pmap=pmap,
-                t=t,
-            )
-            w = _eval_rate(
-                width,
-                derived=derived,
-                flow_values=flow_values,
-                flow_meta=flow_meta,
-                pmap=pmap,
-                t=t,
-            )
-            h = _eval_rate(
-                height,
-                derived=derived,
-                flow_values=flow_values,
-                flow_meta=flow_meta,
-                pmap=pmap,
-                t=t,
-            )
+            x = child(arg)
+            c = child(centre)
+            w = child(width)
+            h = child(height)
             return h * jnp.exp(-0.5 * ((x - c) / w) ** 2)
         case _:
+            evaluator = _RATE_EVALUATORS.get(type(expr))
+            if evaluator is not None:
+                return evaluator(
+                    expr,
+                    eval_child=child,
+                    derived=derived,
+                    pmap=pmap,
+                    t=t,
+                    y_arr=y_arr,
+                    captures=captures,
+                )
             raise TypeError(f"Unsupported rate expression {type(expr).__name__}.")
 
 
@@ -303,29 +332,68 @@ def _as_array(value: Any) -> Any:
 
     from summer4.jax.propertydata import PropertyData
 
-    if isinstance(value, _SubmapRate):
+    if isinstance(value, GroupedRate):
         return value.data
     if isinstance(value, PropertyData):
         return value.data
     return jnp.asarray(value)
 
 
-def _align_submap_rate(
-    rate: _SubmapRate,
+def _group_codes_to_index(
+    pmap: PropertyMap,
+    gather_idx: NDArray[np.int32],
+    properties: tuple[Property, ...],
+) -> NDArray[np.int32]:
+    """Map each gather row onto the last-axis index of a :class:`GroupedRate`."""
+    if not properties:
+        raise ValueError("GroupedRate alignment requires at least one property.")
+    if len(properties) == 1:
+        prop = properties[0]
+        col_i = pmap.column_index(prop)
+        codes = np.asarray(pmap.codes[gather_idx, col_i], dtype=np.int32)
+        if np.any(codes == _NA):
+            raise ValueError(
+                f"Cannot align grouped rate over {prop.name!r}: "
+                "some gather rows lack that property."
+            )
+        return codes
+
+    groups = pmap.group_by(*properties)
+    key_to_idx: dict[tuple[int, ...], int] = {}
+    for i, traits in enumerate(groups):
+        key_to_idx[tuple(t.code for t in traits)] = i
+    cols = np.column_stack(
+        [
+            np.asarray(pmap.codes[gather_idx, pmap.column_index(p)], dtype=np.int32)
+            for p in properties
+        ]
+    )
+    if np.any(cols == _NA):
+        names = ", ".join(p.name for p in properties)
+        raise ValueError(
+            f"Cannot align grouped rate over ({names}): some gather rows lack a property."
+        )
+    indices = np.empty(len(gather_idx), dtype=np.int32)
+    for i, row in enumerate(cols):
+        key = tuple(int(c) for c in row)
+        try:
+            indices[i] = key_to_idx[key]
+        except KeyError as exc:
+            names = ", ".join(p.name for p in properties)
+            raise ValueError(
+                f"Cannot align grouped rate over ({names}): "
+                f"combination {key} is not present on the map."
+            ) from exc
+    return indices
+
+
+def _align_grouped_rate(
+    rate: GroupedRate,
     gather_idx: NDArray[np.int32],
     pmap: PropertyMap,
 ) -> Any:
-    if len(rate.properties) != 1:
-        raise ValueError("sum_over alignment supports exactly one property.")
-    prop = rate.properties[0]
-    col_i = pmap.column_index(prop)
-    codes = np.asarray(pmap.codes[gather_idx, col_i], dtype=np.int32)
-    if np.any(codes == _NA):
-        raise ValueError(
-            f"Cannot align sum_over({prop.name!r}): some gather rows lack that property."
-        )
-    data = _as_array(rate)
-    return data[..., codes]
+    indices = _group_codes_to_index(pmap, gather_idx, rate.properties)
+    return _as_array(rate)[..., indices]
 
 
 def _align_rate(
@@ -338,8 +406,8 @@ def _align_rate(
     pair_dest_codes: NDArray[np.int32] | None,
     pair_n_traits: int | None,
 ) -> Any:
-    if isinstance(rate, _SubmapRate):
-        return _align_submap_rate(rate, gather_idx, pmap)
+    if isinstance(rate, GroupedRate):
+        return _align_grouped_rate(rate, gather_idx, pmap)
     arr = _as_array(rate)
     shape = tuple(getattr(arr, "shape", ()))
     pmap_size = pmap.size
@@ -374,6 +442,8 @@ def _eval_aligned(
     pmap: PropertyMap,
     gather_idx: NDArray[np.int32],
     t: object,
+    y_arr: Any,
+    captures: dict[str, GroupedRate],
 ) -> Any:
     raw = _eval_rate(
         expr,
@@ -382,6 +452,8 @@ def _eval_aligned(
         flow_meta=flow_meta,
         pmap=pmap,
         t=t,
+        y_arr=y_arr,
+        captures=captures,
     )
     pair_src, pair_dest, pair_n = _pair_info(flow)
     return _align_rate(
@@ -405,6 +477,8 @@ def _apply_adjustments(
     pmap: PropertyMap,
     gather_idx: NDArray[np.int32],
     t: object,
+    y_arr: Any,
+    captures: dict[str, GroupedRate],
 ) -> Any:
     import jax.numpy as jnp
 
@@ -421,6 +495,8 @@ def _apply_adjustments(
                     pmap=pmap,
                     gather_idx=gather_idx,
                     t=t,
+                    y_arr=y_arr,
+                    captures=captures,
                 )
                 for arg in adj.args
             ]
@@ -435,6 +511,8 @@ def _apply_adjustments(
                 pmap=pmap,
                 gather_idx=gather_idx,
                 t=t,
+                y_arr=y_arr,
+                captures=captures,
             )
             new = value if isinstance(adj, Overwrite) else prev * value
         prev = jnp.where(jnp.asarray(mask), new, prev) if mask is not None else new
@@ -443,6 +521,38 @@ def _apply_adjustments(
 
 def _scatter_add(target: Any, indices: NDArray[np.int32], values: Any) -> Any:
     return target.at[..., indices].add(values)
+
+
+def _collect_capture_meta(expr: RateOps) -> dict[str, tuple[Property, ...]]:
+    """Walk a rate tree for nodes that expose ``__capture_meta__``."""
+    from summer4.flows.rates import BinOp, GaussianPulse, Interp
+
+    out: dict[str, tuple[Property, ...]] = {}
+    meta_fn = getattr(expr, "__capture_meta__", None)
+    if callable(meta_fn):
+        name, props = meta_fn()
+        out[name] = props
+    match expr:
+        case BinOp(left=left, right=right):
+            out.update(_collect_capture_meta(left))
+            out.update(_collect_capture_meta(right))
+        case Interp(breakpoints=breakpoints, values=values, arg=arg):
+            for bp in breakpoints:
+                out.update(_collect_capture_meta(bp))
+            for value in values:
+                out.update(_collect_capture_meta(value))
+            out.update(_collect_capture_meta(arg))
+        case GaussianPulse(arg=arg, centre=centre, width=width, height=height):
+            out.update(_collect_capture_meta(arg))
+            out.update(_collect_capture_meta(centre))
+            out.update(_collect_capture_meta(width))
+            out.update(_collect_capture_meta(height))
+        case _:
+            custom = getattr(expr, "__capture_children__", None)
+            if callable(custom):
+                for child in custom():
+                    out.update(_collect_capture_meta(child))
+    return out
 
 
 def _flow_paths(flow: FlowEdges) -> set[tuple[str, ...]]:
@@ -524,6 +634,7 @@ class SaveContext:
     dy: Any
     derived: Any
     flows: Mapping[str, Any]
+    captures: Mapping[str, GroupedRate] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -545,6 +656,7 @@ class CompiledModel:
     edge_maps: Mapping[str, EdgeMap]
     derived_fn: DerivedFn | None
     computed_paths: tuple[tuple[str, ...], ...]
+    capture_meta: Mapping[str, tuple[Property, ...]] = field(default_factory=dict)
     _digest: bytes = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
@@ -592,6 +704,7 @@ class CompiledModel:
         derived = _eval_derived(self.derived_fn, params, y_arr, t)
         dy: Any = jnp.zeros_like(y_arr)
         flow_values: dict[str, Any] = {}
+        captures: dict[str, GroupedRate] = {}
         pmap = self.pmap
         for name in self.order:
             flow = self.flows[name]
@@ -605,6 +718,8 @@ class CompiledModel:
                 pmap=pmap,
                 gather_idx=gather,
                 t=t,
+                y_arr=y_arr,
+                captures=captures,
             )
             rate = rate * jnp.asarray(flow.scale)
             rate = _apply_adjustments(
@@ -616,6 +731,8 @@ class CompiledModel:
                 pmap=pmap,
                 gather_idx=gather,
                 t=t,
+                y_arr=y_arr,
+                captures=captures,
             )
             weight = jnp.asarray(flow.weight)
             match flow:
@@ -652,7 +769,9 @@ class CompiledModel:
         else:
             y_out = y_boxed
             dy_out = dy
-        return SaveContext(t=t, y=y_out, dy=dy_out, derived=derived, flows=flow_values)
+        return SaveContext(
+            t=t, y=y_out, dy=dy_out, derived=derived, flows=flow_values, captures=captures
+        )
 
     def vector_field(self, t: object, y: object, params: object) -> Any:
         """Return ``dy/dt`` for state ``y`` (JAX arrays, PropertyData, or State)."""
@@ -664,6 +783,7 @@ class CompiledModel:
             Compartments,
             ComputedValue,
             FlowMass,
+            GroupedOutput,
             SavePlan,
             SaveRequest,
         )
@@ -681,6 +801,8 @@ class CompiledModel:
         for path in self.computed_paths:
             key = ".".join(path)
             requests[key] = SaveRequest(ComputedValue(path=path))
+        for cap_name in self.capture_meta:
+            requests[cap_name] = SaveRequest(GroupedOutput(name=cap_name))
         expanded = SavePlan(
             requests=requests,
             ts=plan.ts,
@@ -872,7 +994,14 @@ class CompiledModel:
 
         traces: dict[str, Trace] = {}
         for key, req in expanded.requests.items():
-            dims = dims_for_quantity(req.what)
+            from summer4.results.plan import GroupedOutput
+
+            dims: tuple[str, ...]
+            if isinstance(req.what, GroupedOutput) and req.what.name in self.capture_meta:
+                prop = self.capture_meta[req.what.name][0]
+                dims = ("time", prop.name)
+            else:
+                dims = dims_for_quantity(req.what)
             raw = out.saved[key]
             group = key_to_group[key]
             trace_times = TimeAxis(
@@ -934,8 +1063,16 @@ class FlowModel:
         order = tuple(flow.name for flow in actualized)
         edge_maps = {flow.name: flow.edge_map for flow in actualized}
         paths: set[tuple[str, ...]] = set()
+        capture_meta: dict[str, tuple[Property, ...]] = {}
         for flow in actualized:
             paths |= _flow_paths(flow)
+            capture_meta.update(_collect_capture_meta(flow.rate))
+            for adj in flow.adjust:
+                if hasattr(adj, "value"):
+                    capture_meta.update(_collect_capture_meta(adj.value))
+                elif hasattr(adj, "args"):
+                    for arg in adj.args:
+                        capture_meta.update(_collect_capture_meta(arg))
         computed_paths = tuple(sorted(paths))
         return CompiledModel(
             pmap=self.pmap,
@@ -944,6 +1081,7 @@ class FlowModel:
             edge_maps=edge_maps,
             derived_fn=derived_fn,
             computed_paths=computed_paths,
+            capture_meta=capture_meta,
         )
 
 
