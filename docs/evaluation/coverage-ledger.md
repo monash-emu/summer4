@@ -50,7 +50,7 @@ reach, and it is the denominator for every percentage on this site.
 | S4 | `model.get_stratification()` | stratification | `full` | `PropertyMap.get_property / history` | History also records the where= selector |
 | S5 | `Compartment` | stratification | `partial` | `rows; labels(), to_dicts()` | No per-compartment object by design |
 | S6 | `AgeStratification` | stratification | `partial` | `Property + TraitChain flow` | Ageing flows exist; no bundled convenience class |
-| S7 | `StrainStratification` | stratification | `partial` | `Property + per-strain flows` | Strain-aware force of infection is hand-written |
+| S7 | `StrainStratification` | stratification | `partial` | `Property + per-strain flows` | Multi-strain FOI via `ForceOfInfection.per_trait`; no bundled StrainStratification class |
 | S8 | `set_population_split / adjust_population_split` | stratification | `none` | — | Flow split= is fan-out only, not initial population |
 | Q1 | `model.query_compartments()` | queries | `full` | `PropertyMap.select / mask` | Algebra, not a conjunction dict |
 | Q2 | `model.get_matching_compartments()` | queries | `full` | `PropertyMap.select / select_one` |  |
@@ -61,13 +61,13 @@ reach, and it is the denominator for every percentage on this site.
 | F4 | `add_crude_birth_flow` | flows | `full` | `EntryFlow` | Absolute rate from a derived total |
 | F5 | `add_replacement_birth_flow` | flows | `full` | `EntryFlow(dest, death.sum_over(...))` |  |
 | F6 | `add_importation_flow` | flows | `full` | `EntryFlow` | Absolute rate |
-| F7 | `add_infection_frequency_flow` | flows | `partial` | `TransitionFlow + derived FOI` | User writes contact*I/N; not a primitive |
-| F8 | `add_infection_density_flow` | flows | `partial` | `TransitionFlow + derived FOI` | User writes contact*I; not a primitive |
+| F7 | `add_infection_frequency_flow` | flows | `full` | `ForceOfInfection(kind="frequency")` / `EpiModel.add_infection_frequency_flow` | Same object as F8; kind selects frequency vs density |
+| F8 | `add_infection_density_flow` | flows | `full` | `ForceOfInfection(kind="density")` / `EpiModel.add_infection_density_flow` | Same object as F7; kind selects frequency vs density |
 | A1 | `Stratification.set_flow_adjustments` | adjustments | `full` | `adjust= with where=` | Flow-owned, deliberately not on Stratification |
 | A2 | `Multiply` | adjustments | `full` | `Multiply` | Default for a bare value in adjust= |
 | A3 | `Overwrite` | adjustments | `full` | `Overwrite` | Supports where=Selector |
-| A4 | `Stratification.add_infectiousness_adjustments` | adjustments | `none` | — | Needs a force-of-infection concept |
-| M1 | `Stratification.set_mixing_matrix` | mixing | `none` | — | TraitMatrix moves people, it does not weight transmission |
+| A4 | `Stratification.add_infectiousness_adjustments` | adjustments | `full` | `ForceOfInfection(infectiousness=...)` | FOI-owned, deliberately not on Stratification (as A1) |
+| M1 | `Stratification.set_mixing_matrix` | mixing | `full` | `summer4.epi.MixingMatrix` | Weights transmission; `TraitMatrix` still moves people |
 | P1 | `Parameter` | parameters | `full` | `FieldRef via derived_refs` | Schema-checked, IDE-completable |
 | P2 | `Function` | parameters | `full` | `Transform / callables in derived_fn` |  |
 | P3 | `Time` | parameters | `full` | `Time()` rate node; `t` on `derived_fn` | |
@@ -109,7 +109,7 @@ published as written.
 | 7 | Obtaining numerical solutions | `full` | None | `textbook/07-numerical-solutions.ipynb` |
 | 8 | Derived outputs | `partial` | Port not yet written (API ready: FlowMass + ComputedValue) | — |
 | 9 | Transmission assumptions | `full` | None | — |
-| 10 | The reproduction number | `partial` | Port not yet written (API ready: time-varying + hand-written FOI; F7 stays partial until WP6) | — |
+| 10 | The reproduction number | `partial` | Port not yet written (API ready: time-varying + `ForceOfInfection`) | — |
 | 11 | Cyclical epidemic dynamics | `full` | None | — |
 | 12 | Heterogeneous mixing introduction | `none` | Mixing matrices | — |
 | 13 | Mixing and transmission types | `none` | Mixing matrices, population split | — |
@@ -172,16 +172,16 @@ contains every branch above it.
 | — | Case study (not a work package) | `docs/age-stratified-seirs-case-study` | `2b1a6ab` | `plans/age-stratified-seirs-case-study.plan.md` |
 | 5.1 | WP5 — `describe(params=...)` | `fix/describe-params` | *(this stack)* | `plans/time-varying.plan.md` |
 | 5.2–5.5 | WP5 — time-varying library + harvest | *(stacked on 5.1)* | *(this stack)* | `plans/time-varying.plan.md` |
+| 6.1–6.6 | WP6 — FOI and mixing | `feat/epi-infection-mixing` | *(this stack)* | `plans/epi-infection-mixing.plan.md` |
 
 Every phase shipped its notebook: `examples/notebooks/01-taxonomy.ipynb`
-through `08-time-varying.ipynb`, plus `docs/textbook/02`, `docs/textbook/07`,
+through `09-epi-models.ipynb`, plus `docs/textbook/02`, `docs/textbook/07`,
 `docs/summer2/time-varying-functions.ipynb` and
 `docs/case-studies/age-stratified-seirs.ipynb`.
 
 ### Planning status of the remaining packages
 
-WP5 is **applied** on this stack (`plans/time-varying.plan.md`). WP6 has a
-detailed plan — `plans/epi-infection-mixing.plan.md` — followed by
+WP5 and WP6 are **applied** on this stack. Next is
 `plans/textbook-catchup.plan.md` for the porting sweep they unblock.
 
 **WP3, WP9 and WP10 still have no detailed plan.** What exists for each is its
@@ -195,7 +195,7 @@ landed phases each had before they were built.
 | --- | --- | --- | --- |
 | WP3 | Initial population | Ledger paragraph only | Whether `set_initial_population` is a `FlowModel` method or a free function over `parent_row`; how a split interacts with `stratify(where=)` on ragged maps |
 | WP5 | Time-varying function library | `plans/time-varying.plan.md` (5.1–5.5) | **Applied.** `Time()`, `summer4.timevarying`, `summer4.data`, summer2 time-varying page |
-| WP6 | Force of infection and mixing | `plans/epi-infection-mixing.plan.md` (6.1–6.6) | **Planned.** `GroupedRate` and a `Reduce` node in core; `summer4.epi` holds `MixingMatrix`, `ForceOfInfection` and an `EpiModel` frontend |
+| WP6 | Force of infection and mixing | `plans/epi-infection-mixing.plan.md` (6.1–6.6) | **Applied.** `GroupedRate`, `Reduce`, `summer4.epi` (`MixingMatrix`, `ForceOfInfection`, `EpiModel`) |
 | WP9 | Contact survey data | Ledger paragraph only | Depends on WP6; loading, validating and scaling empirical matrices |
 | WP10 | Calibration | Ledger paragraph only | The numpyro/optax workflow over `TargetSet`; probabilistic likelihoods were deliberately left out of WP11 |
 
@@ -246,13 +246,13 @@ mechanics that exist.
 ### WP4 — Flow outputs and polarity queries (applied)
 
 **Closes:** D1 D6 D7 · **Unblocks:** textbook 4, 8 (API); textbook 10's
-port remains to write (time-varying is WP5, applied; FOI primitive is WP6);
+port remains to write (time-varying and FOI are applied);
 summer2 `03-derived-outputs`,
 `04-flow-types`, `10-derived-outputs-stratified`
 
 `FlowMass` traces are `PropertyData` over the edge table. `sum_over(..., side=)`,
 `.integrate()`, `.incidence()`, and validated `ComputedValue` paths are live.
-Textbook ports for 4 and 8 remain to write; chapter 10's honest blocker is WP5.
+Textbook ports for 4 and 8 remain to write; chapter 10's honest blocker was WP5.
 Plan phase: `feat/flow-outputs`.
 
 ### WP5 — Time-varying function library (applied)
@@ -263,14 +263,15 @@ Plan phase: `feat/flow-outputs`.
 `summer4.timevarying`, and dated-series `summer4.data.Data`. Ported at
 `docs/summer2/time-varying-functions.ipynb`.
 
-### WP6 — Force of infection and mixing
+### WP6 — Force of infection and mixing (applied)
 
 **Closes:** F7 F8 (to `full`) A4 M1 · **Unblocks:** textbook 12, 13, 14, 15
 
-The largest genuinely unprototyped design problem remaining. A force of
-infection is a reduction over a grouping fed back into a rate, and a mixing
-matrix weights that coupling between strata. `TraitMatrix` does **not** do this:
-it moves people, not transmission.
+`GroupedRate` and `Reduce` in core; `summer4.epi` ships `MixingMatrix`,
+`ForceOfInfection` (frequency / density / custom), infectiousness weights,
+`per_trait` multi-strain FOIs, and an `EpiModel` frontend. Example notebook:
+`examples/notebooks/09-epi-models.ipynb`. `TraitMatrix` remains people-movement,
+not transmission weighting.
 
 ### WP7 — Adaptive solver (applied)
 
@@ -328,11 +329,11 @@ table below is **computed** from these declarations by
 <!-- ledger:progression -->
 | After | API rows at `full` | Share |
 | --- | --- | --- |
-| today | 40 / 52 | 77% |
-| WP2 | 40 / 52 | 77% |
-| WP3 | 43 / 52 | 83% |
-| WP4 | 43 / 52 | 83% |
-| WP5 | 43 / 52 | 83% |
+| today | 44 / 52 | 85% |
+| WP2 | 44 / 52 | 85% |
+| WP3 | 47 / 52 | 90% |
+| WP4 | 47 / 52 | 90% |
+| WP5 | 47 / 52 | 90% |
 | WP6 | 47 / 52 | 90% |
 | WP7 | 47 / 52 | 90% |
 | WP9 | 47 / 52 | 90% |
@@ -344,9 +345,9 @@ table below is **computed** from these declarations by
 
 Five rows stay below `full` even after every package, because they are summer2
 *shapes* that summer4 has deliberately rejected rather than capabilities it
-lacks. Infection-frequency/density constructors (F7, F8) stay `partial` until
-WP6 lands a force-of-infection primitive; they are not in this table because
-they are capabilities still to build, not shapes rejected.
+lacks. F7 and F8 are now `full` via `ForceOfInfection(kind=...)` (WP6 applied);
+they are not in this table because they were capabilities to build, not shapes
+rejected.
 
 | ID | summer2 symbol | Why |
 |---|---|---|

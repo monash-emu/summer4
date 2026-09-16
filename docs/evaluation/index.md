@@ -18,10 +18,10 @@ gaps
 
 | Measure | Result |
 |---|---|
-| Public API symbols | 40 |
-| Package source | taxonomy (NumPy) plus `summer4.flows` and `summer4.jax` |
-| summer2 API surface exercised by its own docs, complete in summer4 | **40 of 52 (77%)** |
-| … with any working route (complete or partial) | 47 of 52 (90%) |
+| Public API symbols | 44 |
+| Package source | taxonomy (NumPy) plus `summer4.flows`, `summer4.jax`, and `summer4.epi` |
+| summer2 API surface exercised by its own docs, complete in summer4 | **44 of 52 (85%)** |
+| … with any working route (complete or partial) | 49 of 52 (94%) |
 | summer2 documentation notebooks reproducible as runnable summer4 | **2 of 11** (7 partially) |
 | summer textbook chapters reproducible as runnable summer4 | **7 of 20** (4 more partially) |
 | Implemented layers of the intended stack | taxonomy + flows + results |

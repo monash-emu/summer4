@@ -7,7 +7,14 @@ from summer4.flows.actualize import (
     TransitionEdges,
     actualize,
 )
-from summer4.flows.compiled import CompiledModel, FlowModel, SaveContext, euler, numpy_euler
+from summer4.flows.compiled import (
+    CompiledModel,
+    FlowModel,
+    GroupedRate,
+    SaveContext,
+    euler,
+    numpy_euler,
+)
 from summer4.flows.edges import EdgeMap, EdgeRoles
 from summer4.flows.join import (
     TraitChain,
@@ -25,6 +32,8 @@ from summer4.flows.rates import (
     Interp,
     Multiply,
     Overwrite,
+    Param,
+    Reduce,
     Time,
     Transform,
     as_adjust,
@@ -48,9 +57,12 @@ __all__ = [
     "FlowModel",
     "FlowRef",
     "GaussianPulse",
+    "GroupedRate",
     "Interp",
     "Multiply",
     "Overwrite",
+    "Param",
+    "Reduce",
     "SaveContext",
     "Time",
     "TraitChain",

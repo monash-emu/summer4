@@ -10,7 +10,14 @@ from summer4.flows.edges import EdgeMap, rewrite_edge_selector, sum_over_edge
 from summer4.flows.rates import _lookup_path
 from summer4.jax.propertydata import PropertyData
 from summer4.propertymap import PropertyMap
-from summer4.results.plan import Compartments, ComputedValue, FlowMass, SaveFn, SavePlan
+from summer4.results.plan import (
+    Compartments,
+    ComputedValue,
+    FlowMass,
+    GroupedOutput,
+    SaveFn,
+    SavePlan,
+)
 from summer4.selectors import Selector
 
 
@@ -43,7 +50,7 @@ def _apply_where(
 
 
 def eval_quantity(
-    what: Compartments | FlowMass | ComputedValue | SaveFn,
+    what: Compartments | FlowMass | ComputedValue | SaveFn | GroupedOutput,
     ctx: Any,
     *,
     pmap: PropertyMap,
@@ -83,6 +90,13 @@ def eval_quantity(
             return sum_over_edge(mass, table, prop, side)
         case ComputedValue(path=path):
             return _lookup_path(ctx.derived, path)
+        case GroupedOutput(name=name):
+            if name not in ctx.captures:
+                known = ", ".join(sorted(ctx.captures)) or "(none)"
+                raise KeyError(f"GroupedOutput {name!r} not captured. Known: {known}.")
+            captured = ctx.captures[name]
+            prop = captured.properties[0]
+            return PropertyData(PropertyMap.from_property(prop), captured.data)
         case SaveFn(fn=fn):
             return fn(ctx)
         case _:
@@ -115,6 +129,12 @@ def values_for(req: Any, raw: Any, model: Any) -> Any:
                 prop, _side = sum_over
                 return PropertyData(PropertyMap.from_property(prop), raw)
             return PropertyData(table, raw)
+        case GroupedOutput(name=name):
+            meta = getattr(model, "capture_meta", {})
+            props = meta.get(name)
+            if props is None:
+                return raw
+            return PropertyData(PropertyMap.from_property(props[0]), raw)
         case _:
             return raw
 
@@ -136,7 +156,9 @@ def build_save_fn(
     return save_fn
 
 
-def dims_for_quantity(what: Compartments | FlowMass | ComputedValue | SaveFn) -> tuple[str, ...]:
+def dims_for_quantity(
+    what: Compartments | FlowMass | ComputedValue | SaveFn | GroupedOutput,
+) -> tuple[str, ...]:
     match what:
         case Compartments(sum_over=sum_over):
             if sum_over is not None:
@@ -146,6 +168,10 @@ def dims_for_quantity(what: Compartments | FlowMass | ComputedValue | SaveFn) ->
             if sum_over is not None:
                 return ("time", "group")
             return ("time", "edge")
+        case GroupedOutput(name=name):
+            # Property name filled in by callers that know capture_meta; default
+            # keeps a stable second axis label when meta is unavailable.
+            return ("time", name)
         case ComputedValue() | SaveFn():
             return ("time",)
         case _:

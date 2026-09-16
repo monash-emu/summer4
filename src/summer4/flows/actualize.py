@@ -155,10 +155,23 @@ def _bind_adjust_masks(
 
 
 def _sum_over_property_name(expr: RateOps) -> str | None:
+    """Property name for entry-weight grouping, if the rate is trait-aligned."""
+    from summer4.flows.rates import BinOp, Capture, Reduce
+
     match expr:
         case FlowRef(reduce=("sum_over", name)):
             return name
+        case Reduce(sum_over=sum_over):
+            return sum_over.name if isinstance(sum_over, Property) else sum_over
+        case Capture(inner=inner):
+            return _sum_over_property_name(inner)
+        case BinOp(left=left, right=right):
+            # Prefer a Reduce / sum_over on either side (FOI = contact * grouped).
+            return _sum_over_property_name(left) or _sum_over_property_name(right)
         case _:
+            custom = getattr(expr, "group_by", None)
+            if isinstance(custom, Property):
+                return custom.name
             return None
 
 

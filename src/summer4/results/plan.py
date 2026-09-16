@@ -14,7 +14,7 @@ from summer4.properties import Property
 from summer4.selectors import Selector
 
 type Side = Literal["source", "dest"]
-type Quantity = Compartments | FlowMass | ComputedValue | SaveFn
+type Quantity = Compartments | FlowMass | ComputedValue | SaveFn | GroupedOutput
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +47,18 @@ class ComputedValue:
 
 
 @dataclass(frozen=True, slots=True)
+class GroupedOutput:
+    """Save a :class:`~summer4.flows.rates.Capture`d :class:`GroupedRate` by name.
+
+    The resulting trace is a :class:`~summer4.jax.propertydata.PropertyData`
+    over ``PropertyMap.from_property(group)``, so ``dims`` carry the grouping
+    property name (e.g. ``("time", "age")``).
+    """
+
+    name: str
+
+
+@dataclass(frozen=True, slots=True)
 class SaveFn:
     """Escape hatch: ``fn(ctx: SaveContext) -> array``.
 
@@ -74,6 +86,8 @@ def _quantity_bytes(what: Quantity) -> bytes:
             return b"flow" + flow.encode() + repr(where).encode() + repr(sum_over).encode()
         case ComputedValue(path=path):
             return b"cv" + repr(path).encode()
+        case GroupedOutput(name=name):
+            return b"grouped" + name.encode()
         case SaveFn(fn=fn, reads=reads):
             return b"fn" + str(id(fn)).encode() + repr(sorted(reads)).encode()
         case _:
