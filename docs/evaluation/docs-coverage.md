@@ -20,7 +20,7 @@ The site has four notebook-bearing sections plus prose and an API reference.
 | `examples/09-mixing-matrices` | Contact matrices | **No** | Mixing matrices |
 | `examples/10-derived-outputs-stratified` | Stratified outputs | **No** | Derived outputs |
 | `examples/11-flows-between-strata` | Inter-stratum flows | **Partial** | Trajectory, compartment outputs |
-| `detailed/time-varying-functions` | Interpolation, piecewise, `Time` | **Partial** | Interpolation and piecewise helpers |
+| `detailed/time-varying-functions` | Interpolation, piecewise, `Time` | **Full** | `docs/summer2/time-varying-functions.ipynb` |
 | `detailed/InitialPopulationGraphobject` | Parameterised initial population | **No** | Initial population, parameters |
 | `rationale.md` | Why summer exists | **Portable** | Prose; adapted into {doc}`../dev/architecture` |
 | `api/*.rst` | Autodoc for six modules | **N/A** | summer4 has its own; see {doc}`../api/index` |

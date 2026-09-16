@@ -27,9 +27,6 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
 - [`propertydata-where-polarity.md`](propertydata-where-polarity.md) —
   `PropertyData.where` replaces what it matches, so the natural reading is
   silently wrong.
-- [`describe-requires-params.md`](describe-requires-params.md) —
-  `CompiledModel.describe` passes `None` for params, so it cannot size a plan
-  for any model with a real `derived_fn`.
 - [`targetset-residual-reduction.md`](targetset-residual-reduction.md) —
   `TargetSet.residuals` cannot reduce a stratified save onto an aggregate
   series.

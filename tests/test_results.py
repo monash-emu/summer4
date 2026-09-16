@@ -24,6 +24,7 @@ from summer4 import (
     SaveRequest,
     State,
     TransitionFlow,
+    derived_refs,
 )
 from summer4.jax.propertydata import PropertyData as PD
 from summer4.results.plan import PlanDescription
@@ -54,6 +55,52 @@ def test_describe_shapes_without_solve() -> None:
     assert isinstance(desc, PlanDescription)
     assert desc.n_saves == 11
     assert desc.outputs[0].shape == (11, 9)
+
+
+class _DescribeRates(NamedTuple):
+    infection: float
+    recovery: float
+
+
+def test_describe_with_params_indexing_derived_fn() -> None:
+    """describe(params=...) sizes a plan when derived_fn indexes params."""
+    state, _age, pmap = _sir_age()
+
+    def derived_fn(params: object, *, y: object, t: object) -> _DescribeRates:
+        del y, t
+        assert isinstance(params, dict)
+        return _DescribeRates(
+            infection=params["infection"],
+            recovery=params["recovery"],
+        )
+
+    refs = derived_refs(_DescribeRates)
+    model = FlowModel(pmap)
+    model.add_flow(TransitionFlow("infection", state["S"], state["I"], refs.infection))
+    model.add_flow(TransitionFlow("recovery", state["I"], state["R"], refs.recovery))
+    cm = model.compile(derived_fn=derived_fn)
+    y0 = np.zeros(pmap.size)
+    y0[pmap.select(state["S"])] = 999.0
+    y0[pmap.select(state["I"])] = 1.0
+    y0_pd = PropertyData.wrap(pmap, y0)
+    params = {"infection": 0.2, "recovery": 0.1}
+    plan = SavePlan(requests={"compartments": SaveRequest(Compartments())})
+
+    desc = cm.describe(plan, params=params, y0=y0_pd, n_saves=11)
+    assert isinstance(desc, PlanDescription)
+    assert desc.n_saves == 11
+    assert desc.outputs[0].shape == (11, pmap.size)
+
+    res = cm.run(params, y0_pd, t0=0.0, steps=10, dt=1.0, save=plan)
+    actual = int(np.asarray(res["compartments"].values.data).nbytes)
+    assert desc.total_nbytes == actual
+
+
+def test_describe_without_params_still_works_without_derived_fn() -> None:
+    _state, _age, _pmap, cm, y0 = _compiled_sir()
+    plan = SavePlan(requests={"compartments": SaveRequest(Compartments())})
+    desc = cm.describe(plan, y0=y0, n_saves=5)
+    assert desc.outputs[0].shape == (5, 9)
 
 
 def test_euler_fast_path_matches_final_euler() -> None:

@@ -24,8 +24,11 @@ from summer4.flows.rates import (
     Const,
     FieldRef,
     FlowRef,
+    GaussianPulse,
+    Interp,
     Overwrite,
     RateOps,
+    Time,
     Transform,
     _adjust_bytes,
     _adjust_field_paths,
@@ -106,6 +109,56 @@ def _sum_mass_over(
     return jnp.reshape(summed, mass_j.shape[:-1] + (n_traits,))
 
 
+def _norm_sigmoid(x: Any, sharpness: float) -> Any:
+    """Normalized logistic on ``[0, 1]`` with summer2 curvature semantics.
+
+    ``sharpness=1`` is linear-equivalent after normalization; larger values
+    shrink the transition width toward a step at the segment midpoint. Ends
+    map to 0 and 1 exactly.
+    """
+    import jax.numpy as jnp
+
+    def uncorrected(u: Any) -> Any:
+        return 1.0 / (1.0 + jnp.exp(sharpness * (0.5 - u)))
+
+    offset = uncorrected(0.0)
+    scale = 1.0 / (1.0 - (offset * 2.0))
+    return (uncorrected(x) - offset) * scale
+
+
+def _eval_interp(
+    kind: str,
+    breakpoints: Any,
+    values: Any,
+    x: Any,
+    sharpness: float,
+) -> Any:
+    import jax.numpy as jnp
+
+    xs = jnp.asarray(breakpoints)
+    vals = jnp.asarray(values)
+    x_arr = jnp.asarray(x)
+    if kind == "linear":
+        return jnp.interp(x_arr, xs, vals)
+    if kind == "step":
+        idx = jnp.searchsorted(xs, x_arr, side="right")
+        return vals[idx]
+    # sigmoidal — clamp outside the knot range, blend inside.
+    lo = xs[0]
+    hi = xs[-1]
+    # Find left knot index in [0, n-2] for interior points.
+    raw = jnp.searchsorted(xs, x_arr, side="right") - 1
+    idx = jnp.clip(raw, 0, xs.shape[0] - 2)
+    x0 = xs[idx]
+    x1 = xs[idx + 1]
+    y0 = vals[idx]
+    y1 = vals[idx + 1]
+    rel = (x_arr - x0) / (x1 - x0)
+    blend = _norm_sigmoid(rel, sharpness)
+    interior = y0 + blend * (y1 - y0)
+    return jnp.where(x_arr <= lo, vals[0], jnp.where(x_arr >= hi, vals[-1], interior))
+
+
 def _eval_rate(
     expr: RateOps,
     *,
@@ -113,12 +166,15 @@ def _eval_rate(
     flow_values: Mapping[str, Any],
     flow_meta: Mapping[str, FlowEdges],
     pmap: PropertyMap,
+    t: object,
 ) -> Any:
     import jax.numpy as jnp
 
     match expr:
         case Const(value=value):
             return value
+        case Time():
+            return t
         case FieldRef(path=path):
             return _lookup_path(derived, path)
         case FlowRef(name=name, reduce=reduce):
@@ -141,6 +197,7 @@ def _eval_rate(
                 flow_values=flow_values,
                 flow_meta=flow_meta,
                 pmap=pmap,
+                t=t,
             )
             right_v = _eval_rate(
                 right,
@@ -148,6 +205,7 @@ def _eval_rate(
                 flow_values=flow_values,
                 flow_meta=flow_meta,
                 pmap=pmap,
+                t=t,
             )
             if op == "add":
                 return left_v + right_v
@@ -156,6 +214,86 @@ def _eval_rate(
             if op == "mul":
                 return left_v * right_v
             return left_v / right_v
+        case Interp(
+            kind=kind,
+            breakpoints=breakpoints,
+            values=values,
+            arg=arg,
+            sharpness=sharpness,
+        ):
+            stacked_bps = jnp.stack(
+                [
+                    jnp.asarray(
+                        _eval_rate(
+                            bp,
+                            derived=derived,
+                            flow_values=flow_values,
+                            flow_meta=flow_meta,
+                            pmap=pmap,
+                            t=t,
+                        )
+                    )
+                    for bp in breakpoints
+                ]
+            )
+            stacked = jnp.stack(
+                [
+                    jnp.asarray(
+                        _eval_rate(
+                            value,
+                            derived=derived,
+                            flow_values=flow_values,
+                            flow_meta=flow_meta,
+                            pmap=pmap,
+                            t=t,
+                        )
+                    )
+                    for value in values
+                ]
+            )
+            x = _eval_rate(
+                arg,
+                derived=derived,
+                flow_values=flow_values,
+                flow_meta=flow_meta,
+                pmap=pmap,
+                t=t,
+            )
+            return _eval_interp(kind, stacked_bps, stacked, x, sharpness)
+        case GaussianPulse(arg=arg, centre=centre, width=width, height=height):
+            x = _eval_rate(
+                arg,
+                derived=derived,
+                flow_values=flow_values,
+                flow_meta=flow_meta,
+                pmap=pmap,
+                t=t,
+            )
+            c = _eval_rate(
+                centre,
+                derived=derived,
+                flow_values=flow_values,
+                flow_meta=flow_meta,
+                pmap=pmap,
+                t=t,
+            )
+            w = _eval_rate(
+                width,
+                derived=derived,
+                flow_values=flow_values,
+                flow_meta=flow_meta,
+                pmap=pmap,
+                t=t,
+            )
+            h = _eval_rate(
+                height,
+                derived=derived,
+                flow_values=flow_values,
+                flow_meta=flow_meta,
+                pmap=pmap,
+                t=t,
+            )
+            return h * jnp.exp(-0.5 * ((x - c) / w) ** 2)
         case _:
             raise TypeError(f"Unsupported rate expression {type(expr).__name__}.")
 
@@ -235,6 +373,7 @@ def _eval_aligned(
     flow_meta: Mapping[str, FlowEdges],
     pmap: PropertyMap,
     gather_idx: NDArray[np.int32],
+    t: object,
 ) -> Any:
     raw = _eval_rate(
         expr,
@@ -242,6 +381,7 @@ def _eval_aligned(
         flow_values=flow_values,
         flow_meta=flow_meta,
         pmap=pmap,
+        t=t,
     )
     pair_src, pair_dest, pair_n = _pair_info(flow)
     return _align_rate(
@@ -264,6 +404,7 @@ def _apply_adjustments(
     flow_meta: Mapping[str, FlowEdges],
     pmap: PropertyMap,
     gather_idx: NDArray[np.int32],
+    t: object,
 ) -> Any:
     import jax.numpy as jnp
 
@@ -279,6 +420,7 @@ def _apply_adjustments(
                     flow_meta=flow_meta,
                     pmap=pmap,
                     gather_idx=gather_idx,
+                    t=t,
                 )
                 for arg in adj.args
             ]
@@ -292,6 +434,7 @@ def _apply_adjustments(
                 flow_meta=flow_meta,
                 pmap=pmap,
                 gather_idx=gather_idx,
+                t=t,
             )
             new = value if isinstance(adj, Overwrite) else prev * value
         prev = jnp.where(jnp.asarray(mask), new, prev) if mask is not None else new
@@ -461,6 +604,7 @@ class CompiledModel:
                 flow_meta=self.flows,
                 pmap=pmap,
                 gather_idx=gather,
+                t=t,
             )
             rate = rate * jnp.asarray(flow.scale)
             rate = _apply_adjustments(
@@ -471,6 +615,7 @@ class CompiledModel:
                 flow_meta=self.flows,
                 pmap=pmap,
                 gather_idx=gather,
+                t=t,
             )
             weight = jnp.asarray(flow.weight)
             match flow:
@@ -549,6 +694,7 @@ class CompiledModel:
         self,
         plan: Any,
         *,
+        params: object | None = None,
         t0: float = 0.0,
         y0: object | None = None,
         n_saves: int | None = None,
@@ -559,6 +705,10 @@ class CompiledModel:
 
         Each output is sized from its own save group's ``ts`` (per-request times
         override the plan default).
+
+        Pass ``params`` (or a pytree of ``jax.ShapeDtypeStruct`` stand-ins) when
+        the model has a ``derived_fn`` that indexes them. ``None`` remains valid
+        for models that ignore params.
         """
         import jax
 
@@ -580,7 +730,7 @@ class CompiledModel:
             return save_fn(ctx)
 
         try:
-            shaped = jax.eval_shape(_one, t0, y0, None)
+            shaped = jax.eval_shape(_one, t0, y0, params)
         except Exception as exc:
             raise ValueError(
                 f"SavePlan failed shape inference (SaveFn must return statically "

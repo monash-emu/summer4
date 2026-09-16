@@ -21,12 +21,9 @@ A parameter representation and a way to attach time- and state-dependent rates
 to flows.
 
 **State:** **done** for the expression tree (`FieldRef`, `FlowRef`, `Multiply` /
-`Overwrite` / `Transform`, `derived_fn`). A full compute graph is not
+`Overwrite` / `Transform`, `derived_fn`) and for the time-varying library
+(`Time()`, `summer4.timevarying`, `summer4.data`). A full compute graph is not
 warranted yet.
-
-**Not done:** time-varying *library* functions — interpolation, sigmoidal
-ramps, piecewise — which summer2's `detailed/time-varying-functions` page is
-entirely about (WP5).
 
 ### 1.3 A solver seam
 

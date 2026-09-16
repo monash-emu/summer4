@@ -20,9 +20,9 @@ gaps
 |---|---|
 | Public API symbols | 40 |
 | Package source | taxonomy (NumPy) plus `summer4.flows` and `summer4.jax` |
-| summer2 API surface exercised by its own docs, complete in summer4 | **36 of 52 (69%)** |
-| … with any working route (complete or partial) | 43 of 52 (83%) |
-| summer2 documentation notebooks reproducible as runnable summer4 | **1 of 11** (8 partially) |
+| summer2 API surface exercised by its own docs, complete in summer4 | **40 of 52 (77%)** |
+| … with any working route (complete or partial) | 47 of 52 (90%) |
+| summer2 documentation notebooks reproducible as runnable summer4 | **2 of 11** (7 partially) |
 | summer textbook chapters reproducible as runnable summer4 | **7 of 20** (4 more partially) |
 | Implemented layers of the intended stack | taxonomy + flows + results |
 | Ceiling of the planned roadmap (WP2–WP11) | 47 of 52 (90%) — see {doc}`coverage-ledger` |

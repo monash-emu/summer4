@@ -84,7 +84,7 @@ library concept.
 and is a different thing: it moves *people* between strata (migration), whereas
 a mixing matrix weights *transmission* between strata.
 
-### Parameters and time-varying functions — 4 of 9 complete (5 covered)
+### Parameters and time-varying functions — 8 of 9 complete (9 covered)
 
 `derived_refs` over a `NamedTuple` gives schema-checked `Parameter` equivalents;
 `t` reaches `derived_fn` every step; `FlowRef` lets one flow's mass feed
@@ -116,7 +116,7 @@ flows* inside the vector field, not to the caller.
 | Flows | 6 / 8 |
 | Flow adjustments | 3 / 4 |
 | Mixing | 0 / 1 |
-| Parameters and time-varying functions | 4 / 9 |
+| Parameters and time-varying functions | 8 / 9 |
 | Derived outputs | 1 / 8 |
 | Solver | 0 / 2 |
 | Real-world time | 0 / 2 |

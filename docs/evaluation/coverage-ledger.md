@@ -70,12 +70,12 @@ reach, and it is the denominator for every percentage on this site.
 | M1 | `Stratification.set_mixing_matrix` | mixing | `none` | — | TraitMatrix moves people, it does not weight transmission |
 | P1 | `Parameter` | parameters | `full` | `FieldRef via derived_refs` | Schema-checked, IDE-completable |
 | P2 | `Function` | parameters | `full` | `Transform / callables in derived_fn` |  |
-| P3 | `Time` | parameters | `full` | `t passed to derived_fn` |  |
+| P3 | `Time` | parameters | `full` | `Time()` rate node; `t` on `derived_fn` | |
 | P4 | `DerivedOutput (as a rate input)` | parameters | `full` | `FlowRef, .sum(), .sum_over()` | Topologically ordered, cycles detected |
-| P5 | `Data` | parameters | `none` | — | No data-loading surface |
-| P6 | `get_linear_interpolation_function` | parameters | `none` | — |  |
-| P7 | `get_sigmoidal_interpolation_function` | parameters | `none` | — |  |
-| P8 | `get_piecewise_function` | parameters | `none` | — |  |
+| P5 | `Data` | parameters | `full` | `summer4.data.Data` | Dated series → `Interp` via `Epoch` |
+| P6 | `get_linear_interpolation_function` | parameters | `full` | `summer4.timevarying.linear` | Structural `Interp`; x and y knots may be `FieldRef`s; clamps outside range |
+| P7 | `get_sigmoidal_interpolation_function` | parameters | `full` | `summer4.timevarying.sigmoidal` | `sharpness` is summer2 curvature; breakpoints may be `FieldRef`s |
+| P8 | `get_piecewise_function` | parameters | `full` | `summer4.timevarying.step` / `piecewise` | Right-continuous; breakpoints may be `FieldRef`s |
 | P9 | `get_time_callable` | parameters | `partial` | `compile() -> vf(t, y, params)` | A time callable, but not summer2's graph wrapper |
 | D1 | `request_output_for_flow` | outputs | `full` | `FlowMass` / `Trace` edge queries | `sum_over(..., side=)`, `incidence`, `integrate` |
 | D2 | `request_output_for_compartments` | outputs | `full` | `Compartments(where=)` / `Trace.select` |  |
@@ -109,7 +109,7 @@ published as written.
 | 7 | Obtaining numerical solutions | `full` | None | `textbook/07-numerical-solutions.ipynb` |
 | 8 | Derived outputs | `partial` | Port not yet written (API ready: FlowMass + ComputedValue) | — |
 | 9 | Transmission assumptions | `full` | None | — |
-| 10 | The reproduction number | `partial` | Time-varying parameters for $R_t$ (WP5) | — |
+| 10 | The reproduction number | `partial` | Port not yet written (API ready: time-varying + hand-written FOI; F7 stays partial until WP6) | — |
 | 11 | Cyclical epidemic dynamics | `full` | None | — |
 | 12 | Heterogeneous mixing introduction | `none` | Mixing matrices | — |
 | 13 | Mixing and transmission types | `none` | Mixing matrices, population split | — |
@@ -136,7 +136,7 @@ published as written.
 | `examples/09-mixing-matrices` | `none` | Mixing matrices | — |
 | `examples/10-derived-outputs-stratified` | `partial` | Port not yet written (API ready) | — |
 | `examples/11-flows-between-strata` | `full` | None | — |
-| `detailed/time-varying-functions` | `partial` | Interpolation and piecewise helpers | — |
+| `detailed/time-varying-functions` | `full` | None | `summer2/time-varying-functions.ipynb` |
 | `detailed/InitialPopulationGraphobject` | `none` | Initial population, parameters | — |
 <!-- /ledger:summer2docs -->
 
@@ -170,17 +170,19 @@ contains every branch above it.
 | 4 | WP4 — flow outputs and polarity | `feat/flow-outputs` | `088814a` | `plans/flow-outputs.plan.md` |
 | 5 | WP11 — sparse targets | `feat/sparse-targets` | `3c0139c` | `plans/sparse-targets.plan.md` |
 | — | Case study (not a work package) | `docs/age-stratified-seirs-case-study` | `2b1a6ab` | `plans/age-stratified-seirs-case-study.plan.md` |
+| 5.1 | WP5 — `describe(params=...)` | `fix/describe-params` | *(this stack)* | `plans/time-varying.plan.md` |
+| 5.2–5.5 | WP5 — time-varying library + harvest | *(stacked on 5.1)* | *(this stack)* | `plans/time-varying.plan.md` |
 
 Every phase shipped its notebook: `examples/notebooks/01-taxonomy.ipynb`
-through `07-targets.ipynb`, plus `docs/textbook/02`, `docs/textbook/07` and
+through `08-time-varying.ipynb`, plus `docs/textbook/02`, `docs/textbook/07`,
+`docs/summer2/time-varying-functions.ipynb` and
 `docs/case-studies/age-stratified-seirs.ipynb`.
 
 ### Planning status of the remaining packages
 
-WP5 and WP6 now have detailed plans — `plans/time-varying.plan.md` and
-`plans/epi-infection-mixing.plan.md`, followed by `plans/textbook-catchup.plan.md`
-for the porting sweep they unblock. Each is broken into subphases of one branch
-apiece, with its own landing and ledger instructions.
+WP5 is **applied** on this stack (`plans/time-varying.plan.md`). WP6 has a
+detailed plan — `plans/epi-infection-mixing.plan.md` — followed by
+`plans/textbook-catchup.plan.md` for the porting sweep they unblock.
 
 **WP3, WP9 and WP10 still have no detailed plan.** What exists for each is its
 paragraph in *The path to 100%* above and one line in the
@@ -192,7 +194,7 @@ landed phases each had before they were built.
 | WP | Name | Planning artifact | What a plan must still settle |
 | --- | --- | --- | --- |
 | WP3 | Initial population | Ledger paragraph only | Whether `set_initial_population` is a `FlowModel` method or a free function over `parent_row`; how a split interacts with `stratify(where=)` on ragged maps |
-| WP5 | Time-varying function library | `plans/time-varying.plan.md` (5.1–5.5) | **Planned.** `Time()` as a first-class rate node, structural `Interp` nodes rather than closures, and a dated-series `Data` surface |
+| WP5 | Time-varying function library | `plans/time-varying.plan.md` (5.1–5.5) | **Applied.** `Time()`, `summer4.timevarying`, `summer4.data`, summer2 time-varying page |
 | WP6 | Force of infection and mixing | `plans/epi-infection-mixing.plan.md` (6.1–6.6) | **Planned.** `GroupedRate` and a `Reduce` node in core; `summer4.epi` holds `MixingMatrix`, `ForceOfInfection` and an `EpiModel` frontend |
 | WP9 | Contact survey data | Ledger paragraph only | Depends on WP6; loading, validating and scaling empirical matrices |
 | WP10 | Calibration | Ledger paragraph only | The numpyro/optax workflow over `TargetSet`; probabilistic likelihoods were deliberately left out of WP11 |
@@ -243,8 +245,9 @@ mechanics that exist.
 
 ### WP4 — Flow outputs and polarity queries (applied)
 
-**Closes:** D1 D6 D7 · **Unblocks:** textbook 4, 8 (API); textbook 10 still
-needs WP5 for time-varying $R_t$; summer2 `03-derived-outputs`,
+**Closes:** D1 D6 D7 · **Unblocks:** textbook 4, 8 (API); textbook 10's
+port remains to write (time-varying is WP5, applied; FOI primitive is WP6);
+summer2 `03-derived-outputs`,
 `04-flow-types`, `10-derived-outputs-stratified`
 
 `FlowMass` traces are `PropertyData` over the edge table. `sum_over(..., side=)`,
@@ -252,12 +255,13 @@ needs WP5 for time-varying $R_t$; summer2 `03-derived-outputs`,
 Textbook ports for 4 and 8 remain to write; chapter 10's honest blocker is WP5.
 Plan phase: `feat/flow-outputs`.
 
-### WP5 — Time-varying function library
+### WP5 — Time-varying function library (applied)
 
 **Closes:** P5 P6 P7 P8 · **Unblocks:** summer2 `detailed/time-varying-functions`
 
-Linear and sigmoidal interpolation, piecewise functions, and a data-loading
-surface. Mechanically straightforward; must be JAX-traceable.
+`Time()` in the rate tree, structural `Interp` / `GaussianPulse` nodes via
+`summer4.timevarying`, and dated-series `summer4.data.Data`. Ported at
+`docs/summer2/time-varying-functions.ipynb`.
 
 ### WP6 — Force of infection and mixing
 
@@ -324,10 +328,10 @@ table below is **computed** from these declarations by
 <!-- ledger:progression -->
 | After | API rows at `full` | Share |
 | --- | --- | --- |
-| today | 36 / 52 | 69% |
-| WP2 | 36 / 52 | 69% |
-| WP3 | 39 / 52 | 75% |
-| WP4 | 39 / 52 | 75% |
+| today | 40 / 52 | 77% |
+| WP2 | 40 / 52 | 77% |
+| WP3 | 43 / 52 | 83% |
+| WP4 | 43 / 52 | 83% |
 | WP5 | 43 / 52 | 83% |
 | WP6 | 47 / 52 | 90% |
 | WP7 | 47 / 52 | 90% |

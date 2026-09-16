@@ -59,6 +59,13 @@ textbook/index
 
 ```{toctree}
 :maxdepth: 2
+:caption: summer2 documentation
+
+summer2/index
+```
+
+```{toctree}
+:maxdepth: 2
 :caption: Project evaluation
 
 evaluation/index

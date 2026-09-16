@@ -53,6 +53,45 @@ class Const(RateOps):
 
 
 @dataclass(frozen=True, slots=True)
+class Time(RateOps):
+    """The current model time, usable anywhere a rate expression is.
+
+    Field-less on purpose: every instance compares and hashes equal, so two
+    models built from separately-constructed ``Time()`` nodes share a jit
+    cache entry. Offset with arithmetic (``Time() - t0``), not a field.
+    """
+
+
+@dataclass(frozen=True, slots=True)
+class Interp(RateOps):
+    """Interpolation between knots, evaluated at a rate expression.
+
+    ``breakpoints`` and ``values`` are rate expressions (length fixed at
+    construct time) so knot times and heights may calibrate via
+    :class:`FieldRef`. Outside the breakpoint range,
+    :func:`jax.numpy.interp` (and the step / sigmoidal evaluators) clamp to
+    the end values — they do not extrapolate. Evaluated breakpoints must
+    remain strictly increasing; they are not sorted at runtime.
+    """
+
+    kind: Literal["linear", "sigmoidal", "step"]
+    breakpoints: tuple[RateOps, ...]
+    values: tuple[RateOps, ...]
+    arg: RateOps
+    sharpness: float = 1.0
+
+
+@dataclass(frozen=True, slots=True)
+class GaussianPulse(RateOps):
+    """``height * exp(-0.5 * ((arg - centre) / width)**2)``."""
+
+    arg: RateOps
+    centre: RateOps
+    width: RateOps
+    height: RateOps
+
+
+@dataclass(frozen=True, slots=True)
 class FieldRef(RateOps):
     """Lazy path into the runtime derived-param struct."""
 
@@ -216,6 +255,17 @@ def _flow_refs(expr: RateOps) -> set[str]:
             return {name}
         case BinOp(left=left, right=right):
             return _flow_refs(left) | _flow_refs(right)
+        case Interp(breakpoints=breakpoints, values=values, arg=arg):
+            refs: set[str] = set()
+            for bp in breakpoints:
+                refs |= _flow_refs(bp)
+            for value in values:
+                refs |= _flow_refs(value)
+            return refs | _flow_refs(arg)
+        case GaussianPulse(arg=arg, centre=centre, width=width, height=height):
+            return _flow_refs(arg) | _flow_refs(centre) | _flow_refs(width) | _flow_refs(height)
+        case Time():
+            return set()
         case _:
             return set()
 
@@ -242,6 +292,22 @@ def _field_paths(expr: RateOps) -> set[tuple[str, ...]]:
             return {path}
         case BinOp(left=left, right=right):
             return _field_paths(left) | _field_paths(right)
+        case Interp(breakpoints=breakpoints, values=values, arg=arg):
+            paths: set[tuple[str, ...]] = set()
+            for bp in breakpoints:
+                paths |= _field_paths(bp)
+            for value in values:
+                paths |= _field_paths(value)
+            return paths | _field_paths(arg)
+        case GaussianPulse(arg=arg, centre=centre, width=width, height=height):
+            return (
+                _field_paths(arg)
+                | _field_paths(centre)
+                | _field_paths(width)
+                | _field_paths(height)
+            )
+        case Time():
+            return set()
         case _:
             return set()
 
@@ -329,12 +395,37 @@ def _rate_bytes(expr: RateOps) -> bytes:
     match expr:
         case Const(value=value):
             return b"const" + np.float64(value).tobytes()
+        case Time():
+            return b"time"
         case FieldRef(path=path):
             return b"field" + repr(path).encode()
         case FlowRef(name=name, reduce=reduce):
             return b"flow" + name.encode() + b"|" + repr(reduce).encode()
         case BinOp(op=op, left=left, right=right):
             return b"binop" + op.encode() + _rate_bytes(left) + _rate_bytes(right)
+        case Interp(
+            kind=kind,
+            breakpoints=breakpoints,
+            values=values,
+            arg=arg,
+            sharpness=sharpness,
+        ):
+            return (
+                b"interp"
+                + kind.encode()
+                + np.float64(sharpness).tobytes()
+                + b"".join(_rate_bytes(bp) for bp in breakpoints)
+                + b"".join(_rate_bytes(v) for v in values)
+                + _rate_bytes(arg)
+            )
+        case GaussianPulse(arg=arg, centre=centre, width=width, height=height):
+            return (
+                b"gpulse"
+                + _rate_bytes(arg)
+                + _rate_bytes(centre)
+                + _rate_bytes(width)
+                + _rate_bytes(height)
+            )
         case _:
             return type(expr).__name__.encode()
 
