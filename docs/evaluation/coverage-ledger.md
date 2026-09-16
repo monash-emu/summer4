@@ -177,8 +177,13 @@ through `07-targets.ipynb`, plus `docs/textbook/02`, `docs/textbook/07` and
 
 ### Planning status of the remaining packages
 
-**No remaining work package has a detailed plan yet.** What exists for each is
-its paragraph in *The path to 100%* above and one line in the
+WP5 and WP6 now have detailed plans — `plans/time-varying.plan.md` and
+`plans/epi-infection-mixing.plan.md`, followed by `plans/textbook-catchup.plan.md`
+for the porting sweep they unblock. Each is broken into subphases of one branch
+apiece, with its own landing and ledger instructions.
+
+**WP3, WP9 and WP10 still have no detailed plan.** What exists for each is its
+paragraph in *The path to 100%* above and one line in the
 *Remaining to the 46/52 ceiling* section of
 `plans/flows-derived-outputs.plan.md`. That is a scope statement, not a plan:
 none of them names modules, types, tests or a notebook, which is what the
@@ -187,14 +192,17 @@ landed phases each had before they were built.
 | WP | Name | Planning artifact | What a plan must still settle |
 | --- | --- | --- | --- |
 | WP3 | Initial population | Ledger paragraph only | Whether `set_initial_population` is a `FlowModel` method or a free function over `parent_row`; how a split interacts with `stratify(where=)` on ragged maps |
-| WP5 | Time-varying function library | Ledger paragraph only | The JAX-traceable form of interpolation and piecewise functions; whether P5 `Data` is a loading surface at all |
-| WP6 | Force of infection and mixing | Ledger paragraph only | **The largest unprototyped design problem left.** How a reduction over a grouping feeds back into a per-edge rate, and how a mixing matrix weights that coupling. No spike exists |
+| WP5 | Time-varying function library | `plans/time-varying.plan.md` (5.1–5.5) | **Planned.** `Time()` as a first-class rate node, structural `Interp` nodes rather than closures, and a dated-series `Data` surface |
+| WP6 | Force of infection and mixing | `plans/epi-infection-mixing.plan.md` (6.1–6.6) | **Planned.** `GroupedRate` and a `Reduce` node in core; `summer4.epi` holds `MixingMatrix`, `ForceOfInfection` and an `EpiModel` frontend |
 | WP9 | Contact survey data | Ledger paragraph only | Depends on WP6; loading, validating and scaling empirical matrices |
 | WP10 | Calibration | Ledger paragraph only | The numpyro/optax workflow over `TargetSet`; probabilistic likelihoods were deliberately left out of WP11 |
 
-WP6 is the ordering constraint: WP9 and WP10 both sit behind it, and it closes
-four API rows (F7 F8 A4 M1) plus textbook chapters 12–15. Deferred gotchas that
-a plan for these should read first are in `futureplans/`.
+WP5 lands before WP6, and before WP3, because every other part of a model may be
+parameterised in a time-varying fashion. WP6 is then the ordering constraint for
+what follows: WP9 and WP10 both sit behind it, and it closes four API rows
+(F7 F8 A4 M1) plus textbook chapters 12, 14 and 15 — chapter 13 also needs WP3's
+population split. Deferred gotchas that a plan for the unplanned packages should
+read first are in `futureplans/`.
 
 ## The path to 100%
 
