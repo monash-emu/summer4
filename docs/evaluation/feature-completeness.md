@@ -28,8 +28,8 @@ Two comparisons, both derived from source rather than from memory:
 | `CompartmentalModel(times, compartments, infectious_compartments, timestep)` | `FlowModel(pmap)` — no times, timestep or infectious_compartments |
 | `model.finalize()` | `FlowModel.compile()` → `CompiledModel` |
 | `model.run(parameters)` | `CompiledModel.run(...)` → `Result` |
-| `model.set_initial_population(distribution)` | — |
-| `model.get_initial_population(parameters)` | — |
+| `model.set_initial_population(distribution)` | `FlowModel.set_initial_population` / `InitialPopulation` |
+| `model.get_initial_population(parameters)` | `CompiledModel.initial_state` |
 | `model.get_outputs_df()` | `Trace.to_frame` / `to_pandas` |
 | `model.get_derived_outputs_df()` | `Result` traces via `SavePlan` |
 
@@ -44,7 +44,7 @@ Two comparisons, both derived from source rather than from memory:
 | `Compartment` (name + strata object) | rows; `labels()`, `to_dicts()` — no per-compartment object |
 | `AgeStratification` | `Property` plus a `TraitChain` flow; no bundled class |
 | `StrainStratification` | `Property` plus per-strain flows; multi-strain FOI via `ForceOfInfection.per_trait` (no bundled class) |
-| `Stratification.set_population_split` / `model.adjust_population_split` | — |
+| `Stratification.set_population_split` / `model.adjust_population_split` | `Split(..., where=)` |
 
 This is the one area where summer4 is ahead. Partial stratification in summer2
 is a list of compartment names; in summer4 it is any selector, and the resulting
@@ -119,12 +119,11 @@ and `ComputedValue` / `derived_fn` cover D1–D8.
 | Derived outputs | 8 / 8 |
 | Solver | 2 / 2 |
 | Real-world time | 2 / 2 |
-| **Total (complete)** | **44 / 52 (85%)** |
-| **Total (covered, incl. partial)** | 49 / 52 (94%) |
+| **Total (complete)** | **47 / 52 (90%)** |
+| **Total (covered, incl. partial)** | 52 / 52 (100%) |
 
-The remaining API gaps are initial population / population split (L4, L5, S8)
-plus five deliberate shape mismatches that never reach `full` (L1, S5, S6, S7,
-P9). See {doc}`coverage-ledger`.
+The remaining API gaps are five deliberate shape mismatches that never reach
+`full` (L1, S5, S6, S7, P9). See {doc}`coverage-ledger`.
 
 ## 2. Against summer4's own intended stack
 

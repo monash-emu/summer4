@@ -38,13 +38,12 @@ original analyses re-run on numpyro.
 
 ## Verdict
 
-- **tb_macro** — tb_macro rows complete today: **3 of 9**, and every other row is `partial`. It is **implementable today** with hand-written glue: a `derived_fn` force of infection, a hand-built initial state, and a hand-written numpyro model (the original hand-writes that too).
-- **Kiribati** — Kiribati rows complete today: **5 of 23**. Every capability except calibration and scale has *some* route, but a faithful, calibratable port would re-implement five layers by hand. Those are the blockers:
-  1. **Initial population with a parameterised split** — `KI3` (API ledger `L4` `L5` `S8`).
-  2. **Generalised force of infection** with compartment × age infectiousness — `KI4` `KI5`. `ForceOfInfection`'s custom `kind` receives no parameters, there is no power node, and `infectiousness=` keys only on the grouping property.
-  3. **Output algebra** at summer2 scale — `KI13`–`KI17`. `Trace` has no operators, `cumulative()` has no start, `FlowMass` names one flow, there is no summer2 midpoint convention and no `Result` → frame.
-  4. **Calibration workflow** — `KI18`–`KI21`. No priors, likelihoods, gradient-free sampler or posterior-run tooling exist.
-  5. **Delivery and scale** — `KI22` `KI23`. The flows stack is not on `main`, and nothing measures a 160-compartment, 185-year model.
+- **tb_macro** — tb_macro rows complete today: **4 of 9**, and every other row is `partial`. It is **implementable today** with hand-written glue: a `derived_fn` force of infection and a hand-written numpyro model (the original hand-writes that too).
+- **Kiribati** — Kiribati rows complete today: **6 of 23**. Every capability except calibration and scale has *some* route, but a faithful, calibratable port would re-implement several layers by hand. Remaining blockers:
+  1. **Generalised force of infection** with compartment × age infectiousness — `KI4` `KI5`. `ForceOfInfection`'s custom `kind` receives no parameters, there is no power node, and `infectiousness=` keys only on the grouping property.
+  2. **Output algebra** at summer2 scale — `KI13`–`KI17`. `Trace` has no operators, `cumulative()` has no start, `FlowMass` names one flow, there is no summer2 midpoint convention and no `Result` → frame.
+  3. **Calibration workflow** — `KI18`–`KI21`. No priors, likelihoods, gradient-free sampler or posterior-run tooling exist.
+  4. **Delivery and scale** — `KI22` `KI23`. The flows stack is not on `main`, and nothing measures a 160-compartment, 185-year model.
 
 A shared limitation is delivery: `summer4.flows` exists only on the unmerged
 branch stack, so a downstream `pixi.toml` must pin a commit
@@ -57,7 +56,7 @@ branch stack, so a downstream `pixi.toml` must pin a commit
 | --- | --- | --- | --- | --- | --- |
 | KI1 | Kiribati | State × 8 uneven age bands × reachability map | `full` | `PropertyMap.from_property(state).stratify(age).stratify(reach)` | — |
 | KI2 | Kiribati | Ageing between uneven bands at rate 1/width | `partial` | Hand-written `TraitChain` pairs and float rates | WP13 |
-| KI3 | Kiribati | Initial population: seed in `clin_inf`, reachability split by `Param` | `partial` | `y0` built by hand from params inside the loss | WP3 |
+| KI3 | Kiribati | Initial population: seed in `clin_inf`, reachability split by `Param` | `full` | `InitialPopulation` | — |
 | KI4 | Kiribati | Generalised FOI `M @ (I_g / N_g**exp)` with a calibrated exponent | `partial` | Whole FOI hand-written in `derived_fn`; no `Pow` node, custom `kind` gets no params | WP14 |
 | KI5 | Kiribati | Infectiousness weights by compartment × age | `partial` | One `ForceOfInfection` per compartment summed, or `derived_fn` | WP14 |
 | KI6 | Kiribati | Time-varying, parameterised mixing matrix (UN weights, fertility age gaps, spectral normalisation) | `partial` | Matrix rebuilt in `derived_fn` every vector-field call; no yearly table lookup node | WP13 |
@@ -83,7 +82,7 @@ branch stack, so a downstream `pixi.toml` must pin a commit
 | TM3 | tb_macro | Ageing 0 → 5 → 15 | `partial` | Hand-written `TraitChain` | WP13 |
 | TM4 | tb_macro | Rates as functions of `t` and params (triangular seed, tanh scale-up) | `partial` | `Transform(fn, Time(), Param(...))`; no `Abs`, `Clip` or `Tanh` nodes | WP13 |
 | TM5 | tb_macro | Per-age FOI `I / N**exp` with rel_sus per source compartment | `partial` | `derived_fn` FOI, `Multiply(Param, where=)` for rel_sus | WP14 |
-| TM6 | tb_macro | Initial population with even split over ragged strata | `partial` | `PropertyData.at[...].set` by hand | WP3 |
+| TM6 | tb_macro | Initial population with even split over ragged strata | `full` | `InitialPopulation` | — |
 | TM7 | tb_macro | Rolling-sum flow target queried at times | `full` | `FlowMass` → `rolling(7, how="sum")` → `at_times` (unrolled jaxpr, fixed in WP15) | — |
 | TM8 | tb_macro | Poisson likelihood, uniform prior, NUTS | `partial` | Hand-written numpyro model over `run` | WP10 |
 | TM9 | tb_macro | summer4 installable from a tagged GitHub release | `partial` | Pin the unmerged stack commit | WP12 |
@@ -113,9 +112,9 @@ Computed by `scripts/coverage_report.py`; do not edit by hand.
 <!-- ledger:port-readiness -->
 | After | Kiribati | tb_macro |
 | --- | --- | --- |
-| today | 5 / 23 | 3 / 9 |
-| WP12 | 6 / 23 | 4 / 9 |
-| WP13 | 10 / 23 | 6 / 9 |
+| today | 6 / 23 | 4 / 9 |
+| WP12 | 7 / 23 | 5 / 9 |
+| WP13 | 11 / 23 | 7 / 9 |
 | WP3 | 11 / 23 | 7 / 9 |
 | WP14 | 13 / 23 | 8 / 9 |
 | WP15 | 18 / 23 | 8 / 9 |

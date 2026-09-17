@@ -38,3 +38,9 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
 - [`propertydata-dense-unstack.md`](propertydata-dense-unstack.md) — opt-in
   reshape of a dense Cartesian `PropertyMap` from a flat last axis to
   `(age × state × …)` (not first-class multi-axis `PropertyData`).
+- [`derived-fn-blocks-hoisting.md`](derived-fn-blocks-hoisting.md) — R3: a
+  `derived_fn` makes every `FieldRef` step-stage and disables param hoisting.
+- [`mixing-matrix-per-call-normalisation.md`](mixing-matrix-per-call-normalisation.md)
+  — `MixingMatrix.resolved_matrix` re-normalises FieldRef matrices every step.
+- [`wp10-preprocess-is-prepare-fn.md`](wp10-preprocess-is-prepare-fn.md) —
+  WP10 `preprocess=` should be `CompiledModel.prepare_fn`, not a second hook.

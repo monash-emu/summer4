@@ -40,8 +40,8 @@ reach, and it is the denominator for every percentage on this site.
 | L1 | `CompartmentalModel` | lifecycle | `partial` | `FlowModel` | No times, timestep or infectious_compartments |
 | L2 | `model.finalize()` | lifecycle | `full` | `FlowModel.compile()` | Actualizes every join once |
 | L3 | `model.run()` | lifecycle | `full` | `CompiledModel.run()` | Returns a `Result`; Euler backend in Phase 2 |
-| L4 | `model.set_initial_population()` | lifecycle | `none` | — | Deferred as a separate later API |
-| L5 | `model.get_initial_population()` | lifecycle | `none` | — |  |
+| L4 | `model.set_initial_population()` | lifecycle | `full` | `FlowModel.set_initial_population` / `InitialPopulation` |  |
+| L5 | `model.get_initial_population()` | lifecycle | `full` | `CompiledModel.initial_state` |  |
 | L6 | `model.get_outputs_df()` | lifecycle | `full` | `Trace.to_frame` / `to_pandas` | Polars default; pandas optional |
 | L7 | `model.get_derived_outputs_df()` | lifecycle | `full` | `Result` traces via `SavePlan` | Flat named traces; no parallel df namespace |
 | S1 | `Stratification(name, strata)` | stratification | `full` | `Property + PropertyMap.stratify` |  |
@@ -51,7 +51,7 @@ reach, and it is the denominator for every percentage on this site.
 | S5 | `Compartment` | stratification | `partial` | `rows; labels(), to_dicts()` | No per-compartment object by design |
 | S6 | `AgeStratification` | stratification | `partial` | `Property + TraitChain flow` | Ageing flows exist; no bundled convenience class |
 | S7 | `StrainStratification` | stratification | `partial` | `Property + per-strain flows` | Multi-strain FOI via `ForceOfInfection.per_trait`; no bundled StrainStratification class |
-| S8 | `set_population_split / adjust_population_split` | stratification | `none` | — | Flow split= is fan-out only, not initial population |
+| S8 | `set_population_split / adjust_population_split` | stratification | `full` | `Split(prop, weights, by=, where=)` | Weights normalised; unspecified properties split evenly over carriers |
 | Q1 | `model.query_compartments()` | queries | `full` | `PropertyMap.select / mask` | Algebra, not a conjunction dict |
 | Q2 | `model.get_matching_compartments()` | queries | `full` | `PropertyMap.select / select_one` |  |
 | Q3 | `model.query_flows()` | queries | `full` | `EdgeMap` / `CompiledModel.edges` / `Source`/`Dest` | Query API over flow edges |
@@ -84,7 +84,7 @@ reach, and it is the denominator for every percentage on this site.
 | D5 | `request_function_output` | outputs | `full` | `SaveFn`; arithmetic on `Trace.values` | `Trace` has no operators yet; they arrive in WP15 |
 | D6 | `request_computed_value_output` | outputs | `full` | `ComputedValue` | Path validated against `derived_fn` return schema |
 | D7 | `request_track_modelled_value` | outputs | `full` | `ComputedValue` | Same capture path as D6 |
-| D8 | `add_computed_value_func` | outputs | `full` | `derived_fn hook` | compute_derived_params runs every step |
+| D8 | `add_computed_value_func` | outputs | `full` | `derived_fn hook` | compute_derived_params runs every step; run-start work goes in `prepare_fn` |
 | V1 | `solve_ode` | solver | `full` | `CompiledModel.run` over `euler` | Fixed step; adaptive is V2 |
 | V2 | `SolverType / solver selection` | solver | `full` | `solver=` name or diffrax instance | Euler kept as reference stepper |
 | T1 | `ref_date / Epoch` | time | `full` | `Epoch` |  |
@@ -174,10 +174,11 @@ contains every branch above it.
 | 5.2–5.5 | WP5 — time-varying library + harvest | *(stacked on 5.1)* | *(this stack)* | `plans/time-varying.plan.md` |
 | 6.1–6.6 | WP6 — FOI and mixing | `feat/epi-infection-mixing` | *(this stack)* | `plans/epi-infection-mixing.plan.md` |
 | C1–C4 | Textbook / summer2 / evaluation catch-up | `docs/textbook-catchup` | *(this stack)* | `plans/textbook-catchup.plan.md` |
+| 3.0–3.7 | WP3 — initial population and run stages | `feat/initial-population` | *(this stack)* | `plans/initial-population.plan.md` |
 
 Every phase shipped its notebook: `examples/notebooks/01-taxonomy.ipynb`
-through `09-epi-models.ipynb`, plus textbook chapters 1–12 and 14–15 (13
-awaits WP3), the summer2 pages under `docs/summer2/`, and
+through `11-run-stages.ipynb`, plus textbook chapters 1–12 and 14–15 (13
+ported on this stack), the summer2 pages under `docs/summer2/`, and
 `docs/case-studies/age-stratified-seirs.ipynb`.
 
 ### Planning status of the remaining packages
@@ -198,7 +199,7 @@ package closes is recorded, by row ID, in {doc}`tb-ports`.
 
 | WP | Name | Planning artifact | What a plan must still settle |
 | --- | --- | --- | --- |
-| WP3 | Initial population | `plans/tb-ports-feature-completeness.plan.md` | Settled there: a declarative `InitialPopulation` with `FlowModel.set_initial_population` as equal-digest sugar; ragged-aware even default |
+| WP3 | Initial population | `plans/initial-population.plan.md` | **Applied.** |
 | WP5 | Time-varying function library | `plans/time-varying.plan.md` (5.1–5.5) | **Applied.** `Time()`, `summer4.timevarying`, `summer4.data`, summer2 time-varying page |
 | WP6 | Force of infection and mixing | `plans/epi-infection-mixing.plan.md` (6.1–6.6) | **Applied.** `GroupedRate`, `Reduce`, `summer4.epi` (`MixingMatrix`, `ForceOfInfection`, `EpiModel`) |
 | — | Textbook / docs catch-up | `plans/textbook-catchup.plan.md` (C1–C4) | **Applied.** Ports for unblocked chapters and summer2 pages; evaluation prose refresh |
@@ -246,13 +247,16 @@ would move people.
 map calendar dates; `SavePlan` names what to keep. Query surface covers select,
 aggregate, cumulative, calendar resample, rolling, and interpolated `at_times`.
 
-### WP3 — Initial population
+### WP3 — Initial population (applied)
 
-**Closes:** L4 L5 S8 · **Unblocks:** summer2 `InitialPopulationGraphobject`
+**Closes:** L4 L5 S8 · **Unblocks:** textbook 2 and 13; summer2 `01-basic-model`,
+`07-age-stratification`, `InitialPopulationGraphobject`
 
-`parent_row` already makes redistribution a gather and a divide — see
-{doc}`../user/06-immutability-and-provenance`. This is an API wrapper over
-mechanics that exist.
+Declarative `InitialPopulation` / `Split` / `REMAINDER` with ragged-aware even
+defaults and summer2-style `where=` adjusts. Run-start staging
+(`prepare_fn`, hoisted rate subtrees) is documented in
+{doc}`../dev/run-stages`. Example notebooks: `10-initial-population`,
+`11-run-stages`.
 
 ### WP4 — Flow outputs and polarity queries (applied)
 
@@ -358,8 +362,8 @@ table below is **computed** from these declarations by
 <!-- ledger:progression -->
 | After | API rows at `full` | Share |
 | --- | --- | --- |
-| today | 44 / 52 | 85% |
-| WP2 | 44 / 52 | 85% |
+| today | 47 / 52 | 90% |
+| WP2 | 47 / 52 | 90% |
 | WP3 | 47 / 52 | 90% |
 | WP4 | 47 / 52 | 90% |
 | WP5 | 47 / 52 | 90% |

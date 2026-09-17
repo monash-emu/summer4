@@ -12,17 +12,17 @@ The site has four notebook-bearing sections plus prose and an API reference.
 | Page | Status | Ported | Blocker |
 |---|---|---|---|
 | `install.ipynb` | **Replaced** | — | Superseded by {doc}`../getting-started/installation` |
-| `examples/01-basic-model` | `partial` | — | Initial population (WP3) |
+| `examples/01-basic-model` | `partial` | — | Port pending on this stack (API unblocked) |
 | `examples/03-derived-outputs` | `full` | `summer2/03-derived-outputs.ipynb` | None |
 | `examples/04-flow-types` | `full` | `summer2/04-flow-types.ipynb` | None |
 | `examples/06-stratification-introduction` | `full` | `summer2/06-stratification-introduction.ipynb` | None |
-| `examples/07-age-stratification` | `partial` | — | Population split (WP3) |
+| `examples/07-age-stratification` | `partial` | — | Port pending on this stack (API unblocked) |
 | `examples/08-strain-stratification` | `full` | `summer2/08-strain-stratification.ipynb` | None (`per_trait` FOI; no `StrainStratification` class) |
 | `examples/09-mixing-matrices` | `full` | `summer2/09-mixing-matrices.ipynb` | None |
 | `examples/10-derived-outputs-stratified` | `full` | `summer2/10-derived-outputs-stratified.ipynb` | None |
 | `examples/11-flows-between-strata` | `full` | `summer2/11-flows-between-strata.ipynb` | None |
 | `detailed/time-varying-functions` | `full` | `summer2/time-varying-functions.ipynb` | None |
-| `detailed/InitialPopulationGraphobject` | `none` | — | Initial population, parameters |
+| `detailed/InitialPopulationGraphobject` | `none` | — | Port pending on this stack (API unblocked) |
 | `rationale.md` | **Portable** | — | Prose; adapted into {doc}`../dev/architecture` |
 | `api/*.rst` | **N/A** | — | summer4 has its own; see {doc}`../api/index` |
 | `dev-setup.md` | **Replaced** | — | Superseded by {doc}`../dev/pixi` |

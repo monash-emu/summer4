@@ -17,8 +17,9 @@ The public API of summer4 today is the taxonomy (`Property`, `Trait`,
 (`SavePlan`, `Result`, `Trace`, `Epoch` / `TimeAxis`, `Target` / `TargetSet`),
 epidemiology (`ForceOfInfection`, `MixingMatrix`, `EpiModel`), and
 time-varying helpers (`Time()`, `summer4.timevarying`, `summer4.data`).
-Initial population / population split (WP3) and Bayesian calibration
-(likelihoods / priors; WP10) are still ahead.
+Initial population / population split (WP3) is applied
+(`InitialPopulation` / `Split` / `CompiledModel.initial_state`). Bayesian
+calibration (likelihoods / priors; WP10) is still ahead.
 
 Material from the [summer2 documentation](https://summer2.readthedocs.io) and
 the [summer textbook](https://github.com/monash-emu/summer-textbook) that needs

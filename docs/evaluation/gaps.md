@@ -37,10 +37,10 @@ chapter 7 is ported at `docs/textbook/07-numerical-solutions.ipynb`.
 `set_initial_population`, and a redistribution API for splitting a population
 across a stratification.
 
-**State:** the mechanism is trivially available — `parent_row` makes it a gather
-and a divide, as demonstrated in {doc}`../user/06-immutability-and-provenance` —
-but no API wraps it. Deferred as "a one-shot redistribution of `y`, not a flow
-property". **This is the open Priority-1 item** (ledger WP3: L4, L5, S8).
+**State:** **done** (WP3: L4, L5, S8 `full`). `InitialPopulation` / `Split` /
+`REMAINDER` with ragged-aware even defaults; `CompiledModel.initial_state` and
+`run` without `y0`. See {doc}`../dev/run-stages` and
+`examples/notebooks/10-initial-population.ipynb`.
 
 ### 1.5 Derived outputs and a results object
 
@@ -72,8 +72,8 @@ rebuilt maps share a hash and work as `jax.jit` static arguments.
 
 **State:** **done** (WP6). `summer4.epi.MixingMatrix` weights transmission
 between strata (M1 `full`). `TraitMatrix` still moves *people*, not
-transmission. Textbook chapters 12 and 14 are ported; chapter 13 still needs
-WP3's population split.
+transmission. Textbook chapters 12 and 14 are ported; chapter 13 is unblocked
+by WP3's population split (port on this stack).
 
 ### 2.3 Infectiousness and susceptibility adjustments
 
@@ -139,16 +139,16 @@ Still missing / partial:
 
 ## The single highest-leverage move
 
-**Initial population / population split** (ledger WP3). WP2–WP7, WP4, WP5,
-WP6 and WP11 are applied: a model can be built with infection and mixing, run
-to a `Result`, queried, time-parameterised and fitted to sparse targets. WP6
-closed the heterogeneous-mixing API rows; what remains between that and full
-textbook coverage of chapters 2 and 13 (and summer2 `01` / `07` /
-`InitialPopulationGraphobject`) is WP3.
+**WP3 (initial population) is applied.** WP2–WP7, WP4, WP5, WP6 and WP11 are
+also applied: a model can be built with infection and mixing, given a
+declarative initial population, run to a `Result`, queried, time-parameterised
+and fitted to sparse targets.
 
-After WP3, the next leverage is WP9 (contact-survey data — chapters 16–19) and
-WP10 (Bayesian calibration — chapter 20), plus the susceptibility-surface
-follow-up that would lift chapter 15 from `partial` to `full`.
+The next leverage is **WP12** (pinnable release on `main`), then **WP13**
+(rate-tree math and tabular time series — `KI2` `KI6` `KI10` `KI11` `TM3` `TM4`),
+followed by WP14–WP16 and WP10. See `plans/tb-ports-feature-completeness.plan.md`
+and the notes in `futureplans/` (`derived-fn-blocks-hoisting`,
+`mixing-matrix-per-call-normalisation`, `wp10-preprocess-is-prepare-fn`).
 
 `Present` / `Absent` binding is **settled**: they are non-binding in flow
 pairing.

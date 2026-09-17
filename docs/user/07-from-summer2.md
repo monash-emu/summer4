@@ -115,15 +115,17 @@ pmap.to_dicts()    # {'state': 'I', 'age': '0-4'}
 | `query_flows` | `CompiledModel.edges` / `Source` / `Dest` | |
 | `Multiply` / `Overwrite` | same names on `adjust=` | Flow-owned, not on `Stratification` |
 | `finalize` | `FlowModel.compile()` | Returns a `CompiledModel` |
+| `set_initial_population` / `get_initial_population` | `FlowModel.set_initial_population` / `CompiledModel.initial_state` | Declarative `InitialPopulation` |
+| `set_population_split` / `adjust_population_split` | `Split(prop, weights, by=, where=)` | Weights normalised; even default on carriers |
 
 ## What does not translate
 
 Infection FOI, mixing, infectiousness weights, interpolation helpers, adaptive
-solvers, derived outputs and results all have summer4 equivalents (see the
-table above and {doc}`../evaluation/coverage-ledger`). What still has **no**
-library wrapper that would let every summer2 notebook run as written:
+solvers, derived outputs, results and initial populations all have summer4
+equivalents (see the table above and {doc}`../evaluation/coverage-ledger`).
+What still has **no** library wrapper that would let every summer2 notebook run
+as written:
 
 | Area | summer2 API |
 |---|---|
-| Initial conditions | `set_initial_population`, `get_initial_population`, `adjust_population_split`, `Stratification.set_population_split` |
 | Calibration | Bayesian workflow in the summer textbook chapter 20 (sparse `Target` / `TargetSet` fits exist; WP10 does not) |

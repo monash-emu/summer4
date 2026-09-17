@@ -44,5 +44,6 @@ selects Euler or a diffrax method. See {doc}`../user/08-flows` for flows and
 
 Tier 3 ships: `summer4.epi` provides `MixingMatrix`, `ForceOfInfection`, and
 an `EpiModel` frontend. `TraitMatrix` still moves people, not transmission.
-Chapter 13 remains blocked on population split (WP3); chapters 14–15 are
-ported (15 partial — no first-class susceptibility surface).
+WP3 (initial population / population split) is applied; chapter 13 is unblocked
+for porting. Chapters 14–15 are ported (15 partial — no first-class
+susceptibility surface).
