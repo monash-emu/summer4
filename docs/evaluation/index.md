@@ -23,8 +23,8 @@ gaps
 | Package source | taxonomy (NumPy) plus `summer4.flows`, `summer4.jax`, `summer4.epi`, and `summer4.timevarying` |
 | summer2 API surface exercised by its own docs, complete in summer4 | **47 of 52 (90%)** |
 | … with any working route (complete or partial) | 52 of 52 (100%) |
-| summer2 documentation notebooks reproducible as runnable summer4 | **8 of 11** (2 more partially) |
-| summer textbook chapters reproducible as runnable summer4 | **12 of 20** (2 more partially) |
+| summer2 documentation notebooks reproducible as runnable summer4 | **11 of 11** |
+| summer textbook chapters reproducible as runnable summer4 | **14 of 20** (1 more partially) |
 | Implemented layers of the intended stack | taxonomy + flows + results + epi + timevarying + initial population |
 | Ceiling of the planned roadmap (WP2–WP16) | 47 of 52 (90%) — see {doc}`coverage-ledger` |
 

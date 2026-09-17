@@ -30,6 +30,7 @@ are already ported). This tree holds the published notebooks only.
 10-reproduction-number
 11-cyclical-epidemic-dynamics
 12-heterogeneous-mixing-intro
+13-mixing-and-transmission-types
 14-assortative-mixing
 15-susceptibility-infectiousness-matrices
 porting

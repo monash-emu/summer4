@@ -12,25 +12,24 @@ The site has four notebook-bearing sections plus prose and an API reference.
 | Page | Status | Ported | Blocker |
 |---|---|---|---|
 | `install.ipynb` | **Replaced** | — | Superseded by {doc}`../getting-started/installation` |
-| `examples/01-basic-model` | `partial` | — | Port pending on this stack (API unblocked) |
+| `examples/01-basic-model` | `full` | `summer2/01-basic-model.ipynb` | None |
 | `examples/03-derived-outputs` | `full` | `summer2/03-derived-outputs.ipynb` | None |
 | `examples/04-flow-types` | `full` | `summer2/04-flow-types.ipynb` | None |
 | `examples/06-stratification-introduction` | `full` | `summer2/06-stratification-introduction.ipynb` | None |
-| `examples/07-age-stratification` | `partial` | — | Port pending on this stack (API unblocked) |
+| `examples/07-age-stratification` | `full` | `summer2/07-age-stratification.ipynb` | None |
 | `examples/08-strain-stratification` | `full` | `summer2/08-strain-stratification.ipynb` | None (`per_trait` FOI; no `StrainStratification` class) |
 | `examples/09-mixing-matrices` | `full` | `summer2/09-mixing-matrices.ipynb` | None |
 | `examples/10-derived-outputs-stratified` | `full` | `summer2/10-derived-outputs-stratified.ipynb` | None |
 | `examples/11-flows-between-strata` | `full` | `summer2/11-flows-between-strata.ipynb` | None |
 | `detailed/time-varying-functions` | `full` | `summer2/time-varying-functions.ipynb` | None |
-| `detailed/InitialPopulationGraphobject` | `none` | — | Port pending on this stack (API unblocked) |
+| `detailed/InitialPopulationGraphobject` | `full` | `summer2/initial-population-graphobject.ipynb` | None |
 | `rationale.md` | **Portable** | — | Prose; adapted into {doc}`../dev/architecture` |
 | `api/*.rst` | **N/A** | — | summer4 has its own; see {doc}`../api/index` |
 | `dev-setup.md` | **Replaced** | — | Superseded by {doc}`../dev/pixi` |
 
-**8 of 11 notebooks reproduce in full. 2 reproduce in part** (`01`, `07`).
-One remains `none` (`InitialPopulationGraphobject`). Structure, flows,
-infection / mixing, trajectories and results are no longer the blocker; WP3
-(initial population / split) is. {doc}`../user/08-flows` is the summer4-native
+**11 of 11 notebooks reproduce in full.** Structure, flows, infection / mixing,
+trajectories, results and initial population are no longer the blocker for this
+corpus. {doc}`../user/08-flows` is the summer4-native
 walkthrough.
 
 ## The summer textbook
@@ -40,9 +39,8 @@ summary:
 
 | Outcome | Chapters | Count |
 |---|---|---|
-| Ported in full | 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14 | 12 |
-| Ported, modelling content partial | 2 (initial population), 15 (no FOI susceptibility surface) | 2 |
-| Blocked on population split (`S8` / WP3) | 13 | 1 |
+| Ported in full | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 | 14 |
+| Ported, modelling content partial | 15 (no FOI susceptibility surface) | 1 |
 | Blocked on contact-survey data (WP9) | 16, 17, 18, 19 | 4 |
 | Blocked on calibration (WP10) | 20 | 1 |
 

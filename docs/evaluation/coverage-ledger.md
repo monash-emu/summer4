@@ -101,7 +101,7 @@ published as written.
 | Ch | Title | Status | Blocker | Ported |
 | --- | --- | --- | --- | --- |
 | 1 | Infectious disease modelling | `full` | None - prose | `textbook/01-introduction.md` |
-| 2 | Basic model construction | `partial` | Initial population | `textbook/02-model-structures.ipynb` |
+| 2 | Basic model construction | `full` | None | `textbook/02-model-structures.ipynb` |
 | 3 | Thinking about flows | `full` | None | `textbook/03-thinking-about-flows.ipynb` |
 | 4 | Thinking about flow rates | `full` | None | `textbook/04-thinking-about-flow-rates.ipynb` |
 | 5 | Series compartments and latency | `full` | None | `textbook/05-series-compartments-latency.ipynb` |
@@ -112,7 +112,7 @@ published as written.
 | 10 | The reproduction number | `full` | None (unstratified $R_t$; no next-gen matrix helper) | `textbook/10-reproduction-number.ipynb` |
 | 11 | Cyclical epidemic dynamics | `full` | None | `textbook/11-cyclical-epidemic-dynamics.ipynb` |
 | 12 | Heterogeneous mixing introduction | `full` | None | `textbook/12-heterogeneous-mixing-intro.ipynb` |
-| 13 | Mixing and transmission types | `none` | Population split (`S8` / WP3) | — |
+| 13 | Mixing and transmission types | `full` | None | `textbook/13-mixing-and-transmission-types.ipynb` |
 | 14 | Assortative mixing | `full` | None | `textbook/14-assortative-mixing.ipynb` |
 | 15 | Susceptibility and infectiousness matrices | `partial` | No FOI susceptibility surface symmetric to infectiousness | `textbook/15-susceptibility-infectiousness-matrices.ipynb` |
 | 16 | Thinking about contact surveys | `none` | Contact-survey data (WP9) | — |
@@ -127,17 +127,17 @@ published as written.
 <!-- ledger:summer2docs -->
 | Page | Status | Blocker | Ported |
 | --- | --- | --- | --- |
-| `examples/01-basic-model` | `partial` | Initial population | — |
+| `examples/01-basic-model` | `full` | None | `summer2/01-basic-model.ipynb` |
 | `examples/03-derived-outputs` | `full` | None | `summer2/03-derived-outputs.ipynb` |
 | `examples/04-flow-types` | `full` | None | `summer2/04-flow-types.ipynb` |
 | `examples/06-stratification-introduction` | `full` | None | `summer2/06-stratification-introduction.ipynb` |
-| `examples/07-age-stratification` | `partial` | Population split | — |
+| `examples/07-age-stratification` | `full` | None | `summer2/07-age-stratification.ipynb` |
 | `examples/08-strain-stratification` | `full` | None (`per_trait` FOI; no `StrainStratification` class) | `summer2/08-strain-stratification.ipynb` |
 | `examples/09-mixing-matrices` | `full` | None | `summer2/09-mixing-matrices.ipynb` |
 | `examples/10-derived-outputs-stratified` | `full` | None | `summer2/10-derived-outputs-stratified.ipynb` |
 | `examples/11-flows-between-strata` | `full` | None | `summer2/11-flows-between-strata.ipynb` |
 | `detailed/time-varying-functions` | `full` | None | `summer2/time-varying-functions.ipynb` |
-| `detailed/InitialPopulationGraphobject` | `none` | Initial population, parameters | — |
+| `detailed/InitialPopulationGraphobject` | `full` | None | `summer2/initial-population-graphobject.ipynb` |
 <!-- /ledger:summer2docs -->
 
 ## Delivery status
@@ -217,6 +217,13 @@ what follows: WP9 and WP10 both sit behind it, and it closes four API rows
 (F7 F8 A4 M1) plus textbook chapters 12, 14 and 15 — chapter 13 also needs WP3's
 population split. Deferred gotchas that a plan for the unplanned packages should
 read first are in `futureplans/`.
+
+**Next steps after WP3.** Promote WP12 (pinnable release) then WP13 (rate-tree
+math / tables — closes `KI2` `KI6` `KI10` `KI11` `TM3` `TM4`) from
+`plans/tb-ports-feature-completeness.plan.md`. Track
+`futureplans/derived-fn-blocks-hoisting.md`,
+`futureplans/mixing-matrix-per-call-normalisation.md`, and
+`futureplans/wp10-preprocess-is-prepare-fn.md` when planning WP10 / mixing work.
 
 ## The path to 100%
 

@@ -19,13 +19,16 @@ published notebooks only. Numerical examples on these pages are written so the r
 ```{toctree}
 :maxdepth: 2
 
+01-basic-model
 03-derived-outputs
 04-flow-types
 06-stratification-introduction
+07-age-stratification
 08-strain-stratification
 09-mixing-matrices
 10-derived-outputs-stratified
 11-flows-between-strata
 12-concurrent-diseases
+initial-population-graphobject
 time-varying-functions
 ```
