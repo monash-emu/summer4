@@ -29,3 +29,6 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
   series.
 - [`trace-plot-backend-coupling.md`](trace-plot-backend-coupling.md) —
   `Trace.plot` hardcodes matplotlib and forwards backend-specific kwargs.
+- [`propertydata-dense-unstack.md`](propertydata-dense-unstack.md) — opt-in
+  reshape of a dense Cartesian `PropertyMap` from a flat last axis to
+  `(age × state × …)` (not first-class multi-axis `PropertyData`).
