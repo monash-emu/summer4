@@ -1198,7 +1198,7 @@ class FlowModel:
         else:
             from summer4.flows.initial import Split
 
-            pop = InitialPopulation(base, splits=tuple(splits))  # type: ignore[arg-type]
+            pop = InitialPopulation(base, splits=tuple(splits))
             del Split
         self._initial_population = pop
         return pop

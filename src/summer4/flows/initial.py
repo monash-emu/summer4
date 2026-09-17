@@ -76,10 +76,7 @@ class InitialPopulation:
         base: Mapping[Selector, BaseValue] | Sequence[tuple[Selector, BaseValue]],
         splits: Sequence[Split] = (),
     ) -> None:
-        if isinstance(base, Mapping):
-            pairs = tuple(base.items())
-        else:
-            pairs = tuple(base)
+        pairs = tuple(base.items()) if isinstance(base, Mapping) else tuple(base)
         object.__setattr__(self, "base", pairs)
         object.__setattr__(self, "splits", tuple(splits))
 
