@@ -170,5 +170,13 @@ class EpiModel:
         self._fois[name] = foi
         return self.add_flow(TransitionFlow(name, source, dest, foi))
 
+    def set_initial_population(
+        self,
+        base: object,
+        splits: object = (),
+    ) -> Any:
+        """Attach a declarative initial population on the underlying FlowModel."""
+        return self._flow_model.set_initial_population(base, splits=splits)  # type: ignore[arg-type]
+
     def compile(self, **kwargs: Any) -> CompiledModel:
         return self._flow_model.compile(**kwargs)

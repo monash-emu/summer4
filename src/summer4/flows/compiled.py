@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -19,6 +19,7 @@ from summer4.flows.actualize import (
     topo_sort,
 )
 from summer4.flows.edges import EdgeMap
+from summer4.flows.initial import InitialPopulation, InitPlan
 from summer4.flows.rates import (
     BinOp,
     Const,
@@ -636,6 +637,7 @@ def _model_digest(
     computed_paths: tuple[tuple[str, ...], ...],
     prepare_fn: PrepareFn | None = None,
     hoist: bool = True,
+    init_plan: InitPlan | None = None,
 ) -> bytes:
     hasher = hashlib.blake2b(digest_size=16)
     hasher.update(pmap.codes.tobytes())
@@ -649,6 +651,7 @@ def _model_digest(
     hasher.update(b"pf")
     hasher.update(str(id(prepare_fn) if prepare_fn is not None else 0).encode())
     hasher.update(b"hoist1" if hoist else b"hoist0")
+    hasher.update(init_plan.digest_bytes() if init_plan is not None else b"noinit")
     return hasher.digest()
 
 
@@ -692,6 +695,7 @@ class CompiledModel:
     prepare_fn: PrepareFn | None = None
     hoist_table: HoistTable | None = None
     hoist: bool = True
+    init_plan: InitPlan | None = None
     capture_meta: Mapping[str, tuple[Property, ...]] = field(default_factory=dict)
     _digest: bytes = field(init=False, repr=False, compare=False)
 
@@ -708,6 +712,7 @@ class CompiledModel:
                 self.computed_paths,
                 prepare_fn=self.prepare_fn,
                 hoist=self.hoist,
+                init_plan=self.init_plan,
             ),
         )
 
@@ -777,6 +782,19 @@ class CompiledModel:
                 )
                 hoisted.append(stacked)
         return Prepared(p, tuple(hoisted))
+
+    def initial_state(self, params: object) -> Any:
+        """Evaluate the attached initial population (ledger ``L5``)."""
+        from summer4.jax.propertydata import PropertyData
+
+        if self.init_plan is None:
+            raise ValueError(
+                "No initial population: call FlowModel.set_initial_population or pass y0."
+            )
+        prepared = params if isinstance(params, Prepared) else self.prepare(params)
+        result = self.init_plan.evaluate(prepared.params)
+        assert isinstance(result, PropertyData)
+        return result
 
     def edges(self, name: str) -> EdgeMap:
         """Return the :class:`EdgeMap` for the named flow."""
@@ -1007,7 +1025,7 @@ class CompiledModel:
     def run(
         self,
         params: object,
-        y0: object,
+        y0: object | None = None,
         *,
         t0: float,
         t1: float | None = None,
@@ -1024,6 +1042,8 @@ class CompiledModel:
 
         Exactly one of ``t1`` / ``steps``. ``solver`` is a name (``"euler"``,
         ``"heun"``, ``"tsit5"``, ``"dopri5"``) or a diffrax solver instance.
+        With no ``y0``, uses :meth:`initial_state` when an initial population
+        is attached.
         """
         from summer4.results.eval import dims_for_quantity, values_for
         from summer4.results.groups import group_requests
@@ -1034,6 +1054,10 @@ class CompiledModel:
         from summer4.solvers.diffrax_backend import KNOWN_SOLVER_NAMES, diffrax_solve
         from summer4.solvers.euler_backend import euler_solve
         from summer4.time import Epoch, TimeAxis
+
+        prepared = self.prepare(params)
+        if y0 is None:
+            y0 = self.initial_state(prepared)
 
         if save is None:
             save = EVERYTHING
@@ -1084,7 +1108,7 @@ class CompiledModel:
             out = euler_solve(
                 self,
                 y0=y0,
-                params=params,
+                params=prepared,
                 spec=spec,
                 groups=groups,
                 plan=expanded,
@@ -1097,7 +1121,7 @@ class CompiledModel:
             out = diffrax_solve(
                 self,
                 y0=y0,
-                params=params,
+                params=prepared,
                 spec=spec,
                 groups=groups,
                 plan=expanded,
@@ -1148,6 +1172,7 @@ class FlowModel:
     def __init__(self, pmap: PropertyMap) -> None:
         self.pmap = pmap
         self.flows: list[FlowLike] = []
+        self._initial_population: InitialPopulation | None = None
 
     def add_flow(self, flow: FlowLike) -> FlowRef:
         """Register a named flow and return a :class:`FlowRef` to it.
@@ -1160,12 +1185,31 @@ class FlowModel:
         self.flows.append(flow)
         return FlowRef(flow.name)
 
+    def set_initial_population(
+        self,
+        base: Mapping[Any, Any] | InitialPopulation | Sequence[tuple[Any, Any]],
+        splits: Sequence[Any] = (),
+    ) -> InitialPopulation:
+        """Attach a declarative initial population (replaces any previous)."""
+        if isinstance(base, InitialPopulation):
+            if splits:
+                raise ValueError("Pass splits= only when base is a mapping, not InitialPopulation.")
+            pop = base
+        else:
+            from summer4.flows.initial import Split
+
+            pop = InitialPopulation(base, splits=tuple(splits))  # type: ignore[arg-type]
+            del Split
+        self._initial_population = pop
+        return pop
+
     def compile(
         self,
         *,
         derived_fn: DerivedFn | None = None,
         prepare_fn: PrepareFn | None = None,
         hoist: bool = True,
+        init: InitialPopulation | None = None,
         strict_pairing: bool = True,
     ) -> CompiledModel:
         """Actualize joins once and return a :class:`CompiledModel`."""
@@ -1173,6 +1217,12 @@ class FlowModel:
 
         if not self.flows:
             raise ValueError("FlowModel has no flows.")
+        if init is not None and self._initial_population is not None:
+            raise ValueError(
+                "Initial population set twice: both set_initial_population and compile(init=)."
+            )
+        pop = init if init is not None else self._initial_population
+        init_plan = pop.compile(self.pmap) if pop is not None else None
         actualized = topo_sort(
             [actualize(flow, self.pmap, strict_pairing=strict_pairing) for flow in self.flows]
         )
@@ -1208,6 +1258,7 @@ class FlowModel:
             prepare_fn=prepare_fn,
             hoist_table=hoist_table,
             hoist=hoist,
+            init_plan=init_plan,
             capture_meta=capture_meta,
         )
 

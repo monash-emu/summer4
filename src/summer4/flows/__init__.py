@@ -16,6 +16,7 @@ from summer4.flows.compiled import (
     numpy_euler,
 )
 from summer4.flows.edges import EdgeMap, EdgeRoles
+from summer4.flows.initial import REMAINDER, InitialPopulation, Split
 from summer4.flows.join import (
     TraitChain,
     TraitMatrix,
@@ -40,6 +41,7 @@ from summer4.flows.rates import (
     as_rate,
     derived_refs,
 )
+from summer4.flows.stages import Prepared
 from summer4.flows.types import EntryFlow, ExitFlow, TransitionFlow
 
 __all__ = [
@@ -58,12 +60,16 @@ __all__ = [
     "FlowRef",
     "GaussianPulse",
     "GroupedRate",
+    "InitialPopulation",
     "Interp",
     "Multiply",
     "Overwrite",
     "Param",
+    "Prepared",
+    "REMAINDER",
     "Reduce",
     "SaveContext",
+    "Split",
     "Time",
     "TraitChain",
     "TraitMatrix",
