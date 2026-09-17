@@ -40,6 +40,7 @@ from summer4.flows.rates import (
     derived_return_schema,
     validate_computed_path,
 )
+from summer4.flows.stages import HoistTable, Prepared, PrepareFn
 from summer4.flows.types import FlowLike
 from summer4.properties import Property
 from summer4.propertymap import PropertyMap
@@ -229,11 +230,18 @@ def _eval_rate(
     t: object,
     y_arr: Any,
     captures: dict[str, GroupedRate],
+    hoisted: Prepared | None = None,
+    table: HoistTable | None = None,
 ) -> Any:
     import jax.numpy as jnp
 
     from summer4.flows.rates import _RATE_EVALUATORS, ArrayConst, Capture
     from summer4.jax.propertydata import PropertyData
+
+    if table is not None and hoisted is not None:
+        value_slot = table.slot.get((id(expr), "value"))
+        if value_slot is not None:
+            return hoisted.hoisted[value_slot]
 
     def child(node: RateOps) -> Any:
         return _eval_rate(
@@ -245,6 +253,8 @@ def _eval_rate(
             t=t,
             y_arr=y_arr,
             captures=captures,
+            hoisted=hoisted,
+            table=table,
         )
 
     match expr:
@@ -303,8 +313,16 @@ def _eval_rate(
             arg=arg,
             sharpness=sharpness,
         ):
-            stacked_bps = jnp.stack([jnp.asarray(child(bp)) for bp in breakpoints])
-            stacked = jnp.stack([jnp.asarray(child(value)) for value in values])
+            bp_slot = table.slot.get((id(expr), "breakpoints")) if table is not None else None
+            val_slot = table.slot.get((id(expr), "values")) if table is not None else None
+            if bp_slot is not None and hoisted is not None:
+                stacked_bps = hoisted.hoisted[bp_slot]
+            else:
+                stacked_bps = jnp.stack([jnp.asarray(child(bp)) for bp in breakpoints])
+            if val_slot is not None and hoisted is not None:
+                stacked = hoisted.hoisted[val_slot]
+            else:
+                stacked = jnp.stack([jnp.asarray(child(value)) for value in values])
             return _eval_interp(kind, stacked_bps, stacked, child(arg), sharpness)
         case GaussianPulse(arg=arg, centre=centre, width=width, height=height):
             x = child(arg)
@@ -444,6 +462,8 @@ def _eval_aligned(
     t: object,
     y_arr: Any,
     captures: dict[str, GroupedRate],
+    hoisted: Prepared | None = None,
+    table: HoistTable | None = None,
 ) -> Any:
     raw = _eval_rate(
         expr,
@@ -454,6 +474,8 @@ def _eval_aligned(
         t=t,
         y_arr=y_arr,
         captures=captures,
+        hoisted=hoisted,
+        table=table,
     )
     pair_src, pair_dest, pair_n = _pair_info(flow)
     return _align_rate(
@@ -479,6 +501,8 @@ def _apply_adjustments(
     t: object,
     y_arr: Any,
     captures: dict[str, GroupedRate],
+    hoisted: Prepared | None = None,
+    table: HoistTable | None = None,
 ) -> Any:
     import jax.numpy as jnp
 
@@ -497,6 +521,8 @@ def _apply_adjustments(
                     t=t,
                     y_arr=y_arr,
                     captures=captures,
+                    hoisted=hoisted,
+                    table=table,
                 )
                 for arg in adj.args
             ]
@@ -513,6 +539,8 @@ def _apply_adjustments(
                 t=t,
                 y_arr=y_arr,
                 captures=captures,
+                hoisted=hoisted,
+                table=table,
             )
             new = value if isinstance(adj, Overwrite) else prev * value
         prev = jnp.where(jnp.asarray(mask), new, prev) if mask is not None else new
@@ -606,6 +634,8 @@ def _model_digest(
     edge_maps: Mapping[str, EdgeMap],
     derived_fn: DerivedFn | None,
     computed_paths: tuple[tuple[str, ...], ...],
+    prepare_fn: PrepareFn | None = None,
+    hoist: bool = True,
 ) -> bytes:
     hasher = hashlib.blake2b(digest_size=16)
     hasher.update(pmap.codes.tobytes())
@@ -616,6 +646,9 @@ def _model_digest(
     hasher.update(b"df")
     hasher.update(str(id(derived_fn) if derived_fn is not None else 0).encode())
     hasher.update(repr(computed_paths).encode())
+    hasher.update(b"pf")
+    hasher.update(str(id(prepare_fn) if prepare_fn is not None else 0).encode())
+    hasher.update(b"hoist1" if hoist else b"hoist0")
     return hasher.digest()
 
 
@@ -656,6 +689,9 @@ class CompiledModel:
     edge_maps: Mapping[str, EdgeMap]
     derived_fn: DerivedFn | None
     computed_paths: tuple[tuple[str, ...], ...]
+    prepare_fn: PrepareFn | None = None
+    hoist_table: HoistTable | None = None
+    hoist: bool = True
     capture_meta: Mapping[str, tuple[Property, ...]] = field(default_factory=dict)
     _digest: bytes = field(init=False, repr=False, compare=False)
 
@@ -670,8 +706,77 @@ class CompiledModel:
                 self.edge_maps,
                 self.derived_fn,
                 self.computed_paths,
+                prepare_fn=self.prepare_fn,
+                hoist=self.hoist,
             ),
         )
+
+    def prepare(self, params: object) -> Prepared:
+        """Run-start stage: apply ``prepare_fn`` and evaluate hoisted rate slots."""
+        if isinstance(params, Prepared):
+            return params
+        p = params if self.prepare_fn is None else self.prepare_fn(params)
+        table = self.hoist_table
+        if table is None or not table.entries:
+            return Prepared(p, ())
+        import jax.numpy as jnp
+
+        hoisted: list[Any] = []
+        for entry in table.entries:
+            if entry.part == "value":
+                hoisted.append(
+                    _eval_rate(
+                        entry.node,
+                        derived=p,
+                        flow_values={},
+                        flow_meta={},
+                        pmap=self.pmap,
+                        t=None,
+                        y_arr=None,
+                        captures={},
+                    )
+                )
+            elif entry.part == "breakpoints":
+                assert isinstance(entry.node, Interp)
+                stacked = jnp.stack(
+                    [
+                        jnp.asarray(
+                            _eval_rate(
+                                bp,
+                                derived=p,
+                                flow_values={},
+                                flow_meta={},
+                                pmap=self.pmap,
+                                t=None,
+                                y_arr=None,
+                                captures={},
+                            )
+                        )
+                        for bp in entry.node.breakpoints
+                    ]
+                )
+                hoisted.append(stacked)
+            else:
+                assert isinstance(entry.node, Interp)
+                stacked = jnp.stack(
+                    [
+                        jnp.asarray(
+                            _eval_rate(
+                                val,
+                                derived=p,
+                                flow_values={},
+                                flow_meta={},
+                                pmap=self.pmap,
+                                t=None,
+                                y_arr=None,
+                                captures={},
+                            )
+                        )
+                        for val in entry.node.values
+                    ]
+                )
+                hoisted.append(stacked)
+        return Prepared(p, tuple(hoisted))
 
     def edges(self, name: str) -> EdgeMap:
         """Return the :class:`EdgeMap` for the named flow."""
@@ -700,12 +805,16 @@ class CompiledModel:
         from summer4.jax.propertydata import PropertyData
         from summer4.jax.state import State, unpack_state
 
+        if not isinstance(params, Prepared):
+            params = self.prepare(params)
+        prepared = params
         y_arr, rebox = unpack_state(y, self.pmap)
-        derived = _eval_derived(self.derived_fn, params, y_arr, t)
+        derived = _eval_derived(self.derived_fn, prepared.params, y_arr, t)
         dy: Any = jnp.zeros_like(y_arr)
         flow_values: dict[str, Any] = {}
         captures: dict[str, GroupedRate] = {}
         pmap = self.pmap
+        table = self.hoist_table if self.hoist else None
         for name in self.order:
             flow = self.flows[name]
             gather = _gather_idx(flow)
@@ -720,6 +829,8 @@ class CompiledModel:
                 t=t,
                 y_arr=y_arr,
                 captures=captures,
+                hoisted=prepared,
+                table=table,
             )
             rate = rate * jnp.asarray(flow.scale)
             rate = _apply_adjustments(
@@ -733,6 +844,8 @@ class CompiledModel:
                 t=t,
                 y_arr=y_arr,
                 captures=captures,
+                hoisted=prepared,
+                table=table,
             )
             weight = jnp.asarray(flow.weight)
             match flow:
@@ -1051,9 +1164,13 @@ class FlowModel:
         self,
         *,
         derived_fn: DerivedFn | None = None,
+        prepare_fn: PrepareFn | None = None,
+        hoist: bool = True,
         strict_pairing: bool = True,
     ) -> CompiledModel:
         """Actualize joins once and return a :class:`CompiledModel`."""
+        from summer4.flows.stages import HoistTable, build_hoist_table, roots_of
+
         if not self.flows:
             raise ValueError("FlowModel has no flows.")
         actualized = topo_sort(
@@ -1074,6 +1191,13 @@ class FlowModel:
                     for arg in adj.args:
                         capture_meta.update(_collect_capture_meta(arg))
         computed_paths = tuple(sorted(paths))
+        if hoist:
+            hoist_table = build_hoist_table(
+                roots_of(flows, order),
+                params_are_static=derived_fn is None,
+            )
+        else:
+            hoist_table = HoistTable(entries=(), slot={})
         return CompiledModel(
             pmap=self.pmap,
             order=order,
@@ -1081,6 +1205,9 @@ class FlowModel:
             edge_maps=edge_maps,
             derived_fn=derived_fn,
             computed_paths=computed_paths,
+            prepare_fn=prepare_fn,
+            hoist_table=hoist_table,
+            hoist=hoist,
             capture_meta=capture_meta,
         )
 

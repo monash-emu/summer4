@@ -113,12 +113,14 @@ def diffrax_solve(
     """Integrate with diffrax; one ``SubSaveAt`` per save group."""
     import jax.numpy as jnp
 
+    from summer4.flows.stages import Prepared
     from summer4.jax.propertydata import PropertyData
     from summer4.jax.state import State, unpack_state
 
     diffrax = _import_diffrax()
     solver_inst, solver_name = resolve_diffrax_solver(solver)
 
+    prepared = params if isinstance(params, Prepared) else model.prepare(params)
     y_arr, rebox = unpack_state(y0, model.pmap)
 
     def vf(t: Any, y: Any, args: Any) -> Any:
@@ -131,7 +133,9 @@ def diffrax_solve(
 
     term = diffrax.ODETerm(vf)
     subs = {
-        g.name: diffrax.SubSaveAt(ts=jnp.asarray(g.ts), fn=_group_fn(model, params, rebox, g, plan))
+        g.name: diffrax.SubSaveAt(
+            ts=jnp.asarray(g.ts), fn=_group_fn(model, prepared, rebox, g, plan)
+        )
         for g in groups
     }
     saveat = diffrax.SaveAt(subs=subs, dense=bool(spec.dense))
@@ -171,7 +175,7 @@ def diffrax_solve(
         t1=t1,
         dt0=dt0,
         y0=y_arr,
-        args=params,
+        args=prepared,
         saveat=saveat,
         stepsize_controller=controller,
         max_steps=max_steps,

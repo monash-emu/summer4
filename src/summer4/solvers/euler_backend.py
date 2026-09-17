@@ -180,6 +180,7 @@ def euler_solve(
     solver_stats: bool,
 ) -> SolveOutput:
     """Integrate with Euler and evaluate each save group on its own ``ts``."""
+    from summer4.flows.stages import Prepared
     from summer4.jax.state import unpack_state
     from summer4.results.eval import build_save_fn
 
@@ -188,6 +189,8 @@ def euler_solve(
     steps = int(spec.steps)
     dt = float(spec.dt)
     t0 = float(spec.t0)
+
+    prepared = params if isinstance(params, Prepared) else model.prepare(params)
 
     y_arr, rebox = unpack_state(y0, model.pmap)
     saved: dict[str, Any] = {}
@@ -198,7 +201,7 @@ def euler_solve(
         group_plan = _filtered_plan(plan, group.keys)
         save_fn = build_save_fn(group_plan, pmap=model.pmap, edge_maps=dict(model.edge_maps))
         keep = group_plan.flow_reads()
-        observe_arr, snapshot = _snapshot_factory(model, params, rebox, save_fn, keep=keep)
+        observe_arr, snapshot = _snapshot_factory(model, prepared, rebox, save_fn, keep=keep)
         init_snap = snapshot(np.asarray(t0), y_arr)
 
         if _is_arithmetic_subgrid(group.ts, t0, dt):
