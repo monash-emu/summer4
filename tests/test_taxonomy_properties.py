@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import numpy as np
 from hypothesis import given, settings
+from tests.helpers.strategies import _build_map, built_maps
 
 from summer4 import Property, PropertyMap
-from tests.helpers.strategies import _build_map, built_maps
 
 
 @settings(max_examples=60, deadline=2000)

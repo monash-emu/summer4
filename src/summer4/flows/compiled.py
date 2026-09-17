@@ -1228,7 +1228,7 @@ class FlowModel:
                 f"Unknown field(s) {sorted(unknown)} for {type(flow).__name__}. "
                 f"Allowed: {sorted(allowed)}"
             )
-        self.flows[i] = cast(FlowLike, replace(flow, **changes))
+        self.flows[i] = replace(flow, **cast(Any, changes))
         return FlowRef(name)
 
     def adjust_flow(self, name: str, /, *adjustments: object) -> FlowRef:

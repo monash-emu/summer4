@@ -20,6 +20,7 @@ from summer4.flows.join import (
 from summer4.flows.rates import (
     Adjustment,
     FlowRef,
+    Multiply,
     Overwrite,
     RateOps,
     _flow_rate_refs,
@@ -209,9 +210,8 @@ def _property_absent_on_side(edge_map: EdgeMap, prop: str, side: str) -> bool:
 
 def _adj_repr(adj: Adjustment) -> str:
     kind = type(adj).__name__
-    if isinstance(adj, Overwrite) or hasattr(adj, "value"):
-        value = getattr(adj, "value")
-        return f"{kind}({value!r}, where={adj.where!r})"
+    if isinstance(adj, (Overwrite, Multiply)):
+        return f"{kind}({adj.value!r}, where={adj.where!r})"
     return f"{kind}(..., where={adj.where!r})"
 
 

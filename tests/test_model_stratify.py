@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
+from tests.helpers.strategies import built_maps
 
 from summer4 import (
     Everything,
@@ -22,7 +23,6 @@ from summer4 import (
 from summer4.flows import EntryFlow, ExitFlow
 from summer4.flows.compiled import _align_rate
 from summer4.flows.rates import Const
-from tests.helpers.strategies import built_maps
 
 
 def _sir() -> tuple[Property, PropertyMap]:
