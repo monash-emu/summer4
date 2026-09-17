@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
-from typing import Any, Protocol
+from dataclasses import dataclass, field, fields, replace
+from typing import Any, Protocol, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -45,6 +45,7 @@ from summer4.flows.stages import HoistTable, Prepared, PrepareFn
 from summer4.flows.types import FlowLike
 from summer4.properties import Property
 from summer4.propertymap import PropertyMap
+from summer4.selectors import Selector
 
 _NA: int = -1
 
@@ -445,9 +446,15 @@ def _align_rate(
         return arr[..., gather_idx]
     if shape[-1] == n_edges:
         return arr
+    hint = ""
+    if pmap.parent_row is not None and shape[-1] == int(pmap.parent_row.max()) + 1:
+        hint = (
+            " It matches the size of the map this one was stratified from; "
+            "lift it with arr[..., pmap.parent_row]."
+        )
     raise ValueError(
         f"Rate last axis {shape[-1]} matches neither pmap.size {pmap_size} "
-        f"nor n_edges {n_edges}."
+        f"nor n_edges {n_edges}.{hint}"
     )
 
 
@@ -1184,6 +1191,53 @@ class FlowModel:
             raise ValueError(f"Duplicate flow name {flow.name!r}.")
         self.flows.append(flow)
         return FlowRef(flow.name)
+
+    def _index_of(self, name: str) -> int:
+        for i, flow in enumerate(self.flows):
+            if flow.name == name:
+                return i
+        known = ", ".join(repr(f.name) for f in self.flows)
+        raise KeyError(f"Unknown flow {name!r}. Known: {{{known}}}")
+
+    def stratify(self, prop: Property, where: Selector | None = None) -> None:
+        """Stratify this model's map in place; declared flows re-resolve at ``compile()``.
+
+        Does not validate flows eagerly — the same errors as a map-first build
+        surface when :meth:`compile` runs. A :class:`CompiledModel` produced
+        before this call is unchanged (frozen against the old map).
+        """
+        self.pmap = self.pmap.stratify(prop, where)
+
+    def copy(self) -> FlowModel:
+        """Return an independent builder with the same map, flows and initial population."""
+        other = FlowModel(self.pmap)
+        other.flows = list(self.flows)
+        other._initial_population = self._initial_population
+        return other
+
+    def update_flow(self, name: str, /, **changes: object) -> FlowRef:
+        """Replace fields of a declared flow (source, dest, rate, split, pairing, adjust, ...)."""
+        if "name" in changes:
+            raise ValueError("Flow names cannot be changed.")
+        i = self._index_of(name)
+        flow = self.flows[i]
+        allowed = {f.name for f in fields(flow)}
+        unknown = set(changes) - allowed
+        if unknown:
+            raise TypeError(
+                f"Unknown field(s) {sorted(unknown)} for {type(flow).__name__}. "
+                f"Allowed: {sorted(allowed)}"
+            )
+        self.flows[i] = cast(FlowLike, replace(flow, **changes))
+        return FlowRef(name)
+
+    def adjust_flow(self, name: str, /, *adjustments: object) -> FlowRef:
+        """Append adjustments to a declared flow; precedence decides evaluation order."""
+        if not adjustments:
+            raise ValueError("adjust_flow requires at least one adjustment.")
+        i = self._index_of(name)
+        flow = self.flows[i]
+        return self.update_flow(name, adjust=(*flow.adjust, *adjustments))
 
     def set_initial_population(
         self,
