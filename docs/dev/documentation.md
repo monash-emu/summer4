@@ -50,6 +50,9 @@ re-execution. Use it when a change should have invalidated a page and did not.
 
 - **User guide** pages are notebooks. They teach one idea, build the smallest
   map that shows it, and assert the result.
+- **Cookbook** pages are short recipes under {doc}`../cookbook/index`: one
+  practical question, rung-ordered alternatives, assertions. Prefer them when
+  the audience is domain experts with limited programming experience.
 - **Developer guide** pages are Markdown, except {doc}`performance`, which is a
   notebook precisely because its claims are measurements.
 - Cross-reference with `{doc}` so the link is checked:
