@@ -95,7 +95,9 @@ covers and what full coverage requires. It holds:
   one closes, and a computed table of coverage after each.
 
 Read it before proposing feature work, so a branch lands the next package rather
-than a duplicate of one already designed. Quote its IDs (`F1`, `D4`, `WP2`) in
+than a duplicate of one already designed. `docs/evaluation/tb-ports.md` is its companion for
+the Kiribati and tb_macro tuberculosis model ports: capability rows `KI*` / `TM*`,
+each naming the work package (WP3, WP10, WP12–WP16) that closes it. Quote its IDs (`F1`, `D4`, `WP2`) in
 plans and PR descriptions — they are stable, and agents on other branches can
 resolve them without this context.
 

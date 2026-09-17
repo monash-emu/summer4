@@ -91,3 +91,65 @@ def test_quoted_totals_are_current(text: str) -> None:
 
 def test_check_mode_passes() -> None:
     assert main(["--check"]) == 0
+
+
+@pytest.fixture(scope="module")
+def ports_text() -> str:
+    from scripts.coverage_report import PORTS
+
+    return PORTS.read_text(encoding="utf-8")
+
+
+def test_ports_ledger_parses(ports_text: str, text: str) -> None:
+    from scripts.coverage_report import PORT_MODELS, read_ports
+
+    rows = read_ports(ports_text, text)
+    assert {row[1] for row in rows} == set(PORT_MODELS)
+
+
+def test_ports_reject_bad_status(ports_text: str, text: str) -> None:
+    from scripts.coverage_report import read_ports
+
+    broken = ports_text.replace(
+        "| `partial` | Hand-written `TraitChain` pairs",
+        "| `mostly` | Hand-written `TraitChain` pairs",
+        1,
+    )
+    with pytest.raises(ValueError, match="Unknown status"):
+        read_ports(broken, text)
+
+
+def test_ports_reject_undeclared_package(ports_text: str, text: str) -> None:
+    from scripts.coverage_report import read_ports
+
+    broken = ports_text.replace("| Pin the unmerged stack commit | WP12 |", "| Pin | WP99 |", 1)
+    with pytest.raises(ValueError, match="undeclared package"):
+        read_ports(broken, text)
+
+
+def test_ports_reject_full_row_with_package(ports_text: str, text: str) -> None:
+    from scripts.coverage_report import read_ports
+
+    broken = ports_text.replace("| `ComputedValue` over `derived_fn` | — |", "| x | WP13 |", 1)
+    with pytest.raises(ValueError, match="is full but names"):
+        read_ports(broken, text)
+
+
+def test_port_readiness_is_current(ports_text: str, text: str) -> None:
+    from scripts.coverage_report import update_port_readiness
+
+    assert update_port_readiness(ports_text, text) == ports_text
+
+
+def test_port_readiness_reaches_every_row(ports_text: str, text: str) -> None:
+    """After the last ordered package, every port row is complete."""
+    from scripts.coverage_report import port_readiness
+
+    _label, final = port_readiness(ports_text, text)[-1]
+    assert all(full == total for full, total in final.values())
+
+
+def test_port_quotes_are_current(ports_text: str, text: str) -> None:
+    from scripts.coverage_report import stale_port_quotes
+
+    assert stale_port_quotes(ports_text, text) == []
