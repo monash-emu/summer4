@@ -44,3 +44,6 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
   — `MixingMatrix.resolved_matrix` re-normalises FieldRef matrices every step.
 - [`wp10-preprocess-is-prepare-fn.md`](wp10-preprocess-is-prepare-fn.md) —
   WP10 `preprocess=` should be `CompiledModel.prepare_fn`, not a second hook.
+- [`adjustment-expanding-arrays.md`](adjustment-expanding-arrays.md) — evaluate
+  adjustment chains over unique value combinations (summer3proto `polarized`)
+  instead of folding over every edge; benchmark-gated.
