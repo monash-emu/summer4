@@ -10,7 +10,7 @@ import pytest
 jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")
 
-from tests.helpers.jaxpr import loop_body_primitives  # noqa: E402
+from tests.helpers.jaxpr import loop_knot_cost  # noqa: E402
 
 from summer4 import (  # noqa: E402
     Compartments,
@@ -150,6 +150,13 @@ def test_hoist_equivalence(solver: str, rtol: float) -> None:
 
 
 def test_knot_count_does_not_grow_loop_body() -> None:
+    """Hoisting keeps Interp knot work out of the euler scan body.
+
+    JAX 0.6 unrolls ``jnp.stack`` of K scalars into many eqns, so raw
+    primitive counts grew with K when ``hoist=False``. JAX 0.11+ keeps a
+    single ``stack`` whose *width* is K — eqn counts no longer grow. Use
+    :func:`loop_knot_cost`, which is sensitive under both.
+    """
     state = Property("state", ("Y",))
     pmap = PropertyMap.from_property(state)
 
@@ -167,22 +174,21 @@ def test_knot_count_does_not_grow_loop_body() -> None:
     y0 = PropertyData.wrap(pmap, np.array([0.0]))
     plan = SavePlan(requests={"y": SaveRequest(Compartments())}, ts=np.array([1.0]))
 
-    def body_count(k: int, *, hoist: bool) -> int:
+    def body_cost(k: int, *, hoist: bool) -> int:
         cm, params = make(k, hoist=hoist)
 
         def loss(p: Any) -> Any:
             res = cm.run(p, y0, t0=0.0, t1=1.0, dt=0.25, save=plan, solver="euler")
             return jnp.sum(jnp.asarray(res["y"].values.data))
 
-        closed = jax.make_jaxpr(loss)(params)
-        return int(sum(loop_body_primitives(closed).values()))
+        return loop_knot_cost(jax.make_jaxpr(loss)(params))
 
-    on4 = body_count(4, hoist=True)
-    on40 = body_count(40, hoist=True)
+    on4 = body_cost(4, hoist=True)
+    on40 = body_cost(40, hoist=True)
     assert on4 == on40
 
-    off4 = body_count(4, hoist=False)
-    off40 = body_count(40, hoist=False)
+    off4 = body_cost(4, hoist=False)
+    off40 = body_cost(40, hoist=False)
     assert off40 > off4
 
 
