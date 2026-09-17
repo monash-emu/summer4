@@ -11,6 +11,7 @@ from summer4 import (
     Compartments,
     FlowModel,
     GroupedRate,
+    Param,
     Property,
     PropertyData,
     PropertyMap,
@@ -26,6 +27,11 @@ from summer4.results.plan import GroupedOutput
 class _ContactParams(NamedTuple):
     contact_rate: float
     mixing: object
+
+
+class _InfectiousParams(NamedTuple):
+    nu_young: float
+    nu_old: float
 
 
 def _sir_age() -> tuple[Property, Property, PropertyMap]:
@@ -323,6 +329,174 @@ def test_infectiousness_wrong_property_raises() -> None:
             group_by=age,
             infectiousness={loc["north"]: 1.0},
         )
+
+
+def _compile_weighted_foi(
+    state: Property,
+    age: Property,
+    pmap: PropertyMap,
+    weights: dict[str, object],
+    *,
+    normalize: str | None = None,
+    contact_rate: object = 0.4,
+    mixing: object | None = None,
+) -> object:
+    """Age-stratified SIR whose infection FOI uses ``weights`` as infectiousness."""
+    m = FlowModel(pmap)
+    matrix = np.eye(2) if mixing is None else mixing
+    foi = ForceOfInfection(
+        "infection",
+        infectious=state["I"],
+        group_by=age,
+        kind="frequency",
+        contact_rate=contact_rate,
+        mixing=MixingMatrix(age, matrix, check_reciprocal=False),
+        infectiousness={age[name]: value for name, value in weights.items()},
+        normalize_infectiousness=normalize,  # type: ignore[arg-type]
+    )
+    m.add_flow(TransitionFlow("inf", state["S"], state["I"], foi))
+    m.add_flow(TransitionFlow("rec", state["I"], state["R"], 0.1))
+    return m.compile()
+
+
+def test_infectiousness_param_matches_literal() -> None:
+    """Param / derived_refs / string-key weights match the same literal floats."""
+    pytest.importorskip("jax")
+    state, age, pmap = _sir_age()
+    y = np.array([900.0, 800.0, 50.0, 40.0, 0.0, 0.0])
+    refs = derived_refs(_InfectiousParams)
+    literal = _compile_weighted_foi(state, age, pmap, {"young": 0.7, "old": 1.4})
+    via_param = _compile_weighted_foi(
+        state, age, pmap, {"young": Param("nu_young"), "old": Param("nu_old")}
+    )
+    via_refs = _compile_weighted_foi(state, age, pmap, {"young": refs.nu_young, "old": refs.nu_old})
+    via_str_keys = FlowModel(pmap)
+    via_str_keys.add_flow(
+        TransitionFlow(
+            "inf",
+            state["S"],
+            state["I"],
+            ForceOfInfection(
+                "infection",
+                infectious=state["I"],
+                group_by=age,
+                kind="frequency",
+                contact_rate=0.4,
+                mixing=MixingMatrix(age, np.eye(2), check_reciprocal=False),
+                infectiousness={"young": Param("nu_young"), "old": Param("nu_old")},
+            ),
+        )
+    )
+    via_str_keys.add_flow(TransitionFlow("rec", state["I"], state["R"], 0.1))
+    expected = np.asarray(literal.observe(0.0, y, {}).captures["infection"].data)
+    params = {"nu_young": 0.7, "nu_old": 1.4}
+    for compiled in (via_param, via_refs, via_str_keys.compile()):
+        got = np.asarray(compiled.observe(0.0, y, params).captures["infection"].data)
+        np.testing.assert_allclose(got, expected)
+
+
+def test_infectiousness_param_omitted_trait_defaults_to_one() -> None:
+    pytest.importorskip("jax")
+    state, age, pmap = _sir_age()
+    y = np.array([900.0, 800.0, 50.0, 40.0, 0.0, 0.0])
+    parameterised = _compile_weighted_foi(state, age, pmap, {"young": Param("nu_young")})
+    literal = _compile_weighted_foi(state, age, pmap, {"young": 0.7})
+    params = {"nu_young": 0.7}
+    a = np.asarray(parameterised.observe(0.0, y, params).captures["infection"].data)
+    b = np.asarray(literal.observe(0.0, y, {}).captures["infection"].data)
+    np.testing.assert_allclose(a, b)
+
+
+def test_infectiousness_params_scale_invariant_under_population_norm() -> None:
+    """One compiled model: a constant rescale of Param weights is a no-op."""
+    pytest.importorskip("jax")
+    state, age, pmap = _sir_age()
+    cm = _compile_weighted_foi(
+        state,
+        age,
+        pmap,
+        {"young": Param("nu_young"), "old": Param("nu_old")},
+        normalize="population",
+    )
+    y0 = np.array([900.0, 800.0, 50.0, 40.0, 50.0, 60.0])
+    plan = SavePlan(
+        requests={"comp": SaveRequest(Compartments())},
+        ts=np.linspace(0.0, 20.0, 21),
+    )
+    r1 = cm.run(
+        {"nu_young": 0.7, "nu_old": 1.4},
+        y0,
+        t0=0.0,
+        t1=20.0,
+        dt=0.1,
+        save=plan,
+        solver="euler",
+    )
+    r2 = cm.run(
+        {"nu_young": 1.4, "nu_old": 2.8},
+        y0,
+        t0=0.0,
+        t1=20.0,
+        dt=0.1,
+        save=plan,
+        solver="euler",
+    )
+    np.testing.assert_allclose(
+        np.asarray(r1["comp"].values.data),
+        np.asarray(r2["comp"].values.data),
+        atol=1e-10,
+    )
+
+
+def test_grad_infectiousness_param_finite() -> None:
+    """Identity mixing: doubling ``nu_young`` doubles that group's FOI; AD is finite."""
+    jax = pytest.importorskip("jax")
+    jnp = pytest.importorskip("jax.numpy")
+    state, age, pmap = _sir_age()
+    cm = _compile_weighted_foi(
+        state, age, pmap, {"young": Param("nu_young"), "old": Param("nu_old")}
+    )
+    y0 = jnp.asarray([900.0, 800.0, 50.0, 40.0, 50.0, 60.0])
+    base = {"nu_old": 1.4}
+    foi_lo = np.asarray(cm.observe(0.0, y0, {**base, "nu_young": 0.7}).captures["infection"].data)
+    foi_hi = np.asarray(cm.observe(0.0, y0, {**base, "nu_young": 1.4}).captures["infection"].data)
+    np.testing.assert_allclose(foi_hi[0], 2.0 * foi_lo[0])
+    np.testing.assert_allclose(foi_hi[1], foi_lo[1])
+
+    def loss(nu_young: object) -> object:
+        dy = cm.vector_field(0.0, y0, {"nu_young": nu_young, "nu_old": 1.4})
+        return jnp.sum(jnp.asarray(dy) ** 2)
+
+    value = jax.jit(loss)(0.7)
+    grad = jax.jit(jax.grad(loss))(0.7)
+    assert jnp.isfinite(value) and jnp.isfinite(grad)
+    assert float(grad) != 0.0
+
+
+def test_mixing_matrix_param_swaps_without_recompile() -> None:
+    """MixingMatrix FieldRef: homogeneous vs assortative K without a new compile."""
+    pytest.importorskip("jax")
+    state, age, pmap = _sir_age()
+    m = FlowModel(pmap)
+    foi = ForceOfInfection(
+        "infection",
+        infectious=state["I"],
+        group_by=age,
+        kind="frequency",
+        contact_rate=0.4,
+        mixing=MixingMatrix(age, Param("K"), normalize="none", check_reciprocal=False),
+    )
+    m.add_flow(TransitionFlow("inf", state["S"], state["I"], foi))
+    cm = m.compile()
+    y = np.array([900.0, 800.0, 80.0, 10.0, 0.0, 0.0])
+    homogeneous = np.asarray(
+        cm.observe(0.0, y, {"K": np.ones((2, 2)) / 2.0}).captures["infection"].data
+    )
+    assortative = np.asarray(
+        cm.observe(0.0, y, {"K": np.array([[0.9, 0.1], [0.1, 0.9]])}).captures["infection"].data
+    )
+    assert float(np.max(np.abs(homogeneous[0] - homogeneous[1]))) == 0.0
+    assert float(np.max(np.abs(assortative[0] - assortative[1]))) > 0.0
 
 
 def test_param_is_field_ref() -> None:

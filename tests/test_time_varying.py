@@ -18,6 +18,7 @@ from summer4 import (
     ExitFlow,
     FlowModel,
     Multiply,
+    Param,
     Property,
     PropertyData,
     PropertyMap,
@@ -190,6 +191,28 @@ def test_gaussian_pulse_peak() -> None:
     np.testing.assert_allclose(_rate_at(expr, 10.0), 5.0)
     half = 5.0 * np.exp(-0.5 * ((12.0 - 10.0) / 2.0) ** 2)
     np.testing.assert_allclose(_rate_at(expr, 12.0), half)
+
+
+def test_gaussian_pulse_width_param_matches_literal() -> None:
+    """width is as_rate'd: Param / derived_refs match a literal, and scale the shoulders."""
+
+    class Width(NamedTuple):
+        width: float
+
+    refs = derived_refs(Width)
+    literal = gaussian_pulse(Time(), centre=10.0, width=2.0, height=5.0)
+    via_refs = gaussian_pulse(Time(), centre=10.0, width=refs.width, height=5.0)
+    via_param = gaussian_pulse(Time(), centre=10.0, width=Param("width"), height=5.0)
+    params_nt = Width(width=2.0)
+    params_dict = {"width": 2.0}
+    for t in (8.0, 10.0, 12.0):
+        want = _rate_at(literal, t)
+        np.testing.assert_allclose(_rate_at(via_refs, t, params=params_nt), want)
+        np.testing.assert_allclose(_rate_at(via_param, t, params=params_dict), want)
+    # Wider pulse decays less far from the centre (peak itself is width-invariant).
+    narrow = _rate_at(via_param, 12.0, params={"width": 2.0})
+    wide = _rate_at(via_param, 12.0, params={"width": 4.0})
+    assert wide > narrow
 
 
 def test_interp_fieldref_knot_calibrates() -> None:

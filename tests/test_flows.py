@@ -15,6 +15,7 @@ from summer4 import (
     FlowRef,
     Multiply,
     Overwrite,
+    Param,
     Property,
     PropertyMap,
     Source,
@@ -531,6 +532,35 @@ def test_adjust_overwrite_where() -> None:
     dy = np.asarray(model.compile().vector_field(0.0, y, {}))
     np.testing.assert_allclose(dy[pm.select(state["S"] & age["0-4"])], 0.0)
     np.testing.assert_allclose(dy[pm.select(state["S"] & ~age["0-4"])], -0.2)
+
+
+def test_adjust_overwrite_param_matches_literal() -> None:
+    """Overwrite(Param / derived_refs) matches Overwrite(0.05) on the masked ages."""
+    pytest.importorskip("jax")
+    state, age, pm = _sir_age()
+    refs = derived_refs(_Cap)
+
+    def build(value: object) -> object:
+        model = FlowModel(pm)
+        model.add_flow(
+            TransitionFlow(
+                "inf",
+                state["S"],
+                state["I"],
+                0.2,
+                adjust=[Overwrite(value, where=age["0-4"])],
+            )
+        )
+        return model.compile()
+
+    y = np.ones(pm.size)
+    literal = np.asarray(build(0.05).vector_field(0.0, y, {}))
+    via_param = np.asarray(build(Param("foi_cap")).vector_field(0.0, y, {"foi_cap": 0.05}))
+    via_refs = np.asarray(build(refs.foi_cap).vector_field(0.0, y, _Cap(foi_cap=0.05)))
+    np.testing.assert_allclose(via_param, literal)
+    np.testing.assert_allclose(via_refs, literal)
+    np.testing.assert_allclose(literal[pm.select(state["S"] & age["0-4"])], -0.05)
+    np.testing.assert_allclose(literal[pm.select(state["S"] & ~age["0-4"])], -0.2)
 
 
 def test_adjust_transform_minimum() -> None:
