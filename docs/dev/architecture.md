@@ -95,3 +95,4 @@ notebook compiles a vector field at build time.
 | Value-compared frozen selectors | The per-map query cache is keyed by selector value, so equal queries built independently share work |
 | `PropertyMap` hashes by content digest | Equal rebuilt maps share a jit cache as static arguments |
 | `Present` / `Absent` are non-binding | Pairing binds `Trait` / `IsIn` only; `strict_pairing` guards leftover movement |
+| Compile / run-start / per-step staging | Parameter-only work and initial populations run once per `run`; see [run-stages](run-stages.md) |

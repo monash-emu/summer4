@@ -38,6 +38,10 @@ to run under **`jax.jit`** (and friends). NumPy remains fine for host-side index
 arithmetic and taxonomy code that must stay JAX-free at import time; it is not
 the default path for traced numerics going forward.
 
+Parameter work is staged (compile / run start / per step); see
+`docs/dev/run-stages.md`. Put `t`/`y`-independent computation in `prepare_fn`
+or a hoistable rate subtree, never in `derived_fn`.
+
 When changing or reviewing JAX-facing code (vector fields, `Trace` ops, save
 evaluation, losses):
 

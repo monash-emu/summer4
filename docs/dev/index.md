@@ -8,6 +8,7 @@ fits on top of the map.
 :maxdepth: 2
 
 architecture
+run-stages
 data-structures
 selector-evaluation
 performance
