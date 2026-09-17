@@ -45,7 +45,7 @@ reach, and it is the denominator for every percentage on this site.
 | L6 | `model.get_outputs_df()` | lifecycle | `full` | `Trace.to_frame` / `to_pandas` | Polars default; pandas optional |
 | L7 | `model.get_derived_outputs_df()` | lifecycle | `full` | `Result` traces via `SavePlan` | Flat named traces; no parallel df namespace |
 | S1 | `Stratification(name, strata)` | stratification | `full` | `Property + PropertyMap.stratify` |  |
-| S2 | `model.stratify_with()` | stratification | `full` | `PropertyMap.stratify` | Returns a new map; summer2 mutates |
+| S2 | `model.stratify_with()` | stratification | `full` | `PropertyMap.stratify` | `FlowModel.stratify` (in place, like summer2) or `PropertyMap.stratify` (new map) |
 | S3 | `Stratification(compartments=[...])` | stratification | `full` | `stratify(prop, where=selector)` | Generalised from names to a query |
 | S4 | `model.get_stratification()` | stratification | `full` | `PropertyMap.get_property / history` | History also records the where= selector |
 | S5 | `Compartment` | stratification | `partial` | `rows; labels(), to_dicts()` | No per-compartment object by design |
@@ -63,9 +63,9 @@ reach, and it is the denominator for every percentage on this site.
 | F6 | `add_importation_flow` | flows | `full` | `EntryFlow` | Absolute rate |
 | F7 | `add_infection_frequency_flow` | flows | `full` | `ForceOfInfection(kind="frequency")` | Same object as F8; kind selects frequency vs density |
 | F8 | `add_infection_density_flow` | flows | `full` | `ForceOfInfection(kind="density")` | Same object as F7; kind selects frequency vs density |
-| A1 | `Stratification.set_flow_adjustments` | adjustments | `full` | `adjust= with where=` | Flow-owned, deliberately not on Stratification |
+| A1 | `Stratification.set_flow_adjustments` | adjustments | `full` | `adjust= with where=` | Flow-owned, deliberately not on Stratification; `adjust_flow` after `stratify`; `Source`/`Dest` where |
 | A2 | `Multiply` | adjustments | `full` | `Multiply` | Default for a bare value in adjust= |
-| A3 | `Overwrite` | adjustments | `full` | `Overwrite` | Supports where=Selector |
+| A3 | `Overwrite` | adjustments | `full` | `Overwrite` | Supports where=Selector; precedence levels (summer2 applies in stratification order) |
 | A4 | `Stratification.add_infectiousness_adjustments` | adjustments | `full` | `ForceOfInfection(infectiousness=...)` | FOI-owned, deliberately not on Stratification (as A1) |
 | M1 | `Stratification.set_mixing_matrix` | mixing | `full` | `summer4.epi.MixingMatrix` | Weights transmission; `TraitMatrix` still moves people |
 | P1 | `Parameter` | parameters | `full` | `FieldRef via derived_refs` | Schema-checked, IDE-completable |

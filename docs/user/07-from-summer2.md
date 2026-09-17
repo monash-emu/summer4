@@ -45,9 +45,12 @@ model.stratify_with(strat)
 ```
 
 ```python
-# summer4
+# summer4 — map first
 age = Property("age", ("0-4", "5-9", "10+"))
 pmap = pmap.stratify(age)
+
+# summer4 — or stratify the model after declaring flows (like stratify_with)
+model.stratify(age)
 ```
 
 The summer2 `compartments=` argument restricts a stratification to named
@@ -59,10 +62,20 @@ Stratification("severity", ["mild", "severe"], compartments=["I"])
 
 # summer4: any query, including across several axes
 pmap.stratify(severity, where=state["I"] & age["10+"])
+# or: model.stratify(severity, where=state["I"] & age["10+"])
 ```
 
-Note that `stratify` **returns a new map** — summer2's `stratify_with` mutates
-the model in place.
+`PropertyMap.stratify` **returns a new map**. `FlowModel.stratify` mutates the
+model in place like summer2's `stratify_with`, and declared flows re-resolve
+when you `compile()`.
+
+### Adjustments after stratifying
+
+summer2 applies flow adjustments in **stratification order** (later
+stratifications overwrite earlier ones where they overlap). summer4 orders
+adjustments by **precedence level** (`Overwrite` → `Multiply` → `Transform`),
+independent of when you declared them. Pass `precedence=` on an adjustment to
+reproduce "later overwrite wins".
 
 ### Finding compartments
 

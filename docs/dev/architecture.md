@@ -53,10 +53,15 @@ name and a strata dictionary, and where compartment lookup is string matching.
 `PropertyMap.stratify(prop, where=sel)` returns a new map. The old map remains
 valid and queryable. Two consequences matter for the layers above:
 
-- A model's compartment space can be built as an expression, branched, and
-  compared, without a mutable builder object.
+- A compartment space can be built as an expression, branched, and compared.
+  `FlowModel` is the mutable builder that holds flows against a map; call
+  `copy()` before stratifying it different ways.
 - Every map carries the full `history` of `Stratification` values that produced
   it, so the construction is replayable and auditable.
+
+Joins are late-bound at `compile()`, which is why `FlowModel.stratify` needs no
+flow rewriting: the same declarations actualize against the new map.
+Adjustments are canonicalised by precedence level in `actualize`.
 
 ### 3. Queries are a three-valued algebra, not a dictionary
 

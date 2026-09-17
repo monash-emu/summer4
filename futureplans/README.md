@@ -31,6 +31,9 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
   `Trace.plot` hardcodes matplotlib and forwards backend-specific kwargs.
 - [`foi-unstratified-dummy-pop.md`](foi-unstratified-dummy-pop.md) —
   unstratified FOI still needs a singleton `pop` property + `[[1.0]]` matrix.
+- [`foi-multi-property-mixing.md`](foi-multi-property-mixing.md) —
+  `ForceOfInfection.group_by` is one property; multi-axis mixing is homogeneous
+  after further `stratify`.
 - [`foi-susceptibility-surface.md`](foi-susceptibility-surface.md) —
   infectiousness has `ForceOfInfection(infectiousness=...)`; susceptibility does not.
 - [`next-generation-matrix-r0.md`](next-generation-matrix-r0.md) —
