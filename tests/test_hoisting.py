@@ -25,8 +25,9 @@ from summer4 import (  # noqa: E402
     SaveRequest,
     Time,
     Transform,
+    TransitionFlow,
 )
-from summer4.epi import EpiModel  # noqa: E402
+from summer4.epi import ForceOfInfection, MixingMatrix  # noqa: E402
 from summer4.flows.rates import (  # noqa: E402
     ArrayConst,
     BinOp,
@@ -190,13 +191,28 @@ def test_epi_unaffected_by_hoist() -> None:
     age = Property("age", ("young", "old"))
     pmap = PropertyMap.from_property(state).stratify(age)
     K = np.eye(2)
+    infectious = state["I"]
+    mixing = MixingMatrix(age, K, check_reciprocal=False)
 
     def build(*, hoist: bool) -> Any:
-        epi = EpiModel(pmap, infectious=state["I"])
-        epi.set_mixing_matrix(age, K, check_reciprocal=False)
-        epi.add_infection_frequency_flow("infection", state["S"], state["I"], Param("beta"))
-        epi.add_transition_flow("recovery", state["I"], state["R"], 0.1)
-        return epi.compile(hoist=hoist)
+        m = FlowModel(pmap)
+        m.add_flow(
+            TransitionFlow(
+                "infection",
+                state["S"],
+                state["I"],
+                ForceOfInfection(
+                    "infection",
+                    infectious=infectious,
+                    group_by=mixing.prop,
+                    mixing=mixing,
+                    kind="frequency",
+                    contact_rate=Param("beta"),
+                ),
+            )
+        )
+        m.add_flow(TransitionFlow("recovery", state["I"], state["R"], 0.1))
+        return m.compile(hoist=hoist)
 
     cm_on = build(hoist=True)
     cm_off = build(hoist=False)

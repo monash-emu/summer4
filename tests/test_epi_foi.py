@@ -323,3 +323,12 @@ def test_infectiousness_wrong_property_raises() -> None:
             group_by=age,
             infectiousness={loc["north"]: 1.0},
         )
+
+
+def test_param_is_field_ref() -> None:
+    from summer4.flows.rates import FieldRef
+    from summer4.epi import Param
+
+    p = Param("beta")
+    assert isinstance(p, FieldRef)
+    assert p.path == ("beta",)

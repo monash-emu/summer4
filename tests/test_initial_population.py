@@ -28,7 +28,6 @@ from summer4 import (  # noqa: E402
     Split,
     Time,
 )
-from summer4.epi import EpiModel  # noqa: E402
 
 
 def _age_state_infect_map() -> tuple[Property, Property, Property, PropertyMap]:
@@ -396,18 +395,6 @@ def test_model_wiring() -> None:
     both.set_initial_population(pop)
     with pytest.raises(ValueError, match="twice"):
         both.compile(init=pop)
-
-    epi = EpiModel(pmap)
-    epi.add_transition_flow("noop", state["Y"], state["Y"], 0.0)
-    epi.set_initial_population({state["Y"]: 7.0})
-    flow = FlowModel(pmap)
-    flow.add_flow(
-        __import__("summer4", fromlist=["TransitionFlow"]).TransitionFlow(
-            "noop", state["Y"], state["Y"], 0.0
-        )
-    )
-    flow.set_initial_population({state["Y"]: 7.0})
-    assert epi.compile() == flow.compile()
 
 
 def test_under_jit() -> None:

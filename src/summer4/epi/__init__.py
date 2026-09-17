@@ -2,11 +2,9 @@
 
 from summer4.epi.infection import ForceOfInfection
 from summer4.epi.mixing import MixingMatrix
-from summer4.epi.model import EpiModel
 from summer4.flows.rates import Param
 
 __all__ = [
-    "EpiModel",
     "ForceOfInfection",
     "MixingMatrix",
     "Param",
