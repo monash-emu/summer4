@@ -25,7 +25,7 @@ case data.*
 | Stratify by age | Works |
 | Add severity only to the infectious | Works, and better than summer2 |
 | Set the initial population | **Blocked** — build `y0` by hand with `select` |
-| Add infection, progression, recovery flows | Works (`EpiModel` / `ForceOfInfection`; progression via `TransitionFlow`) |
+| Add infection, progression, recovery flows | Works (`ForceOfInfection` + `TransitionFlow`) |
 | Run the model | Works — `CompiledModel.run` returns a `Result` trajectory |
 | Request incidence by age | Works — `FlowMass` / `Trace` edge queries |
 | Plot | Works — `Trace.to_pandas()` then Plotly (pandas plotting backend) |

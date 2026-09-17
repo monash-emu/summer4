@@ -64,9 +64,8 @@ rebuilt maps share a hash and work as `jax.jit` static arguments.
 
 ### 2.1 Force of infection
 
-**State:** **done** (WP6). `ForceOfInfection(kind="frequency"|"density")` and
-`EpiModel.add_infection_*_flow` (F7, F8 `full`). Example:
-`examples/notebooks/09-epi-models.ipynb`.
+**State:** **done** (WP6). `ForceOfInfection(kind="frequency"|"density")`
+(F7, F8 `full`). Example: `examples/notebooks/09-epi-models.ipynb`.
 
 ### 2.2 Mixing matrices
 
@@ -78,8 +77,7 @@ by WP3's population split (port on this stack).
 ### 2.3 Infectiousness and susceptibility adjustments
 
 **State:** **infectiousness done** (A4 `full`) via
-`ForceOfInfection(infectiousness=...)` /
-`EpiModel.add_infectiousness_adjustments`. **Susceptibility still open** —
+`ForceOfInfection(infectiousness=...)`. **Susceptibility still open** —
 there is no FOI surface symmetric to infectiousness; chapter 15 is therefore
 `partial` and scales susceptibility via flow `adjust=` or matrix row scaling.
 See `futureplans/foi-susceptibility-surface.md`.

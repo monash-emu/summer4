@@ -29,10 +29,10 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
   series.
 - [`trace-plot-backend-coupling.md`](trace-plot-backend-coupling.md) —
   `Trace.plot` hardcodes matplotlib and forwards backend-specific kwargs.
-- [`epimodel-unstratified-dummy-pop.md`](epimodel-unstratified-dummy-pop.md) —
+- [`foi-unstratified-dummy-pop.md`](foi-unstratified-dummy-pop.md) —
   unstratified FOI still needs a singleton `pop` property + `[[1.0]]` matrix.
 - [`foi-susceptibility-surface.md`](foi-susceptibility-surface.md) —
-  infectiousness has `add_infectiousness_adjustments`; susceptibility does not.
+  infectiousness has `ForceOfInfection(infectiousness=...)`; susceptibility does not.
 - [`next-generation-matrix-r0.md`](next-generation-matrix-r0.md) —
   unstratified $R_t$ is ported; no next-generation-matrix / spectral $R_0$ helper.
 - [`propertydata-dense-unstack.md`](propertydata-dense-unstack.md) — opt-in

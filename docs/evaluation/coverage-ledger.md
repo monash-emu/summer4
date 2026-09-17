@@ -61,8 +61,8 @@ reach, and it is the denominator for every percentage on this site.
 | F4 | `add_crude_birth_flow` | flows | `full` | `EntryFlow` | Absolute rate from a derived total |
 | F5 | `add_replacement_birth_flow` | flows | `full` | `EntryFlow(dest, death.sum_over(...))` |  |
 | F6 | `add_importation_flow` | flows | `full` | `EntryFlow` | Absolute rate |
-| F7 | `add_infection_frequency_flow` | flows | `full` | `ForceOfInfection(kind="frequency")` / `EpiModel.add_infection_frequency_flow` | Same object as F8; kind selects frequency vs density |
-| F8 | `add_infection_density_flow` | flows | `full` | `ForceOfInfection(kind="density")` / `EpiModel.add_infection_density_flow` | Same object as F7; kind selects frequency vs density |
+| F7 | `add_infection_frequency_flow` | flows | `full` | `ForceOfInfection(kind="frequency")` | Same object as F8; kind selects frequency vs density |
+| F8 | `add_infection_density_flow` | flows | `full` | `ForceOfInfection(kind="density")` | Same object as F7; kind selects frequency vs density |
 | A1 | `Stratification.set_flow_adjustments` | adjustments | `full` | `adjust= with where=` | Flow-owned, deliberately not on Stratification |
 | A2 | `Multiply` | adjustments | `full` | `Multiply` | Default for a bare value in adjust= |
 | A3 | `Overwrite` | adjustments | `full` | `Overwrite` | Supports where=Selector |
@@ -201,7 +201,7 @@ package closes is recorded, by row ID, in {doc}`tb-ports`.
 | --- | --- | --- | --- |
 | WP3 | Initial population | `plans/initial-population.plan.md` | **Applied.** |
 | WP5 | Time-varying function library | `plans/time-varying.plan.md` (5.1–5.5) | **Applied.** `Time()`, `summer4.timevarying`, `summer4.data`, summer2 time-varying page |
-| WP6 | Force of infection and mixing | `plans/epi-infection-mixing.plan.md` (6.1–6.6) | **Applied.** `GroupedRate`, `Reduce`, `summer4.epi` (`MixingMatrix`, `ForceOfInfection`, `EpiModel`) |
+| WP6 | Force of infection and mixing | `plans/epi-infection-mixing.plan.md` (6.1–6.6) | **Applied.** `GroupedRate`, `Reduce`, `summer4.epi` (`MixingMatrix`, `ForceOfInfection`, `EpiModel`) (`EpiModel` later removed: `plans/remove-epimodel.plan.md`) |
 | — | Textbook / docs catch-up | `plans/textbook-catchup.plan.md` (C1–C4) | **Applied.** Ports for unblocked chapters and summer2 pages; evaluation prose refresh |
 | WP9 | Contact survey data | Ledger paragraph only | Depends on WP6; loading, validating and scaling empirical matrices |
 | WP10 | Calibration | `plans/tb-ports-feature-completeness.plan.md` | Settled there: priors, likelihoods on `Target`, numpyro samplers (NUTS and gradient-free ensemble), MAP, posterior runs; lives in `summer4.epi` |
@@ -291,7 +291,8 @@ Plan phase: `feat/flow-outputs`.
 
 `GroupedRate` and `Reduce` in core; `summer4.epi` ships `MixingMatrix`,
 `ForceOfInfection` (frequency / density / custom), infectiousness weights,
-`per_trait` multi-strain FOIs, and an `EpiModel` frontend. Example notebook:
+`per_trait` multi-strain FOIs, and an `EpiModel` frontend. (`EpiModel` later
+removed: `plans/remove-epimodel.plan.md`) Example notebook:
 `examples/notebooks/09-epi-models.ipynb`. `TraitMatrix` remains people-movement,
 not transmission weighting.
 

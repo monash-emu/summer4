@@ -32,8 +32,9 @@ pmap = PropertyMap.from_property(state)
 
 There is no `infectious_compartments` argument on the map constructor.
 Infectious compartments are named when you build a force of infection in
-`summer4.epi` (`ForceOfInfection` / `EpiModel`) — typically a selector such as
-`state["I"]`, not a constructor list.
+`summer4.epi` (`ForceOfInfection`) — typically a selector such as
+`state["I"]`, not a constructor list. summer2's `add_infection_*_flow`
+becomes a `TransitionFlow` whose rate is a `ForceOfInfection`.
 
 ### Stratifying
 

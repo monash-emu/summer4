@@ -66,8 +66,7 @@ absence. Flow-edge queries use the same algebra, polarity-wrapped.
 
 `TransitionFlow`, `ExitFlow` and `EntryFlow` cover transition, death, universal
 death, crude birth, replacement birth and importation. Infection frequency and
-density are `ForceOfInfection(kind="frequency"|"density")` (F7, F8 `full`),
-also via `EpiModel.add_infection_*_flow`.
+density are `ForceOfInfection(kind="frequency"|"density")` (F7, F8 `full`).
 
 ### Flow adjustments — 4 of 4
 
@@ -137,7 +136,7 @@ The remaining API gaps are five deliberate shape mismatches that never reach
 | Edge queries | **Implemented** | `EdgeMap`, `Source` / `Dest` |
 | Compiled model + fixed-step integrator | **Implemented** | `CompiledModel`, `euler` |
 | Adaptive solver seam (diffrax) | **Implemented** | `solver=` name or diffrax instance |
-| Force of infection / mixing | **Implemented** | `summer4.epi` (`ForceOfInfection`, `MixingMatrix`, `EpiModel`) |
+| Force of infection / mixing | **Implemented** | `summer4.epi` (`ForceOfInfection`, `MixingMatrix`) |
 | Derived outputs and results | **Implemented** | `Result`, `Trace`, `SavePlan`, `FlowMass` |
 | Real-world time | **Implemented** | `Epoch`, `TimeAxis` |
 | Time-varying rates / dated data | **Implemented** | `summer4.timevarying`, `summer4.data` |

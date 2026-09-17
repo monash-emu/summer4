@@ -18,7 +18,7 @@ Noticed during the textbook catch-up sweep (`plans/textbook-catchup.plan.md`).
 
 ## Done looks like
 
-A documented, tested function (or `EpiModel` method) that returns $R_0$ (and
+A documented, tested function that returns $R_0$ (and
 optionally per-group contributions) from the compiled infection structure for
 at least the frequency-dependent SIR/SEIR case with a mixing matrix — without
 requiring the user to assemble the NGM by hand in NumPy.
