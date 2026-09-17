@@ -16,6 +16,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 LEDGER = ROOT / "docs" / "evaluation" / "coverage-ledger.md"
+PORTS = ROOT / "docs" / "evaluation" / "tb-ports.md"
 
 STATUSES = ("full", "partial", "none")
 
@@ -76,7 +77,7 @@ def _strip(cell: str) -> str:
     return cell.strip().strip("`").strip()
 
 
-def read_block(text: str, name: str) -> list[list[str]]:
+def read_block(text: str, name: str, source: Path = LEDGER) -> list[list[str]]:
     """Return the data rows of the fenced ledger table called ``name``."""
     match = re.search(
         rf"<!-- ledger:{name} -->(.*?)<!-- /ledger:{name} -->",
@@ -84,7 +85,7 @@ def read_block(text: str, name: str) -> list[list[str]]:
         re.S,
     )
     if match is None:
-        raise ValueError(f"Ledger block {name!r} not found in {LEDGER}.")
+        raise ValueError(f"Ledger block {name!r} not found in {source}.")
     rows: list[list[str]] = []
     for line in match.group(1).strip().splitlines():
         line = line.strip()
@@ -163,6 +164,106 @@ def update_progression(text: str) -> str:
         text,
         flags=re.S,
     )
+
+
+PORTS_STATUS_COLUMN = 3
+PORT_MODELS = ("Kiribati", "tb_macro")
+_NO_PACKAGE = {"", "—", "-", "–"}
+
+
+def read_ports(ports_text: str, ledger_text: str) -> list[list[str]]:
+    """Validated rows of the TB ports table.
+
+    A ``full`` row names no closing package; any other row names exactly one
+    package that is declared in the ledger and listed in the port order.
+    """
+    rows = read_block(ports_text, "ports", PORTS)
+    declared = {pkg_id for pkg_id, _name, _closes in read_packages(ledger_text)}
+    ordered = set(port_order(ports_text))
+    tally(rows, PORTS_STATUS_COLUMN)
+    seen: set[str] = set()
+    for row in rows:
+        if len(row) != 6:
+            raise ValueError(f"Ports row {row[0]!r} has {len(row)} cells, expected 6.")
+        row_id, model, status, closed_by = row[0], row[1], row[3], row[5]
+        if not re.fullmatch(r"(KI|TM)\d+", row_id):
+            raise ValueError(f"Ports row ID {row_id!r} must look like KI1 or TM1.")
+        if row_id in seen:
+            raise ValueError(f"Duplicate ports row ID {row_id!r}.")
+        seen.add(row_id)
+        if model not in PORT_MODELS:
+            raise ValueError(f"Ports row {row_id!r} has unknown model {model!r}.")
+        if status == "full":
+            if closed_by not in _NO_PACKAGE:
+                raise ValueError(f"Ports row {row_id!r} is full but names {closed_by!r}.")
+            continue
+        if closed_by not in declared:
+            raise ValueError(f"Ports row {row_id!r} is closed by undeclared package {closed_by!r}.")
+        if closed_by not in ordered:
+            raise ValueError(f"Ports row {row_id!r} names {closed_by!r}, absent from port order.")
+    return rows
+
+
+def port_order(ports_text: str) -> list[str]:
+    """Work packages in the order the feature plan lands them."""
+    return [row[1] for row in read_block(ports_text, "port-order", PORTS)]
+
+
+def port_readiness(
+    ports_text: str, ledger_text: str
+) -> list[tuple[str, dict[str, tuple[int, int]]]]:
+    """``(label, {model: (full, total)})`` today and after each ordered package."""
+    rows = read_ports(ports_text, ledger_text)
+    state = {row[0]: (row[1], row[3], row[5]) for row in rows}
+
+    def snapshot() -> dict[str, tuple[int, int]]:
+        counts: dict[str, tuple[int, int]] = {}
+        for model in PORT_MODELS:
+            model_rows = [status for m, status, _pkg in state.values() if m == model]
+            counts[model] = (sum(s == "full" for s in model_rows), len(model_rows))
+        return counts
+
+    result = [("today", snapshot())]
+    for pkg_id in port_order(ports_text):
+        for row_id, (model, _status, closed_by) in state.items():
+            if closed_by == pkg_id:
+                state[row_id] = (model, "full", closed_by)
+        result.append((pkg_id, snapshot()))
+    return result
+
+
+def render_port_readiness(ports_text: str, ledger_text: str) -> str:
+    """Markdown for the computed port readiness table."""
+    lines = [
+        "| After | " + " | ".join(PORT_MODELS) + " |",
+        "| --- |" + " --- |" * len(PORT_MODELS),
+    ]
+    for label, counts in port_readiness(ports_text, ledger_text):
+        cells = [f"{full} / {total}" for full, total in (counts[m] for m in PORT_MODELS)]
+        lines.append(f"| {label} | " + " | ".join(cells) + " |")
+    return "\n".join(lines)
+
+
+def update_port_readiness(ports_text: str, ledger_text: str) -> str:
+    """Rewrite the computed port readiness block in place."""
+    return re.sub(
+        r"(<!-- ledger:port-readiness -->)(.*?)(<!-- /ledger:port-readiness -->)",
+        lambda m: f"{m.group(1)}\n{render_port_readiness(ports_text, ledger_text)}\n{m.group(3)}",
+        ports_text,
+        flags=re.S,
+    )
+
+
+def stale_port_quotes(ports_text: str, ledger_text: str) -> list[str]:
+    """Expected ``<model> rows complete today: **N of M**`` phrases that are missing."""
+    _label, today = port_readiness(ports_text, ledger_text)[0]
+    missing = []
+    for model in PORT_MODELS:
+        full, total = today[model]
+        phrase = f"{model} rows complete today: **{full} of {total}**"
+        if phrase not in ports_text:
+            missing.append(phrase)
+    return missing
 
 
 def render(text: str) -> str:
@@ -259,7 +360,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--write",
         action="store_true",
-        help="Regenerate the computed progression block in the ledger.",
+        help="Regenerate the computed progression and port readiness blocks.",
     )
     parser.add_argument(
         "--check",
@@ -269,10 +370,14 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     text = LEDGER.read_text(encoding="utf-8")
+    ports_text = PORTS.read_text(encoding="utf-8")
     if args.write:
         LEDGER.write_text(update_progression(text), encoding="utf-8")
         text = LEDGER.read_text(encoding="utf-8")
         print(f"Rewrote the progression block in {LEDGER}.")
+        PORTS.write_text(update_port_readiness(ports_text, text), encoding="utf-8")
+        ports_text = PORTS.read_text(encoding="utf-8")
+        print(f"Rewrote the port readiness block in {PORTS}.")
     report = render(text)
     if not args.check:
         print(report)
@@ -283,6 +388,19 @@ def main(argv: list[str] | None = None) -> int:
             "The progression table is stale. Run: pixi run coverage-write",
             file=sys.stderr,
         )
+        return 1
+
+    if update_port_readiness(ports_text, text) != ports_text:
+        print(
+            f"The port readiness table in {PORTS} is stale. Run: pixi run coverage-write",
+            file=sys.stderr,
+        )
+        return 1
+    stale_quotes = stale_port_quotes(ports_text, text)
+    if stale_quotes:
+        print(f"{PORTS} quotes stale totals; expected to find:", file=sys.stderr)
+        for phrase in stale_quotes:
+            print(f"  {phrase}", file=sys.stderr)
         return 1
 
     docs_root = ROOT / "docs"

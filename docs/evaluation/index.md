@@ -11,6 +11,7 @@ feature-completeness
 docs-coverage
 user-satisfaction
 age-stratified-seirs-case-study
+tb-ports
 gaps
 ```
 
@@ -25,7 +26,7 @@ gaps
 | summer2 documentation notebooks reproducible as runnable summer4 | **8 of 11** (2 more partially) |
 | summer textbook chapters reproducible as runnable summer4 | **12 of 20** (2 more partially) |
 | Implemented layers of the intended stack | taxonomy + flows + results + epi + timevarying |
-| Ceiling of the planned roadmap (WP2–WP11) | 47 of 52 (90%) — see {doc}`coverage-ledger` |
+| Ceiling of the planned roadmap (WP2–WP16) | 47 of 52 (90%) — see {doc}`coverage-ledger` |
 
 summer4 ships a compartment taxonomy, flows, results, epidemiology
 (`summer4.epi`), and time-varying rates (`summer4.timevarying` /
@@ -55,4 +56,7 @@ chapters 16–19), and WP10 (Bayesian calibration — chapter 20).
   end to end and reports what it cost, requirement by requirement, against the
   ledger. It is the only page here whose claims come from building the thing
   rather than from reading the API.
+- {doc}`tb-ports` asks whether two existing tuberculosis models (Kiribati on
+  summer2gen, tb_macro on summer3wip) can be built in summer4, row by row, and
+  which work package closes each gap. It is machine-checked like the ledger.
 - {doc}`gaps` collects the blockers in priority order.

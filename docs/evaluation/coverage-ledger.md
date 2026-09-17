@@ -81,7 +81,7 @@ reach, and it is the denominator for every percentage on this site.
 | D2 | `request_output_for_compartments` | outputs | `full` | `Compartments(where=)` / `Trace.select` |  |
 | D3 | `request_aggregate_output` | outputs | `full` | `Trace.sum_over` / `total` / `partition` |  |
 | D4 | `request_cumulative_output` | outputs | `full` | `Trace.cumulative()` |  |
-| D5 | `request_function_output` | outputs | `full` | `SaveFn` plus trace arithmetic |  |
+| D5 | `request_function_output` | outputs | `full` | `SaveFn`; arithmetic on `Trace.values` | `Trace` has no operators yet; they arrive in WP15 |
 | D6 | `request_computed_value_output` | outputs | `full` | `ComputedValue` | Path validated against `derived_fn` return schema |
 | D7 | `request_track_modelled_value` | outputs | `full` | `ComputedValue` | Same capture path as D6 |
 | D8 | `add_computed_value_func` | outputs | `full` | `derived_fn hook` | compute_derived_params runs every step |
@@ -185,21 +185,30 @@ awaits WP3), the summer2 pages under `docs/summer2/`, and
 WP5, WP6 and the textbook catch-up sweep
 (`plans/textbook-catchup.plan.md`) are **applied** on this stack.
 
-**WP3, WP9 and WP10 still have no detailed plan.** What exists for each is its
-paragraph in *The path to 100%* above and one line in the
-*Remaining to the 46/52 ceiling* section of
-`plans/flows-derived-outputs.plan.md`. That is a scope statement, not a plan:
-none of them names modules, types, tests or a notebook, which is what the
-landed phases each had before they were built.
+**WP9 still has no detailed plan.** What exists is its paragraph in *The path
+to 100%* above and one line in the *Remaining to the 46/52 ceiling* section of
+`plans/flows-derived-outputs.plan.md`. That is a scope statement, not a plan: it
+names no modules, types, tests or notebook, which is what the landed phases each
+had before they were built.
+
+WP3 and WP10, and the new WP12–WP16, are planned in
+`plans/tb-ports-feature-completeness.plan.md`. That plan exists to make two
+tuberculosis models portable to summer4; which of their capabilities each
+package closes is recorded, by row ID, in {doc}`tb-ports`.
 
 | WP | Name | Planning artifact | What a plan must still settle |
 | --- | --- | --- | --- |
-| WP3 | Initial population | Ledger paragraph only | Whether `set_initial_population` is a `FlowModel` method or a free function over `parent_row`; how a split interacts with `stratify(where=)` on ragged maps |
+| WP3 | Initial population | `plans/tb-ports-feature-completeness.plan.md` | Settled there: a declarative `InitialPopulation` with `FlowModel.set_initial_population` as equal-digest sugar; ragged-aware even default |
 | WP5 | Time-varying function library | `plans/time-varying.plan.md` (5.1–5.5) | **Applied.** `Time()`, `summer4.timevarying`, `summer4.data`, summer2 time-varying page |
 | WP6 | Force of infection and mixing | `plans/epi-infection-mixing.plan.md` (6.1–6.6) | **Applied.** `GroupedRate`, `Reduce`, `summer4.epi` (`MixingMatrix`, `ForceOfInfection`, `EpiModel`) |
 | — | Textbook / docs catch-up | `plans/textbook-catchup.plan.md` (C1–C4) | **Applied.** Ports for unblocked chapters and summer2 pages; evaluation prose refresh |
 | WP9 | Contact survey data | Ledger paragraph only | Depends on WP6; loading, validating and scaling empirical matrices |
-| WP10 | Calibration | Ledger paragraph only | The numpyro/optax workflow over `TargetSet`; probabilistic likelihoods were deliberately left out of WP11 |
+| WP10 | Calibration | `plans/tb-ports-feature-completeness.plan.md` | Settled there: priors, likelihoods on `Target`, numpyro samplers (NUTS and gradient-free ensemble), MAP, posterior runs; lives in `summer4.epi` |
+| WP12 | Pinnable release | `plans/tb-ports-feature-completeness.plan.md` | Merge the stack to `main` and tag, so downstream repos pin a release |
+| WP13 | Rate-tree math and tabular time series | `plans/tb-ports-feature-completeness.plan.md` | Math nodes, vector-valued table interpolation, `Lookup`, ageing sugar |
+| WP14 | Generalised force of infection | `plans/tb-ports-feature-completeness.plan.md` | `kind="generalised"` with an exponent; compartment-level infectiousness |
+| WP15 | Output algebra | `plans/tb-ports-feature-completeness.plan.md` | `Trace` operators, windowed cumulative, multi-flow outputs, `OutputSet`, frames |
+| WP16 | Scale and solver safety | `plans/tb-ports-feature-completeness.plan.md` | TB-scale benchmark, surfaced `max_steps` failure, vmap-safe reciprocity check |
 
 WP5 lands before WP6, and before WP3, because every other part of a model may be
 parameterised in a time-varying fashion. WP6 is then the ordering constraint for
@@ -298,6 +307,19 @@ A Bayesian workflow over JAX-differentiable models. `numpyro` and `optax` are
 declared extras; `optax` is exercised by sparse-target fits (WP11). Depends on
 everything above, including WP11's declarative targets.
 
+### WP12–WP16 — Packages for the TB model ports
+
+**Closes:** *(no API rows)* · **Unblocks:** the Kiribati and tb_macro ports;
+see {doc}`tb-ports` for the rows each closes and the computed readiness after each.
+
+WP12 tags a pinnable release. WP13 adds math nodes (`Pow`, `Log`, `Maximum`, …),
+vector-valued table interpolation and a `Lookup` node. WP14 adds a generalised
+force of infection with a calibratable exponent and compartment-level
+infectiousness. WP15 adds output algebra: `Trace` operators, a windowed
+`cumulative`, multi-flow `FlowMass`, and named output sets to frames. WP16
+benchmarks a TB-scale model and makes solver failure visible. Plan:
+`plans/tb-ports-feature-completeness.plan.md`.
+
 ### WP11 — Sparse outputs and calibration targets (applied)
 
 **Closes:** *(no API rows)* · **Unblocks:** WP10 / textbook 20
@@ -324,6 +346,11 @@ table below is **computed** from these declarations by
 | WP9 | Contact survey data | *(no API rows; unblocks textbook 16-19)* |
 | WP10 | Calibration | *(no API rows; unblocks textbook 20)* |
 | WP11 | Sparse outputs and calibration targets | *(no API rows; unblocks WP10 / textbook 20)* |
+| WP12 | Pinnable release | *(no API rows; unblocks the TB ports)* |
+| WP13 | Rate-tree math and tabular time series | *(no API rows; unblocks the TB ports)* |
+| WP14 | Generalised force of infection | *(no API rows; unblocks the TB ports)* |
+| WP15 | Output algebra | *(no API rows; unblocks the TB ports)* |
+| WP16 | Scale and solver safety | *(no API rows; unblocks the TB ports)* |
 <!-- /ledger:packages -->
 
 ## Coverage after each package
@@ -341,6 +368,11 @@ table below is **computed** from these declarations by
 | WP9 | 47 / 52 | 90% |
 | WP10 | 47 / 52 | 90% |
 | WP11 | 47 / 52 | 90% |
+| WP12 | 47 / 52 | 90% |
+| WP13 | 47 / 52 | 90% |
+| WP14 | 47 / 52 | 90% |
+| WP15 | 47 / 52 | 90% |
+| WP16 | 47 / 52 | 90% |
 <!-- /ledger:progression -->
 
 ## What never reaches `full`, and why that is fine

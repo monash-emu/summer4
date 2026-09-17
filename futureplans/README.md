@@ -35,3 +35,6 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
   infectiousness has `add_infectiousness_adjustments`; susceptibility does not.
 - [`next-generation-matrix-r0.md`](next-generation-matrix-r0.md) —
   unstratified $R_t$ is ported; no next-generation-matrix / spectral $R_0$ helper.
+- [`propertydata-dense-unstack.md`](propertydata-dense-unstack.md) — opt-in
+  reshape of a dense Cartesian `PropertyMap` from a flat last axis to
+  `(age × state × …)` (not first-class multi-axis `PropertyData`).
