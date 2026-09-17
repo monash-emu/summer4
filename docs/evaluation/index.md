@@ -19,21 +19,23 @@ gaps
 | Measure | Result |
 |---|---|
 | Public API symbols | 44 |
-| Package source | taxonomy (NumPy) plus `summer4.flows`, `summer4.jax`, and `summer4.epi` |
+| Package source | taxonomy (NumPy) plus `summer4.flows`, `summer4.jax`, `summer4.epi`, and `summer4.timevarying` |
 | summer2 API surface exercised by its own docs, complete in summer4 | **44 of 52 (85%)** |
 | … with any working route (complete or partial) | 49 of 52 (94%) |
-| summer2 documentation notebooks reproducible as runnable summer4 | **2 of 11** (7 partially) |
-| summer textbook chapters reproducible as runnable summer4 | **7 of 20** (4 more partially) |
-| Implemented layers of the intended stack | taxonomy + flows + results |
+| summer2 documentation notebooks reproducible as runnable summer4 | **8 of 11** (2 more partially) |
+| summer textbook chapters reproducible as runnable summer4 | **12 of 20** (2 more partially) |
+| Implemented layers of the intended stack | taxonomy + flows + results + epi + timevarying |
 | Ceiling of the planned roadmap (WP2–WP11) | 47 of 52 (90%) — see {doc}`coverage-ledger` |
 
-summer4 ships a compartment taxonomy, a flows layer, and a results layer:
-declare a map, attach named flows, compile to a `CompiledModel`, and
-`run()` to a queryable `Result` with selectable Euler or adaptive
-diffrax solvers. Flow-output polarity queries (`side=`, incidence) and
-sparse calibration targets (`Target` / `TargetSet`) are available;
-textbook ports for derived-output chapters and a Bayesian calibration
-workflow remain.
+summer4 ships a compartment taxonomy, flows, results, epidemiology
+(`summer4.epi`), and time-varying rates (`summer4.timevarying` /
+`summer4.data`). Declare a map, attach named flows (including infection and
+mixing), compile to a `CompiledModel`, and `run()` to a queryable `Result`
+with selectable Euler or adaptive diffrax solvers. What remains is mainly
+WP3 (initial population / population split — chapters 2 and 13, summer2
+`01` / `07` / `InitialPopulationGraphobject`), a first-class FOI
+susceptibility surface (chapter 15 partial), WP9 (contact-survey data —
+chapters 16–19), and WP10 (Bayesian calibration — chapter 20).
 
 ## How to read this section
 

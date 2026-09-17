@@ -29,8 +29,8 @@ mapping. Initial-population split remains a separate API.
 evaluation catches cycles.
 
 **A `lax.scan` Euler step proves the seam.** `compile()` returns a
-`CompiledModel`; `euler` returns the final state only. Diffrax can wrap the
-same vector field later.
+`CompiledModel`; `CompiledModel.run` returns a `Result`. Diffrax sits behind
+the same `solver=` seam.
 
 ## What is still open
 

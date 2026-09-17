@@ -102,20 +102,20 @@ published as written.
 | --- | --- | --- | --- | --- |
 | 1 | Infectious disease modelling | `full` | None - prose | `textbook/01-introduction.md` |
 | 2 | Basic model construction | `partial` | Initial population | `textbook/02-model-structures.ipynb` |
-| 3 | Thinking about flows | `full` | None | — |
-| 4 | Thinking about flow rates | `partial` | Port not yet written (API ready: flow outputs / sojourn) | — |
-| 5 | Series compartments and latency | `full` | None | — |
-| 6 | Post-infection immunity | `full` | None | — |
+| 3 | Thinking about flows | `full` | None | `textbook/03-thinking-about-flows.ipynb` |
+| 4 | Thinking about flow rates | `full` | None | `textbook/04-thinking-about-flow-rates.ipynb` |
+| 5 | Series compartments and latency | `full` | None | `textbook/05-series-compartments-latency.ipynb` |
+| 6 | Post-infection immunity | `full` | None | `textbook/06-post-infection-immunity.ipynb` |
 | 7 | Obtaining numerical solutions | `full` | None | `textbook/07-numerical-solutions.ipynb` |
-| 8 | Derived outputs | `partial` | Port not yet written (API ready: FlowMass + ComputedValue) | — |
-| 9 | Transmission assumptions | `full` | None | — |
-| 10 | The reproduction number | `partial` | Port not yet written (API ready: time-varying + `ForceOfInfection`) | — |
-| 11 | Cyclical epidemic dynamics | `full` | None | — |
-| 12 | Heterogeneous mixing introduction | `none` | Mixing matrices | — |
-| 13 | Mixing and transmission types | `none` | Mixing matrices, population split | — |
-| 14 | Assortative mixing | `none` | Mixing matrices, infectiousness adjustments | — |
-| 15 | Susceptibility and infectiousness matrices | `none` | Mixing matrices, infectiousness adjustments | — |
-| 16 | Thinking about contact surveys | `none` | Mixing matrices, contact-survey data | — |
+| 8 | Derived outputs | `full` | None | `textbook/08-derived-outputs.ipynb` |
+| 9 | Transmission assumptions | `full` | None | `textbook/09-transmission-assumptions.ipynb` |
+| 10 | The reproduction number | `full` | None (unstratified $R_t$; no next-gen matrix helper) | `textbook/10-reproduction-number.ipynb` |
+| 11 | Cyclical epidemic dynamics | `full` | None | `textbook/11-cyclical-epidemic-dynamics.ipynb` |
+| 12 | Heterogeneous mixing introduction | `full` | None | `textbook/12-heterogeneous-mixing-intro.ipynb` |
+| 13 | Mixing and transmission types | `none` | Population split (`S8` / WP3) | — |
+| 14 | Assortative mixing | `full` | None | `textbook/14-assortative-mixing.ipynb` |
+| 15 | Susceptibility and infectiousness matrices | `partial` | No FOI susceptibility surface symmetric to infectiousness | `textbook/15-susceptibility-infectiousness-matrices.ipynb` |
+| 16 | Thinking about contact surveys | `none` | Contact-survey data (WP9) | — |
 | 17 | Understanding empiric contact data | `none` | Contact-survey data | — |
 | 18 | Implementing empiric survey data | `none` | Contact-survey data | — |
 | 19 | Adapting mixing matrices | `none` | Contact-survey data, matrix scaling | — |
@@ -128,14 +128,14 @@ published as written.
 | Page | Status | Blocker | Ported |
 | --- | --- | --- | --- |
 | `examples/01-basic-model` | `partial` | Initial population | — |
-| `examples/03-derived-outputs` | `partial` | Port not yet written (API ready) | — |
-| `examples/04-flow-types` | `partial` | Port not yet written (API ready) | — |
-| `examples/06-stratification-introduction` | `partial` | Infectiousness adjustments | — |
+| `examples/03-derived-outputs` | `full` | None | `summer2/03-derived-outputs.ipynb` |
+| `examples/04-flow-types` | `full` | None | `summer2/04-flow-types.ipynb` |
+| `examples/06-stratification-introduction` | `full` | None | `summer2/06-stratification-introduction.ipynb` |
 | `examples/07-age-stratification` | `partial` | Population split | — |
-| `examples/08-strain-stratification` | `partial` | Strain-aware FOI primitive | — |
-| `examples/09-mixing-matrices` | `none` | Mixing matrices | — |
-| `examples/10-derived-outputs-stratified` | `partial` | Port not yet written (API ready) | — |
-| `examples/11-flows-between-strata` | `full` | None | — |
+| `examples/08-strain-stratification` | `full` | None (`per_trait` FOI; no `StrainStratification` class) | `summer2/08-strain-stratification.ipynb` |
+| `examples/09-mixing-matrices` | `full` | None | `summer2/09-mixing-matrices.ipynb` |
+| `examples/10-derived-outputs-stratified` | `full` | None | `summer2/10-derived-outputs-stratified.ipynb` |
+| `examples/11-flows-between-strata` | `full` | None | `summer2/11-flows-between-strata.ipynb` |
 | `detailed/time-varying-functions` | `full` | None | `summer2/time-varying-functions.ipynb` |
 | `detailed/InitialPopulationGraphobject` | `none` | Initial population, parameters | — |
 <!-- /ledger:summer2docs -->
@@ -173,16 +173,17 @@ contains every branch above it.
 | 5.1 | WP5 — `describe(params=...)` | `fix/describe-params` | *(this stack)* | `plans/time-varying.plan.md` |
 | 5.2–5.5 | WP5 — time-varying library + harvest | *(stacked on 5.1)* | *(this stack)* | `plans/time-varying.plan.md` |
 | 6.1–6.6 | WP6 — FOI and mixing | `feat/epi-infection-mixing` | *(this stack)* | `plans/epi-infection-mixing.plan.md` |
+| C1–C4 | Textbook / summer2 / evaluation catch-up | `docs/textbook-catchup` | *(this stack)* | `plans/textbook-catchup.plan.md` |
 
 Every phase shipped its notebook: `examples/notebooks/01-taxonomy.ipynb`
-through `09-epi-models.ipynb`, plus `docs/textbook/02`, `docs/textbook/07`,
-`docs/summer2/time-varying-functions.ipynb` and
+through `09-epi-models.ipynb`, plus textbook chapters 1–12 and 14–15 (13
+awaits WP3), the summer2 pages under `docs/summer2/`, and
 `docs/case-studies/age-stratified-seirs.ipynb`.
 
 ### Planning status of the remaining packages
 
-WP5 and WP6 are **applied** on this stack. Next is
-`plans/textbook-catchup.plan.md` for the porting sweep they unblock.
+WP5, WP6 and the textbook catch-up sweep
+(`plans/textbook-catchup.plan.md`) are **applied** on this stack.
 
 **WP3, WP9 and WP10 still have no detailed plan.** What exists for each is its
 paragraph in *The path to 100%* above and one line in the
@@ -196,6 +197,7 @@ landed phases each had before they were built.
 | WP3 | Initial population | Ledger paragraph only | Whether `set_initial_population` is a `FlowModel` method or a free function over `parent_row`; how a split interacts with `stratify(where=)` on ragged maps |
 | WP5 | Time-varying function library | `plans/time-varying.plan.md` (5.1–5.5) | **Applied.** `Time()`, `summer4.timevarying`, `summer4.data`, summer2 time-varying page |
 | WP6 | Force of infection and mixing | `plans/epi-infection-mixing.plan.md` (6.1–6.6) | **Applied.** `GroupedRate`, `Reduce`, `summer4.epi` (`MixingMatrix`, `ForceOfInfection`, `EpiModel`) |
+| — | Textbook / docs catch-up | `plans/textbook-catchup.plan.md` (C1–C4) | **Applied.** Ports for unblocked chapters and summer2 pages; evaluation prose refresh |
 | WP9 | Contact survey data | Ledger paragraph only | Depends on WP6; loading, validating and scaling empirical matrices |
 | WP10 | Calibration | Ledger paragraph only | The numpyro/optax workflow over `TargetSet`; probabilistic likelihoods were deliberately left out of WP11 |
 

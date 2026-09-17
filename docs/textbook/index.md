@@ -20,7 +20,18 @@ are already ported). This tree holds the published notebooks only.
 
 01-introduction
 02-model-structures
+03-thinking-about-flows
+04-thinking-about-flow-rates
+05-series-compartments-latency
+06-post-infection-immunity
 07-numerical-solutions
+08-derived-outputs
+09-transmission-assumptions
+10-reproduction-number
+11-cyclical-epidemic-dynamics
+12-heterogeneous-mixing-intro
+14-assortative-mixing
+15-susceptibility-infectiousness-matrices
 porting
 roadmap
 ```

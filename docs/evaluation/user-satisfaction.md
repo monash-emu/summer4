@@ -25,15 +25,17 @@ case data.*
 | Stratify by age | Works |
 | Add severity only to the infectious | Works, and better than summer2 |
 | Set the initial population | **Blocked** — build `y0` by hand with `select` |
-| Add infection, progression, recovery flows | Works (`TransitionFlow`; infection FOI is hand-written) |
-| Run the model | **Partial** — `euler` returns the final state, not a trajectory |
-| Request incidence by age | **Blocked** — the index sets exist, the request mechanism does not |
-| Plot | **Blocked** |
-| Calibrate | **Blocked** |
+| Add infection, progression, recovery flows | Works (`EpiModel` / `ForceOfInfection`; progression via `TransitionFlow`) |
+| Run the model | Works — `CompiledModel.run` returns a `Result` trajectory |
+| Request incidence by age | Works — `FlowMass` / `Trace` edge queries |
+| Plot | Works — `Trace.to_pandas()` then Plotly (pandas plotting backend) |
+| Calibrate | **Partial** — sparse `Target` / `TargetSet` fits exist; Bayesian workflow (WP10) does not |
 
-Four of nine steps complete, one partial. The modeller can compile a vector
-field but cannot plot a run. For this user, summer4 is still not a finished
-tool.
+Seven of nine steps complete, one partial, one blocked. The modeller can build,
+run, query and plot an epidemic model; initial population remains manual, and
+full Bayesian calibration is still ahead. For this user, summer4 is usable for
+many modelling tasks but not yet a complete migration of summer2's calibration
+story.
 
 ### The summer2 user evaluating a migration
 
@@ -41,25 +43,28 @@ tool.
 
 They will find the compartment model genuinely better — selector queries instead
 of dictionaries, ragged stratification instead of compartment-name lists,
-immutable maps with replayable history — and a flows layer that covers most
-constructors. They will then find that 31 of 52 symbols have any working route,
-and that `euler` does not return a dataframe. The honest answer is "you can
-compile a model; you cannot yet publish a run"; {doc}`../user/07-from-summer2`
-gives it directly.
+immutable maps with replayable history — and a flows / epi / results stack that
+covers 49 of 52 symbols with any working route (**44 of 52** at `full`). They
+can compile, run and plot; what still does not translate is initial population /
+population split and Bayesian calibration. The honest answer is in
+{doc}`../user/07-from-summer2`.
 
-The risk to manage here is expectation. The package is named `summer4` and
-describes itself as a modelling platform; a summer2 user arriving at `pip
-install summer4` reasonably expects to be able to run a model.
+The risk to manage here is expectation around those remaining gaps, not around
+whether a run is publishable at all.
 
 ### The contributor
 
-*Wants: add the next layer (results, then solvers).*
+*Wants: add the next layer (initial population, then contact data / calibration).*
 
 This user is well served. The repository has a stated contribution contract
 (`AGENTS.md`), an enforced feature bar (tests + notebook + plan, checked by
 `pixi run check-branch`), `mypy --strict`, Hypothesis invariants, a benchmark
-suite, git hooks, and a ledger whose next package is WP2 (trajectories).
-Onboarding friction is low and the next step is unambiguous.
+suite, git hooks, and a ledger whose next capability package is WP3 (initial
+population / split). Onboarding friction is low and the next step is unambiguous.
+
+Expert walkthroughs of landed behaviour (not user research) live in
+`examples/notebooks/` (WP5 time-varying, WP6 epi) and the ported textbook /
+summer2 pages under `docs/textbook/` and `docs/summer2/`.
 
 ## API ergonomics review
 
@@ -134,14 +139,15 @@ across leftover strata. This is settled, not an open question.
 
 | Dimension | Assessment |
 |---|---|
-| Can a modeller complete a real task? | **No** — compile yes, plot a run no |
+| Can a modeller complete a real task? | **Mostly** — run and plot yes; initial population and Bayesian calibration no |
 | Is the implemented layer pleasant to use? | **Yes** |
 | Is the implemented layer better than summer2's equivalent? | **Yes**, materially |
-| Is it discoverable? | **It is now** — there was no documentation before this site |
+| Is it discoverable? | **It is now** — documentation covers taxonomy, flows, epi and ports |
 | Is the contribution path clear? | **Yes** |
 | Is there any evidence about real users? | **No** |
 
-The project's risk is not quality; the layer that exists is good. The risk is
-that the distance to a *publishable* tool is still one layer — trajectories and
-a results object — and that no external user can currently exercise a full run,
-so little feedback is arriving to steer the remaining design.
+The project's risk is no longer "can anyone exercise a full run?" — they can.
+The remaining risk is the distance to a *complete* migration surface: WP3
+(initial population / split), then WP9 / WP10, plus the FOI susceptibility gap
+that keeps chapter 15 at `partial`. Little external-user feedback has arrived
+to steer those designs.

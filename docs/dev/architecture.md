@@ -73,7 +73,9 @@ A {class}`~summer4.flows.compiled.FlowModel` owns named flows over one map.
 `compile()` actualizes every join once and returns a static
 {class}`~summer4.flows.compiled.CompiledModel` with a JAX vector field and
 {meth}`~summer4.flows.compiled.CompiledModel.edges` for inspection.
-{func}`~summer4.euler` steps that field and returns the final state only.
+{func}`~summer4.euler` is the reference fixed-step backend;
+{meth}`~summer4.flows.compiled.CompiledModel.run` returns a queryable
+{class}`~summer4.results.result.Result` (Euler or a diffrax solver).
 
 ## Dependency policy
 

@@ -20,19 +20,17 @@ and `Source` / `Dest` on {meth}`~summer4.flows.compiled.CompiledModel.edges`.
 A parameter representation and a way to attach time- and state-dependent rates
 to flows.
 
-**State:** **done** for the expression tree (`FieldRef`, `FlowRef`, `Multiply` /
-`Overwrite` / `Transform`, `derived_fn`) and for the time-varying library
+**State:** **done** (WP5). Expression tree (`FieldRef`, `FlowRef`, `Multiply` /
+`Overwrite` / `Transform`, `derived_fn`) plus the time-varying library
 (`Time()`, `summer4.timevarying`, `summer4.data`). A full compute graph is not
 warranted yet.
 
 ### 1.3 A solver seam
 
-**State:** a fixed-step Euler via JAX `lax.scan`, plus a NumPy reference loop
-in tests. `euler` returns the final state only.
-
-**Needed:** trajectories (WP2), an adaptive backend (diffrax; WP7), and solver
-selection. Textbook chapter 7 compares hand-stepped Euler against Runge-Kutta
-and needs all three.
+**State:** **done** (WP2 + WP7). `CompiledModel.run` returns a `Result`
+trajectory; Euler is the reference stepper; `solver=` selects adaptive
+diffrax backends (Heun, Tsit5, Dopri5, or a diffrax instance). Textbook
+chapter 7 is ported at `docs/textbook/07-numerical-solutions.ipynb`.
 
 ### 1.4 Initial population
 
@@ -42,7 +40,7 @@ across a stratification.
 **State:** the mechanism is trivially available — `parent_row` makes it a gather
 and a divide, as demonstrated in {doc}`../user/06-immutability-and-provenance` —
 but no API wraps it. Deferred as "a one-shot redistribution of `y`, not a flow
-property".
+property". **This is the open Priority-1 item** (ledger WP3: L4, L5, S8).
 
 ### 1.5 Derived outputs and a results object
 
@@ -66,41 +64,43 @@ rebuilt maps share a hash and work as `jax.jit` static arguments.
 
 ### 2.1 Force of infection
 
-`add_infection_frequency_flow` and `add_infection_density_flow`. This is
-**not** a small addition to the flows layer: rates are per-edge scalars,
-whereas a force of infection is a reduction over a grouping fed back into a
-rate. Expressible today by writing `contact * I / N` in `derived_fn` (F7/F8
-`partial`).
+**State:** **done** (WP6). `ForceOfInfection(kind="frequency"|"density")` and
+`EpiModel.add_infection_*_flow` (F7, F8 `full`). Example:
+`examples/notebooks/09-epi-models.ipynb`.
 
 ### 2.2 Mixing matrices
 
-`set_mixing_matrix`, with the infection flow becoming a matrix-weighted coupling
-between strata. Textbook chapters 12–15 and 19 are entirely about this, as is
-summer2's `examples/09-mixing-matrices`. `TraitMatrix` moves *people*, not
-transmission.
+**State:** **done** (WP6). `summer4.epi.MixingMatrix` weights transmission
+between strata (M1 `full`). `TraitMatrix` still moves *people*, not
+transmission. Textbook chapters 12 and 14 are ported; chapter 13 still needs
+WP3's population split.
 
 ### 2.3 Infectiousness and susceptibility adjustments
 
-`add_infectiousness_adjustments`, plus flow adjustments interacting with the
-mixing matrix. Textbook chapter 15 exists specifically to explain the three
-equivalent ways of expressing these.
+**State:** **infectiousness done** (A4 `full`) via
+`ForceOfInfection(infectiousness=...)` /
+`EpiModel.add_infectiousness_adjustments`. **Susceptibility still open** —
+there is no FOI surface symmetric to infectiousness; chapter 15 is therefore
+`partial` and scales susceptibility via flow `adjust=` or matrix row scaling.
+See `futureplans/foi-susceptibility-surface.md`.
 
 ## Priority 3 — blocks the remaining chapters
 
 ### 3.1 Contact-survey data handling
 
 Loading, validating, inspecting and scaling empirical contact matrices.
-Chapters 16–19.
+Chapters 16–19 (WP9). Depends on WP6 (applied).
 
 ### 3.2 Calibration
 
-A Bayesian workflow over JAX-differentiable models. `numpyro` and `optax` are
-already declared as an optional extra and are unused. Chapter 20.
+A Bayesian workflow over JAX-differentiable models. Sparse `Target` /
+`TargetSet` fits exist (WP11); probabilistic likelihoods / priors are WP10.
+Chapter 20.
 
 ### 3.3 Real-world time
 
-`ref_date` / epoch handling, so model times can be dates. Every applied example
-in both corpora eventually needs this.
+**State:** **done** (WP2). `Epoch` / `TimeAxis` map calendar dates on
+`Result.times`.
 
 ## Priority 4 — quality of life
 
@@ -125,10 +125,12 @@ Previously absent, now in place:
   `docs-clean` tasks;
 - `.readthedocs.yaml`.
 
-Still missing:
+Still missing / partial:
 
-- **Vendored textbook figures.** Chapters 2–6 and 12–19 embed SVGs from the
-  source repository under BSD-2-Clause.
+- **Vendored textbook figures.** Partially done for ported chapters (figures
+  under `docs/textbook/figures/` for chapters 3–6 and 8). Remaining chapters
+  that need diagrams (especially 12–19 when unblocked) still need copies under
+  the BSD-2-Clause notice, or redraws.
 - ~~**A plotting convention.**~~ Settled: Plotly through the pandas plotting
   backend over `Trace.to_pandas()`, as in the summer2 documentation. See
   {doc}`../dev/plotting` for the decision and the Sphinx renderer it requires.
@@ -137,20 +139,16 @@ Still missing:
 
 ## The single highest-leverage move
 
-**Force of infection and mixing** (ledger WP6). WP2 landed trajectories and a
-results object, WP4 landed flow outputs, WP7 landed an adaptive solver, and
-WP11 landed sparse calibration targets, so a model can now be built, run,
-queried and fitted. WP6 is what remains between that and the eight textbook
-chapters on heterogeneous mixing.
+**Initial population / population split** (ledger WP3). WP2–WP7, WP4, WP5,
+WP6 and WP11 are applied: a model can be built with infection and mixing, run
+to a `Result`, queried, time-parameterised and fitted to sparse targets. WP6
+closed the heterogeneous-mixing API rows; what remains between that and full
+textbook coverage of chapters 2 and 13 (and summer2 `01` / `07` /
+`InitialPopulationGraphobject`) is WP3.
 
-Its row count (`F7` `F8` `A4` `M1`) understates it.
-{doc}`age-stratified-seirs-case-study` measures the reason: a hand-written
-homogeneous mixing matrix gives every stratum an *identical* force of infection,
-so age-varying infectiousness is not identifiable — a fit recovers an inverted
-age gradient at a lower loss than the parameters that generated the data.
-Off-diagonal mixing structure is not a convenience over hand-written coupling;
-without it a whole class of stratum-specific parameters cannot be estimated at
-all.
+After WP3, the next leverage is WP9 (contact-survey data — chapters 16–19) and
+WP10 (Bayesian calibration — chapter 20), plus the susceptibility-surface
+follow-up that would lift chapter 15 from `partial` to `full`.
 
 `Present` / `Absent` binding is **settled**: they are non-binding in flow
 pairing.

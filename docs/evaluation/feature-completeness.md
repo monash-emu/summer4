@@ -21,17 +21,17 @@ Two comparisons, both derived from source rather than from memory:
 
 ## 1. Against the summer2 API
 
-### Model lifecycle — 1 of 7 complete (3 covered)
+### Model lifecycle — 4 of 7 complete (5 covered)
 
 | summer2 | summer4 |
 |---|---|
 | `CompartmentalModel(times, compartments, infectious_compartments, timestep)` | `FlowModel(pmap)` — no times, timestep or infectious_compartments |
 | `model.finalize()` | `FlowModel.compile()` → `CompiledModel` |
-| `model.run(parameters)` | `euler(...)` — final state only, no trajectory |
+| `model.run(parameters)` | `CompiledModel.run(...)` → `Result` |
 | `model.set_initial_population(distribution)` | — |
 | `model.get_initial_population(parameters)` | — |
-| `model.get_outputs_df()` | — |
-| `model.get_derived_outputs_df()` | — |
+| `model.get_outputs_df()` | `Trace.to_frame` / `to_pandas` |
+| `model.get_derived_outputs_df()` | `Result` traces via `SavePlan` |
 
 ### Compartments and stratification — 4 of 8 complete (7 covered)
 
@@ -43,7 +43,7 @@ Two comparisons, both derived from source rather than from memory:
 | `model.get_stratification(name)` | `PropertyMap.get_property(name)`, `PropertyMap.history` |
 | `Compartment` (name + strata object) | rows; `labels()`, `to_dicts()` — no per-compartment object |
 | `AgeStratification` | `Property` plus a `TraitChain` flow; no bundled class |
-| `StrainStratification` | `Property` plus per-strain flows; strain-aware FOI is hand-written |
+| `StrainStratification` | `Property` plus per-strain flows; multi-strain FOI via `ForceOfInfection.per_trait` (no bundled class) |
 | `Stratification.set_population_split` / `model.adjust_population_split` | — |
 
 This is the one area where summer4 is ahead. Partial stratification in summer2
@@ -84,45 +84,47 @@ covers `set_flow_adjustments`. Adjustments belong to the flow, not to a
 ### Parameters and time-varying functions — 8 of 9 complete (9 covered)
 
 `derived_refs` over a `NamedTuple` gives schema-checked `Parameter` equivalents;
-`t` reaches `derived_fn` every step; `FlowRef` lets one flow's mass feed
-another. Missing is the *library* of time functions — linear and sigmoidal
-interpolation, piecewise — and a data-loading surface.
+`Time()` and `t` on `derived_fn` supply model time; `FlowRef` lets one flow's
+mass feed another. WP5 applied: `summer4.timevarying` (`linear`, `sigmoidal`,
+`step` / `piecewise`) and dated-series `summer4.data.Data`. `get_time_callable`
+remains `partial` — `compile()` returns `vf(t, y, params)`, not summer2's graph
+wrapper (P9).
 
-### Derived outputs — 1 of 8
+### Derived outputs — 8 of 8
 
-`derived_fn` ≈ `add_computed_value_func`. There is no request mechanism, no
-post-integration stage and no results object. `FlowRef` exposes mass to *other
-flows* inside the vector field, not to the caller.
+`FlowMass` / `Trace` edge queries, `Compartments(where=)`, `Trace.sum_over` /
+`total` / `partition`, `Trace.cumulative()`, `SaveFn` plus trace arithmetic,
+and `ComputedValue` / `derived_fn` cover D1–D8.
 
-### Solver — 0 of 2 complete (1 covered)
+### Solver — 2 of 2
 
-`euler` is a fixed-step stepper returning the final state (`partial` vs
-`solve_ode`). No adaptive backend, no solver selection.
+`CompiledModel.run` over `euler` (V1) and `solver=` name or diffrax instance
+(V2). Euler remains the reference stepper.
 
-### Real-world time — 0 of 2
+### Real-world time — 2 of 2
 
-`ref_date` / epoch handling and `get_epoch`. Not started.
+`Epoch` and `Result.times.epoch` / `TimeAxis.epoch` (T1, T2).
 
 ### Totals
 
 | Area | summer4 / summer2 |
 |---|---|
-| Model lifecycle | 1 / 7 |
+| Model lifecycle | 4 / 7 |
 | Compartments and stratification | 4 / 8 |
 | Compartment queries | 3 / 3 |
 | Flows | 8 / 8 |
 | Flow adjustments | 4 / 4 |
 | Mixing | 1 / 1 |
 | Parameters and time-varying functions | 8 / 9 |
-| Derived outputs | 1 / 8 |
-| Solver | 0 / 2 |
-| Real-world time | 0 / 2 |
-| **Total (complete)** | **22 / 52 (42%)** |
-| **Total (covered, incl. partial)** | 31 / 52 (60%) |
+| Derived outputs | 8 / 8 |
+| Solver | 2 / 2 |
+| Real-world time | 2 / 2 |
+| **Total (complete)** | **44 / 52 (85%)** |
+| **Total (covered, incl. partial)** | 49 / 52 (94%) |
 
-The 42% is two contiguous areas — declaring a compartment space, then compiling
-named flows over it — with everything above the vector field (trajectories,
-outputs, mixing, calibration) still absent or partial.
+The remaining API gaps are initial population / population split (L4, L5, S8)
+plus five deliberate shape mismatches that never reach `full` (L1, S5, S6, S7,
+P9). See {doc}`coverage-ledger`.
 
 ## 2. Against summer4's own intended stack
 
@@ -134,12 +136,13 @@ outputs, mixing, calibration) still absent or partial.
 | Lazy rates, derived parameters, adjustments | **Implemented** | `FieldRef`, `FlowRef`, `adjust=` |
 | Array container over a map (`PropertyData`) | **Implemented** | `summer4.jax.propertydata` |
 | Edge queries | **Implemented** | `EdgeMap`, `Source` / `Dest` |
-| Compiled model + fixed-step integrator | **Implemented** | `CompiledModel`, `euler` (final state) |
-| Adaptive solver seam (diffrax) | Not started | `pyproject.toml` extra only |
+| Compiled model + fixed-step integrator | **Implemented** | `CompiledModel`, `euler` |
+| Adaptive solver seam (diffrax) | **Implemented** | `solver=` name or diffrax instance |
 | Force of infection / mixing | **Implemented** | `summer4.epi` (`ForceOfInfection`, `MixingMatrix`, `EpiModel`) |
-| Derived outputs and results | Not started | — |
-| Real-world time | Not started | — |
-| Calibration | Not started | `pyproject.toml` extra only |
+| Derived outputs and results | **Implemented** | `Result`, `Trace`, `SavePlan`, `FlowMass` |
+| Real-world time | **Implemented** | `Epoch`, `TimeAxis` |
+| Time-varying rates / dated data | **Implemented** | `summer4.timevarying`, `summer4.data` |
+| Calibration | Partial | Sparse `Target` / `TargetSet` (WP11); Bayesian workflow (WP10) ahead |
 
 ## What is genuinely strong
 

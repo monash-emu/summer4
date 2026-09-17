@@ -30,9 +30,10 @@ state = Property("state", ("S", "I", "R"))
 pmap = PropertyMap.from_property(state)
 ```
 
-There is no `infectious_compartments` argument. A force of infection is not a
-library primitive; when you write one, the infectious set is a selector
-(`state["I"]`) rather than a constructor list.
+There is no `infectious_compartments` argument on the map constructor.
+Infectious compartments are named when you build a force of infection in
+`summer4.epi` (`ForceOfInfection` / `EpiModel`) — typically a selector such as
+`state["I"]`, not a constructor list.
 
 ### Stratifying
 
@@ -104,7 +105,7 @@ pmap.to_dicts()    # {'state': 'I', 'age': '0-4'}
 | `Stratification(name, strata)` | `Property(name, traits)` + `PropertyMap.stratify` | Returns a new map |
 | `Stratification(..., compartments=[...])` | `stratify(prop, where=selector)` | Generalised from names to a query |
 | `AgeStratification` | `Property` + `TraitChain` flow | No bundled convenience class |
-| `StrainStratification` | `Property` + per-strain flows | Strain-aware FOI is hand-written |
+| `StrainStratification` | `Property` + per-strain flows | Multi-strain FOI via `ForceOfInfection.per_trait`; no bundled class |
 | `model.query_compartments(dict)` | `pmap.select(selector)` | Algebra instead of a conjunction dict |
 | `model.get_matching_compartments` | `pmap.select` / `pmap.select_one` | |
 | `model.get_stratification(name)` | `pmap.get_property(name)`, `pmap.history` | History records the `where=` selector too |
@@ -117,19 +118,12 @@ pmap.to_dicts()    # {'state': 'I', 'age': '0-4'}
 
 ## What does not translate
 
-These still have **no** summer4 equivalent that would let a summer2 notebook
-run and plot. Flows themselves are in the package; what is missing is
-everything around a *run*.
+Infection FOI, mixing, infectiousness weights, interpolation helpers, adaptive
+solvers, derived outputs and results all have summer4 equivalents (see the
+table above and {doc}`../evaluation/coverage-ledger`). What still has **no**
+library wrapper that would let every summer2 notebook run as written:
 
 | Area | summer2 API |
 |---|---|
 | Initial conditions | `set_initial_population`, `get_initial_population`, `adjust_population_split`, `Stratification.set_population_split` |
-| Infection primitives | `add_infection_frequency_flow`, `add_infection_density_flow` (write `contact * I / N` yourself) |
-| Infectiousness | `Stratification.add_infectiousness_adjustments` |
-| Mixing | `Stratification.set_mixing_matrix` |
-| Interpolation helpers | `get_linear_interpolation_function`, `get_sigmoidal_interpolation_function`, `get_piecewise_function` |
-| Adaptive solver | `SolverType`, backend selection |
-| Derived output requests | `request_output_for_*`, `request_aggregate_output`, `request_cumulative_output`, … |
-| Results | `Result` / `Trace.to_frame` / `to_pandas` via `CompiledModel.run` |
-| Real-world time | `ref_date`, `get_epoch` |
-| Calibration | everything in the summer textbook chapter 20 |
+| Calibration | Bayesian workflow in the summer textbook chapter 20 (sparse `Target` / `TargetSet` fits exist; WP10 does not) |

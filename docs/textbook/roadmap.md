@@ -42,5 +42,7 @@ Tier 2 ships: `CompiledModel.run` returns a queryable `Result`, and `solver=`
 selects Euler or a diffrax method. See {doc}`../user/08-flows` for flows and
 `examples/notebooks/05-solvers.ipynb` for solver selection.
 
-Tier 3 requires a force-of-infection mechanism with matrix-weighted coupling
-between strata. `TraitMatrix` moves people, not transmission.
+Tier 3 ships: `summer4.epi` provides `MixingMatrix`, `ForceOfInfection`, and
+an `EpiModel` frontend. `TraitMatrix` still moves people, not transmission.
+Chapter 13 remains blocked on population split (WP3); chapters 14–15 are
+ported (15 partial — no first-class susceptibility surface).

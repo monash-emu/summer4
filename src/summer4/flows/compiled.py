@@ -57,7 +57,7 @@ class DerivedFn(Protocol):
 class GroupedRate:
     """Rate whose last axis is aligned to one or more properties' traits.
 
-    Arithmetic preserves ``properties``. Two :class:`GroupedRate`s combine only
+    Arithmetic preserves ``properties``. Two ``GroupedRate`` values combine only
     when their groupings match; combining with a scalar keeps this grouping.
     Mismatched groupings raise rather than broadcasting silently.
     """
