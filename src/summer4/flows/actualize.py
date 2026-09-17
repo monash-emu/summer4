@@ -14,13 +14,29 @@ from summer4.flows.join import (
     _property_present,
     _validate_split,
     join_with_pairing,
+    selector_properties,
     selector_values,
 )
-from summer4.flows.rates import Adjustment, FlowRef, RateOps, _flow_rate_refs
+from summer4.flows.rates import (
+    Adjustment,
+    FlowRef,
+    Overwrite,
+    RateOps,
+    _flow_rate_refs,
+    adjustment_level,
+    canonical_adjustments,
+)
 from summer4.flows.types import ExitFlow, FlowLike, TransitionFlow
 from summer4.properties import Property
 from summer4.propertymap import PropertyMap
-from summer4.selectors import Selector
+from summer4.selectors import (
+    And,
+    Dest,
+    Not,
+    Or,
+    Selector,
+    Source,
+)
 
 _NA: int = -1
 
@@ -137,19 +153,131 @@ def _pairing_codes(
     return src_codes, dest_codes, len(pairing.property.traits)
 
 
+def _has_polarity(sel: Selector) -> bool:
+    """True if ``sel`` contains a ``Source`` or ``Dest`` node anywhere."""
+    match sel:
+        case Source() | Dest():
+            return True
+        case And(left=left, right=right) | Or(left=left, right=right):
+            return _has_polarity(left) or _has_polarity(right)
+        case Not(inner=inner):
+            return _has_polarity(inner)
+        case _:
+            return False
+
+
+def _contains_side(sel: Selector, side: type[Source] | type[Dest]) -> bool:
+    match sel:
+        case Source() if side is Source:
+            return True
+        case Dest() if side is Dest:
+            return True
+        case And(left=left, right=right) | Or(left=left, right=right):
+            return _contains_side(left, side) or _contains_side(right, side)
+        case Not(inner=inner):
+            return _contains_side(inner, side)
+        case _:
+            return False
+
+
+def _iter_polarized(sel: Selector) -> list[tuple[str, Selector]]:
+    """Return ``(side, inner)`` for each ``Source``/``Dest`` node in ``sel``."""
+    out: list[tuple[str, Selector]] = []
+
+    def walk(node: Selector) -> None:
+        match node:
+            case Source(inner=inner):
+                out.append(("source", inner))
+            case Dest(inner=inner):
+                out.append(("dest", inner))
+            case And(left=left, right=right) | Or(left=left, right=right):
+                walk(left)
+                walk(right)
+            case Not(inner=inner):
+                walk(inner)
+            case _:
+                return
+
+    walk(sel)
+    return out
+
+
+def _property_absent_on_side(edge_map: EdgeMap, prop: str, side: str) -> bool:
+    col = np.asarray(edge_map.table.column(f"{prop}@{side}"), dtype=np.int16)
+    return bool(np.all(col == _NA))
+
+
+def _adj_repr(adj: Adjustment) -> str:
+    kind = type(adj).__name__
+    if isinstance(adj, Overwrite) or hasattr(adj, "value"):
+        value = getattr(adj, "value")
+        return f"{kind}({value!r}, where={adj.where!r})"
+    return f"{kind}(..., where={adj.where!r})"
+
+
+def _check_overwrite_overlap(
+    adjust: tuple[Adjustment, ...],
+    masks: tuple[NDArray[np.bool_] | None, ...],
+    edge_map: EdgeMap,
+) -> None:
+    """Raise if two same-level ``Overwrite`` masks share an edge."""
+    by_level: dict[int, list[tuple[Overwrite, NDArray[np.bool_] | None]]] = {}
+    for adj, mask in zip(adjust, masks, strict=True):
+        if not isinstance(adj, Overwrite):
+            continue
+        by_level.setdefault(adjustment_level(adj), []).append((adj, mask))
+    n_edges = edge_map.n_edges
+    labels = edge_map.labels()
+    for items in by_level.values():
+        for i in range(len(items)):
+            left, left_mask = items[i]
+            left_bool = np.ones(n_edges, dtype=np.bool_) if left_mask is None else left_mask
+            for j in range(i + 1, len(items)):
+                right, right_mask = items[j]
+                right_bool = np.ones(n_edges, dtype=np.bool_) if right_mask is None else right_mask
+                overlap = left_bool & right_bool
+                if not overlap.any():
+                    continue
+                idxs = np.flatnonzero(overlap)[:5]
+                edge_list = ", ".join(labels[int(k)] for k in idxs)
+                raise ValueError(
+                    f"Overlapping Overwrite adjustments at the same precedence level: "
+                    f"{_adj_repr(left)} and {_adj_repr(right)}. "
+                    f"Overlapping edges include: {edge_list}. "
+                    f"Pass precedence= on one of them to resolve the conflict."
+                )
+
+
 def _bind_adjust_masks(
     adjust: tuple[Adjustment, ...],
-    gather_idx: NDArray[np.int32],
-    pmap: PropertyMap,
+    edge_map: EdgeMap,
+    default_side: type[Source] | type[Dest],
+    *,
+    name: str,
 ) -> tuple[NDArray[np.bool_] | None, ...]:
+    """Bind each adjustment's ``where`` to an edge mask via ``EdgeMap.mask``."""
     masks: list[NDArray[np.bool_] | None] = []
     for adj in adjust:
         if adj.where is None:
             masks.append(None)
             continue
-        selected = pmap.select(adj.where)
-        mask = np.isin(gather_idx, selected)
+        where = adj.where
+        sel: Selector = where if _has_polarity(where) else default_side(where)
+        if edge_map.dest_idx is None and _contains_side(sel, Dest):
+            raise ValueError("Dest(...) in where= on a flow without a destination")
+        if edge_map.src_idx is None and _contains_side(sel, Source):
+            raise ValueError("Source(...) in where= on a flow without a source")
+        mask = np.asarray(edge_map.mask(sel), dtype=np.bool_)
         mask.flags.writeable = False
+        if not mask.any():
+            for side, inner in _iter_polarized(sel):
+                for prop in selector_properties(inner):
+                    if _property_absent_on_side(edge_map, prop, side):
+                        raise ValueError(
+                            f"Adjustment where={adj.where!r} can never apply on flow "
+                            f"{name!r}: property {prop!r} is absent on the {side} of "
+                            f"every edge. Use Dest(...)/Source(...) or split=."
+                        )
         masks.append(mask)
     return tuple(masks)
 
@@ -250,6 +378,9 @@ def actualize(flow: FlowLike, pmap: PropertyMap, *, strict_pairing: bool = True)
         src_codes, dest_codes, n_traits = _pairing_codes(
             pmap, flow.pairing, edges.src_idx, edges.dest_idx
         )
+        adjust = canonical_adjustments(flow.adjust)
+        masks = _bind_adjust_masks(adjust, edges.edge_map, Source, name=flow.name)
+        _check_overwrite_overlap(adjust, masks, edges.edge_map)
         return TransitionEdges(
             name=flow.name,
             src_idx=edges.src_idx,
@@ -258,8 +389,8 @@ def actualize(flow: FlowLike, pmap: PropertyMap, *, strict_pairing: bool = True)
             scale=edges.scale,
             rate=flow.rate,
             absolute=flow.absolute,
-            adjust=flow.adjust,
-            adjust_masks=_bind_adjust_masks(flow.adjust, edges.src_idx, pmap),
+            adjust=adjust,
+            adjust_masks=masks,
             edge_map=edges.edge_map,
             pair_src_codes=src_codes,
             pair_dest_codes=dest_codes,
@@ -272,6 +403,9 @@ def actualize(flow: FlowLike, pmap: PropertyMap, *, strict_pairing: bool = True)
         n = int(src_idx.size)
         roles = _side_roles(pmap, src_idx, selector_values(flow.source), source=True)
         edge_map = EdgeMap.from_indices(pmap, src_idx, None, roles)
+        adjust = canonical_adjustments(flow.adjust)
+        masks = _bind_adjust_masks(adjust, edge_map, Source, name=flow.name)
+        _check_overwrite_overlap(adjust, masks, edge_map)
         return ExitEdges(
             name=flow.name,
             src_idx=src_idx,
@@ -279,8 +413,8 @@ def actualize(flow: FlowLike, pmap: PropertyMap, *, strict_pairing: bool = True)
             scale=np.ones(n, dtype=np.float64),
             rate=flow.rate,
             absolute=flow.absolute,
-            adjust=flow.adjust,
-            adjust_masks=_bind_adjust_masks(flow.adjust, src_idx, pmap),
+            adjust=adjust,
+            adjust_masks=masks,
             edge_map=edge_map,
         )
     dest_idx, weights, _dest_only = _entry_indices(
@@ -288,6 +422,9 @@ def actualize(flow: FlowLike, pmap: PropertyMap, *, strict_pairing: bool = True)
     )
     roles = _side_roles(pmap, dest_idx, selector_values(flow.dest), source=False)
     edge_map = EdgeMap.from_indices(pmap, None, dest_idx, roles)
+    adjust = canonical_adjustments(flow.adjust)
+    masks = _bind_adjust_masks(adjust, edge_map, Dest, name=flow.name)
+    _check_overwrite_overlap(adjust, masks, edge_map)
     return EntryEdges(
         name=flow.name,
         dest_idx=dest_idx,
@@ -295,8 +432,8 @@ def actualize(flow: FlowLike, pmap: PropertyMap, *, strict_pairing: bool = True)
         scale=np.ones(int(dest_idx.size), dtype=np.float64),
         rate=flow.rate,
         absolute=True,
-        adjust=flow.adjust,
-        adjust_masks=_bind_adjust_masks(flow.adjust, dest_idx, pmap),
+        adjust=adjust,
+        adjust_masks=masks,
         edge_map=edge_map,
     )
 

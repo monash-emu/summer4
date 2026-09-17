@@ -206,10 +206,17 @@ class Multiply:
 
     value: RateOps
     where: Selector | None = None
+    precedence: int | None = None
 
-    def __init__(self, value: object, where: Selector | None = None) -> None:
+    def __init__(
+        self,
+        value: object,
+        where: Selector | None = None,
+        precedence: int | None = None,
+    ) -> None:
         object.__setattr__(self, "value", as_rate(value))
         object.__setattr__(self, "where", where)
+        object.__setattr__(self, "precedence", precedence)
 
 
 @dataclass(frozen=True, slots=True)
@@ -218,10 +225,17 @@ class Overwrite:
 
     value: RateOps
     where: Selector | None = None
+    precedence: int | None = None
 
-    def __init__(self, value: object, where: Selector | None = None) -> None:
+    def __init__(
+        self,
+        value: object,
+        where: Selector | None = None,
+        precedence: int | None = None,
+    ) -> None:
         object.__setattr__(self, "value", as_rate(value))
         object.__setattr__(self, "where", where)
+        object.__setattr__(self, "precedence", precedence)
 
 
 @dataclass(frozen=True, slots=True)
@@ -231,16 +245,36 @@ class Transform:
     fn: Callable[..., Any]
     args: tuple[RateOps, ...]
     where: Selector | None = None
+    precedence: int | None = None
 
     def __init__(
         self,
         fn: Callable[..., Any],
         *args: object,
         where: Selector | None = None,
+        precedence: int | None = None,
     ) -> None:
         object.__setattr__(self, "fn", fn)
         object.__setattr__(self, "args", tuple(as_rate(arg) for arg in args))
         object.__setattr__(self, "where", where)
+        object.__setattr__(self, "precedence", precedence)
+
+
+def adjustment_level(adj: Adjustment) -> int:
+    """Return the evaluation level for ``adj`` (``precedence`` or kind default)."""
+    if adj.precedence is not None:
+        return adj.precedence
+    if isinstance(adj, Overwrite):
+        return 0
+    if isinstance(adj, Multiply):
+        return 1
+    return 2
+
+
+def canonical_adjustments(adjust: tuple[Adjustment, ...]) -> tuple[Adjustment, ...]:
+    """Stable-sort adjustments by ``(level, declaration index)``."""
+    order = sorted(range(len(adjust)), key=lambda i: (adjustment_level(adjust[i]), i))
+    return tuple(adjust[i] for i in order)
 
 
 def _is_namedtuple_class(schema: type) -> bool:
