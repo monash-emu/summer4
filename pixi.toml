@@ -96,6 +96,7 @@ bench = { cmd = "pytest benchmarks/ --benchmark-only -v --benchmark-columns=min,
 bench-json = { cmd = "python scripts/bench_json.py", description = "Write benchmark JSON keyed by JAX version" }
 coverage = { cmd = "python scripts/coverage_report.py --check", description = "Report feature coverage from docs/evaluation/coverage-ledger.md" }
 coverage-write = { cmd = "python scripts/coverage_report.py --write", description = "Regenerate the computed progression block in the coverage ledger" }
+roadmap = { cmd = "python -m scripts.roadmap_check --check", description = "Check the step runbook in docs/dev/roadmap.md" }
 docs = { cmd = "sphinx-build -b html docs docs/_build/html", env = { PYTHONPATH = "." }, description = "Build the HTML documentation" }
 docs-strict = { cmd = "sphinx-build -b html -W --keep-going docs docs/_build/html", env = { PYTHONPATH = "." }, description = "Build docs with warnings as errors" }
 docs-clean = { cmd = "rm -rf docs/_build", description = "Remove documentation build artifacts" }

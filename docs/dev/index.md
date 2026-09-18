@@ -4,9 +4,12 @@ Documentation for contributors to summer4: how the taxonomy is represented, how
 queries are evaluated, how the repository is organised, and how the flows layer
 fits on top of the map.
 
+Starting work? [Roadmap](roadmap.md) names the next step and how to run it.
+
 ```{toctree}
 :maxdepth: 2
 
+roadmap
 architecture
 run-stages
 data-structures

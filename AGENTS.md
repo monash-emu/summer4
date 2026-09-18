@@ -87,6 +87,26 @@ Cursor plans must travel with the branch so a merge automatically copies them in
 
 Do not leave the only copy of a plan outside the repository. Do not edit a plan file that was already committed as historical record; add a new plan for follow-up work.
 
+## To continue the work: read the roadmap
+
+`docs/dev/roadmap.md` is the authoritative record of **where the work has got
+to**. The coverage ledger below says what summer4 can do; the roadmap says what
+to do next. If you have been told only "next step", that file is your entire
+brief.
+
+1. Read its *Current position* block. It names exactly one step.
+2. **Present that step's *Summary* to the user before doing anything else.**
+3. Follow *Read first*, *Do*, *Exit checks* and *Handoff* in that step's
+   section. Where the step's *Do* contradicts a plan under `plans/`, the step
+   wins — plans are immutable history and the roadmap carries the corrections.
+4. **Finishing a step means committing its handoff on the step's own branch**,
+   so it merges with the work. A step that lands without updating the roadmap
+   has left the next session with nothing to start from.
+
+```bash
+pixi run roadmap   # the runbook parses, one step is current, its references resolve
+```
+
 ## Before planning feature work: read the coverage ledger
 
 `docs/evaluation/coverage-ledger.md` is the authoritative record of what summer4
@@ -174,6 +194,7 @@ pixi run check-notebooks
 pixi run test
 pixi run check-branch
 pixi run coverage
+pixi run roadmap
 ```
 
 `check-branch` fails if this branch changed `src/summer4` but did not also change `tests/` and (for new or changed public modules) `examples/notebooks/`, or if a feature branch has no plan under `plans/`.
