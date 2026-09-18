@@ -16,8 +16,7 @@ Features are dependency groups; environments are combinations of features.
 | `docs` | `docs` | 3.13 | 0.6.x | Sphinx build (includes JAX for flow notebooks) |
 
 The JAX matrix exists so that solver work can be benchmarked across versions
-without a flag day. The taxonomy layer stays NumPy-only; compiled flows import
-JAX.
+without a flag day. Taxonomy modules do not import JAX; `import summer4` does.
 
 ## Tasks
 
@@ -56,10 +55,11 @@ Then `pixi install -e <env>` and commit the updated `pixi.lock`. Keep the lock
 file in the commit that changes `pixi.toml`; a lock that disagrees with the
 manifest is the most common cause of an unreproducible CI run.
 
-```{admonition} JAX is an extra, not a core dependency
-:class: warning
+```{admonition} JAX is a core dependency
+:class: note
 
-`pyproject.toml` keeps `jax` (and `diffrax`, `equinox`) under
-`[project.optional-dependencies]`. The taxonomy layer stays importable from a
-NumPy-only environment; compiled flows and the solver live behind that extra.
+`import summer4` imports JAX. `jax`, `jaxlib`, `diffrax` and `equinox` are in
+`[project].dependencies`. The `jax` extra remains for one release as a
+compatibility alias listing the same packages. Taxonomy modules still do not
+import JAX.
 ```

@@ -122,7 +122,11 @@ def test_ports_reject_bad_status(ports_text: str, text: str) -> None:
 def test_ports_reject_undeclared_package(ports_text: str, text: str) -> None:
     from scripts.coverage_report import read_ports
 
-    broken = ports_text.replace("| Pin the unmerged stack commit | WP12 |", "| Pin | WP99 |", 1)
+    broken = ports_text.replace(
+        "| Hand-written `TraitChain` | WP13 |",
+        "| Hand-written `TraitChain` | WP99 |",
+        1,
+    )
     with pytest.raises(ValueError, match="undeclared package"):
         read_ports(broken, text)
 

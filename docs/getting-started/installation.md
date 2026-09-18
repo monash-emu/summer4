@@ -1,10 +1,53 @@
 # Installation
 
-summer4's taxonomy layer depends on **NumPy only**. Compiled flows import JAX.
-JAX also lives in the pixi environment matrix so solvers can be benchmarked
-across versions.
+summer4 is an alpha (`0.2.0a1`). The API is not stable, and the package is not
+published to PyPI. Install from the git tag.
 
-## With pixi (recommended)
+Importing summer4 imports JAX, so `jax`, `jaxlib`, `diffrax` and `equinox` are
+core dependencies. The version string is
+`importlib.metadata.version("summer4")`.
+
+## Downstream project
+
+A pixi project that depends on the tagged release:
+
+```toml
+[pypi-dependencies]
+summer4 = { git = "https://github.com/monash-emu/summer4.git", tag = "v0.2.0a1", extras = ["calibration", "pandas", "frames"] }
+```
+
+Or with pip:
+
+```bash
+pip install "summer4[calibration,pandas,frames] @ git+https://github.com/monash-emu/summer4.git@v0.2.0a1"
+```
+
+### Extras
+
+| Extra | Packages | When you need it |
+| --- | --- | --- |
+| `calibration` | numpyro, optax | Sampling and MAP fits |
+| `pandas` | pandas | `Trace.to_pandas` |
+| `frames` | polars, pyarrow | `Trace.to_frame`, and the Arrow conversion `to_pandas` uses |
+| `jax` | jax, jaxlib, diffrax, equinox | Compatibility alias for this release. These packages are already core dependencies, so `pip install summer4[jax]` still works |
+
+### Platforms
+
+This repository's pixi environments are solved for `osx-arm64` and `linux-64`.
+
+JAX's own support, from the
+[installation table](https://docs.jax.dev/en/latest/installation.html):
+
+- **CPU:** Linux x86_64, Linux aarch64, macOS Apple Silicon, and Windows x86_64.
+  The Windows `jaxlib` wheel is experimental; you may also need the Microsoft
+  Visual Studio 2019 redistributable.
+- **NVIDIA GPU:** Linux yes. Native Windows no. Windows via WSL2 is
+  experimental.
+- **AMD GPU:** Linux yes. Native Windows no. WSL2 is experimental.
+
+There is no Windows on ARM build.
+
+## With pixi (contributors)
 
 [pixi](https://pixi.sh) manages both the conda-level toolchain and the Python
 dependencies, and the repository's task table is the project's real entry point.
@@ -38,21 +81,6 @@ pixi run -e docs docs
 
 The `docs` environment includes JAX so the user-guide flows notebook can
 compile a vector field at build time.
-
-## With pip
-
-The package builds with hatchling and is importable from a plain virtualenv:
-
-```bash
-pip install .
-```
-
-Optional extras:
-
-```bash
-pip install ".[jax]"           # jax, jaxlib, diffrax, equinox
-pip install ".[calibration]"   # numpyro, optax
-```
 
 ## Notebook kernel
 

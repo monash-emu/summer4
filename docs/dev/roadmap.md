@@ -127,6 +127,7 @@ changed about them is recorded here instead, and overrides them.
 | `tb-ports-feature-completeness` | §14c | `EpiModel` no longer exists (`plans/remove-epimodel.plan.md`). There are no `EpiModel.add_infection_*_flow` methods to extend. Builder sugar belongs on `ForceOfInfection` construction, used with `FlowModel`; `adjust=` already exists on `TransitionFlow` |
 | `tb-ports-feature-completeness` | §13.3, §14e, §15e | Notebook numbers are stale: `examples/notebooks/` already reaches `12-model-stratification.ipynb`. Use the numbers in the step sections below |
 | `tb-ports-feature-completeness` | §15a | Still accurate: `Trace` has no operators. The `D5` row's note in the coverage ledger already promises them in WP15; clear that note in step 10 |
+| `wp12-release` | Step 2b | JAX has native Windows x86_64 CPU support; the Windows `jaxlib` wheel is experimental. Native Windows GPU is unsupported. WSL2 is the Windows GPU route, and that support is experimental. This repository's pixi platforms stay `osx-arm64` and `linux-64` |
 
 ---
 
