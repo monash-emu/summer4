@@ -71,11 +71,11 @@ Two conventions that are easy to get wrong:
 <!-- roadmap:current -->
 | Field | Value |
 | --- | --- |
-| Step | 1 |
+| Step | 2 |
 | Status | next |
-| Branch | `chore/merge-flows-stack` |
-| Cut from | `feat/model-stratify` |
-| Last landed | — |
+| Branch | `chore/release-v0.2` |
+| Cut from | `main` |
+| Last landed | `chore/merge-flows-stack` |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -87,8 +87,8 @@ only step 2's tag.
 <!-- roadmap:steps -->
 | Step | Phase | WP | Branch | Plan | Section | Status | Closes |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | A | WP12 | `chore/merge-flows-stack` | `plans/wp12-release.plan.md` | Step 1 | next | — |
-| 2 | A | WP12 | `chore/release-v0.2` | `plans/wp12-release.plan.md` | Step 2 | planned | KI23 TM9 |
+| 1 | A | WP12 | `chore/merge-flows-stack` | `plans/wp12-release.plan.md` | Step 1 | done | — |
+| 2 | A | WP12 | `chore/release-v0.2` | `plans/wp12-release.plan.md` | Step 2 | next | KI23 TM9 |
 | 3 | A | WP12 | `chore/downstream-smoke-ci` | `plans/wp12-release.plan.md` | Step 3 | planned | — |
 | 4 | B | WP13 | `feat/rate-math` | `plans/tb-ports-feature-completeness.plan.md` | 13.1 | planned | — |
 | 5 | B | WP13 | `feat/table-interp` | `plans/tb-ports-feature-completeness.plan.md` | 13.2 | planned | KI6 KI10 KI11 TM4 |
@@ -131,6 +131,8 @@ changed about them is recorded here instead, and overrides them.
 ---
 
 ## Step 1 — `chore/merge-flows-stack`
+
+**Landed:** chore/merge-flows-stack, PR #7 (eceba1e) + PR #8 (769f9f1), 2026-09-18.
 
 ### Summary
 
@@ -191,6 +193,15 @@ pyarrow that `Trace.to_pandas` silently needs. Then it bumps the version to
 `0.2.0a1`, tags it, and documents the git install honestly, including that JAX
 has no native Windows support. It closes `KI23` and `TM9`, which unblocks the
 tb_macro port (step 20).
+
+### What the previous worker left you
+
+- Stack merge was clean: PR #7 retargeted from `feat/remove-epimodel` to `main` and merge-committed; cookbook PR #8 rebased onto main with no conflicts (the intermediate merge commit dropped away; only `c679c3c`/`40550b9` cookbook commit remained).
+- PR #3 auto-closed/merged with #7 (it already targeted `main`); #4 and #6 closed manually with supersession comments naming `eceba1e`.
+- No stacked flows PRs remain open.
+- Clean-clone import of `summer4.flows.FlowModel` works. `summer4.__version__` is missing as a module attribute; `importlib.metadata.version("summer4")` returns `0.1.0a0` — step 2 should expose version honestly when bumping to `0.2.0a1`.
+- Delivery-status warning admonition was removed in this handoff (step 1), so step 2's delivery rewrite should not try to delete it again; still do the rest of 2c (tb-ports KI23/TM9, pointer polish).
+- Tip was fully green (`pixi run` full suite) on `feat/model-stratify` before merge; no test fixes needed on the merge branch.
 
 ### Read first
 
