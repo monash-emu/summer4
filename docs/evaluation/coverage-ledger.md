@@ -146,15 +146,6 @@ Where the landed work physically lives, and which of the remaining packages have
 a written plan. This section records *delivery*, not capability — the `Status`
 column of the API ledger above stays the authority on what summer4 can do.
 
-```{admonition} The flows stack is not on `main`
-:class: warning
-
-`main` carries the compartment taxonomy and CI only. Every phase below lives on
-an unmerged feature branch, each one stacked on the previous. A clone of `main`
-cannot `import summer4.flows`. Branch off the tip of the stack, not off `main`,
-until the stack is merged.
-```
-
 ### Landed phases
 
 Phases of `plans/flows-derived-outputs.plan.md`, in stack order. Each branch
@@ -175,6 +166,10 @@ contains every branch above it.
 | 6.1–6.6 | WP6 — FOI and mixing | `feat/epi-infection-mixing` | *(this stack)* | `plans/epi-infection-mixing.plan.md` |
 | C1–C4 | Textbook / summer2 / evaluation catch-up | `docs/textbook-catchup` | *(this stack)* | `plans/textbook-catchup.plan.md` |
 | 3.0–3.7 | WP3 — initial population and run stages | `feat/initial-population` | *(this stack)* | `plans/initial-population.plan.md` |
+
+Every phase in the table is now on `main`, as of the merge of PR #7
+(`eceba1e`) and PR #8 (`769f9f1`). The table is kept as history of the
+stack order.
 
 Every phase shipped its notebook: `examples/notebooks/01-taxonomy.ipynb`
 through `11-run-stages.ipynb`, plus textbook chapters 1–12 and 14–15 (13
@@ -203,7 +198,7 @@ package closes is recorded, by row ID, in {doc}`tb-ports`.
 | — | Textbook / docs catch-up | `plans/textbook-catchup.plan.md` (C1–C4) | **Applied.** Ports for unblocked chapters and summer2 pages; evaluation prose refresh |
 | WP9 | Contact survey data | `plans/wp9-contact-surveys.plan.md` | Settled there: `ContactMatrix` loading and validation, rebinning, reciprocity, population adaptation, scaling, textbook 16-19 |
 | WP10 | Calibration | `plans/tb-ports-feature-completeness.plan.md` | Settled there: priors, likelihoods on `Target`, numpyro samplers (NUTS and gradient-free ensemble), MAP, posterior runs; lives in `summer4.epi` |
-| WP12 | Pinnable release | `plans/tb-ports-feature-completeness.plan.md` | Merge the stack to `main` and tag, so downstream repos pin a release |
+| WP12 | Pinnable release | `plans/tb-ports-feature-completeness.plan.md` | Stack is on `main` (PR #7 `eceba1e`, PR #8 `769f9f1`). Tagging is step 2 of `plans/wp12-release.plan.md` |
 | WP13 | Rate-tree math and tabular time series | `plans/tb-ports-feature-completeness.plan.md` | Math nodes, vector-valued table interpolation, `Lookup`, ageing sugar |
 | WP14 | Generalised force of infection | `plans/tb-ports-feature-completeness.plan.md` | `kind="generalised"` with an exponent; compartment-level infectiousness |
 | WP15 | Output algebra | `plans/tb-ports-feature-completeness.plan.md` | `Trace` operators, windowed cumulative, multi-flow outputs, `OutputSet`, frames |
