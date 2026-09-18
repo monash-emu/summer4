@@ -131,9 +131,19 @@ merge observation times into a save plan for sparse calibration runs.
    FieldRef
    FlowRef
    BinOp
+   UnaryOp
    Multiply
    Overwrite
    Transform
+   exp
+   log
+   tanh
+   sqrt
+   floor
+   maximum
+   minimum
+   clip
+   eval_closed
    derived_refs
    as_rate
    as_adjust

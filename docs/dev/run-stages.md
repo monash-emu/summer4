@@ -28,6 +28,7 @@ Rules:
 | `FieldRef` | run if `params_are_static` (i.e. `derived_fn is None`), else step (leaf) |
 | `Time`, `FlowRef`, `Reduce`, `Capture` | step |
 | `BinOp` | step if any child is step, else run |
+| `UnaryOp` | same stage as its argument |
 | `Interp` | step if any of breakpoints/values/arg is step, else run |
 | `GaussianPulse` | step if any of arg/centre/width/height is step, else run |
 | any other `RateOps` | `expr.__rate_stage__()` if that attribute exists and is callable, else **step** (conservative; `ForceOfInfection` stays step) |
@@ -47,7 +48,7 @@ Walk the roots depth-first. The roots are every flow's `rate`, every
 
    Then descend into `arg`, and into any breakpoints/values not covered by a
    slot.
-3. Otherwise descend into the children of `BinOp` and `GaussianPulse`. Do not
+3. Otherwise descend into the children of `BinOp`, `UnaryOp` and `GaussianPulse`. Do not
    descend into `Capture` or unknown custom nodes.
 4. Skip a key that already has a slot, because shared node objects are
    evaluated once.

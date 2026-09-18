@@ -71,11 +71,11 @@ Two conventions that are easy to get wrong:
 <!-- roadmap:current -->
 | Field | Value |
 | --- | --- |
-| Step | 4 |
+| Step | 5 |
 | Status | next |
-| Branch | `feat/rate-math` |
+| Branch | `feat/table-interp` |
 | Cut from | `main` |
-| Last landed | `chore/downstream-smoke-ci` |
+| Last landed | `feat/rate-math` |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -90,8 +90,8 @@ only step 2's tag.
 | 1 | A | WP12 | `chore/merge-flows-stack` | `plans/wp12-release.plan.md` | Step 1 | done | — |
 | 2 | A | WP12 | `chore/release-v0.2` | `plans/wp12-release.plan.md` | Step 2 | done | KI23 TM9 |
 | 3 | A | WP12 | `chore/downstream-smoke-ci` | `plans/wp12-release.plan.md` | Step 3 | done | — |
-| 4 | B | WP13 | `feat/rate-math` | `plans/tb-ports-feature-completeness.plan.md` | 13.1 | next | — |
-| 5 | B | WP13 | `feat/table-interp` | `plans/tb-ports-feature-completeness.plan.md` | 13.2 | planned | KI6 KI10 KI11 TM4 |
+| 4 | B | WP13 | `feat/rate-math` | `plans/tb-ports-feature-completeness.plan.md` | 13.1 | done | — |
+| 5 | B | WP13 | `feat/table-interp` | `plans/tb-ports-feature-completeness.plan.md` | 13.2 | next | KI6 KI10 KI11 TM4 |
 | 6 | B | WP13 | `feat/ageing-sugar` | `plans/tb-ports-feature-completeness.plan.md` | 13.3 | planned | KI2 TM3 |
 | 7 | C | WP14 | `feat/epi-generalised-foi` | `plans/tb-ports-feature-completeness.plan.md` | 14a | planned | — |
 | 8 | C | WP14 | `feat/epi-compartment-infectiousness` | `plans/tb-ports-feature-completeness.plan.md` | 14b | planned | KI4 KI5 TM5 |
@@ -126,7 +126,7 @@ changed about them is recorded here instead, and overrides them.
 | `tb-ports-feature-completeness` | WP3, all of it | **Applied** on `feat/initial-population`; the plan that shipped is `plans/initial-population.plan.md`. `KI3`, `TM6`, `L4`, `L5` and `S8` are already `full`. Port-order step 3 is a no-op — skip it |
 | `tb-ports-feature-completeness` | §14c | `EpiModel` no longer exists (`plans/remove-epimodel.plan.md`). There are no `EpiModel.add_infection_*_flow` methods to extend. Builder sugar belongs on `ForceOfInfection` construction, used with `FlowModel`; `adjust=` already exists on `TransitionFlow` |
 | `tb-ports-feature-completeness` | §13.3, §14e, §15e | Notebook numbers are stale: `examples/notebooks/` already reaches `12-model-stratification.ipynb`. Use the numbers in the step sections below |
-| `tb-ports-feature-completeness` | §15a | Still accurate: `Trace` has no operators. The `D5` row's note in the coverage ledger already promises them in WP15; clear that note in step 10 |
+| `tb-ports-feature-completeness` | §15a | Step 4 landed scalar/array `Trace` arithmetic, unary ops on a `Trace` (`tanh(trace)`), and `eval_closed` so a parameter transform can scale a `Trace`. Name-aligned `Trace` ∘ `Trace`, `cumulative(start=)`, `midpoint` and multi-flow `FlowMass` remain step 9. Clear the `D5` note in step 10 |
 | `wp12-release` | Step 2b | JAX has native Windows x86_64 CPU support; the Windows `jaxlib` wheel is experimental. Native Windows GPU is unsupported. WSL2 is the Windows GPU route, and that support is experimental. This repository's pixi platforms stay `osx-arm64` and `linux-64` |
 
 ---
@@ -283,6 +283,8 @@ step 20 (tb_macro port) is now unblocked and may run in parallel with phase B.
 
 ## Step 4 — `feat/rate-math`
 
+**Landed:** feat/rate-math, 2026-09-18.
+
 ### Summary
 
 The rate tree can only add, subtract, multiply and divide. Both tuberculosis
@@ -344,6 +346,16 @@ that evaluates a whole `(T, K)` table in one batched interpolation returning a
 `GroupedRate`, plus a `Lookup` node that gathers a row out of an array carried in
 the parameters, so a yearly mixing matrix can be built once per run instead of
 rebuilt on every vector-field call. It closes `KI6`, `KI10`, `KI11` and `TM4`.
+
+### What the previous worker left you
+
+- Operators that landed: unary `neg`, `exp`, `log`, `abs`, `tanh`, `sqrt`, `floor`; binary `pow`, `maximum`, `minimum`; `clip` is `minimum(maximum(x, lo), hi)`. Dunders `__pow__`, `__rpow__`, `__neg__`, `__abs__`. None of §13.1's operators were deferred.
+- The numeric kernel is `summer4.flows.algebra.apply_unary` / `apply_binary`. Rate evaluation and value-side arithmetic (a `GroupedRate`, a `PropertyData`, a `Trace`) share it. Grouped rates still refuse a different grouping.
+- `eval_closed(expr, params)` evaluates a parameter-only tree (`tanh(Param("s"))`, `Param("x") ** Param("p")`). The same object can be a flow rate or a `Transform` argument. A `Trace` does not carry parameters, so `trace * expr` raises and names `eval_closed`; `trace * eval_closed(expr, params)` is the combination. Name-aligned `Trace` ∘ `Trace`, `cumulative(start=)`, `midpoint` and multi-flow `FlowMass` are still step 9.
+- `UnaryOp` is run-stage when its argument is. A parameter-only `exp(Param("a") * Param("b"))` is one hoist slot. A step-stage `exp` still descends, so the parameter product inside `exp(a * b + Time())` hoists. `hoist=True` and `hoist=False` matched on that expression.
+- Default JAX is float32. The 50-time triangular and tanh checks use `rtol=1e-5`.
+- `examples/notebooks/13-rate-math-and-tables.ipynb` exists. Extend it; do not start a second notebook. It currently asserts the triangular seed, the tanh scale-up, and scaling a trace by `eval_closed(tanh(Param("se")))`.
+- No ledger status moved. Route-today text for `KI4`, `KI11`, `KI14` and `TM4` now names the nodes that exist. `TM4` stays `partial` until this step closes it. `S6` is untouched.
 
 ### Read first
 

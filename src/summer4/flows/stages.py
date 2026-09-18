@@ -24,6 +24,7 @@ from summer4.flows.rates import (
     Reduce,
     Time,
     Transform,
+    UnaryOp,
 )
 
 PrepareFn = Callable[[Any], Any]
@@ -76,6 +77,8 @@ def rate_stage(expr: RateOps, *, params_are_static: bool) -> Stage:
         left = rate_stage(expr.left, params_are_static=params_are_static)
         right = rate_stage(expr.right, params_are_static=params_are_static)
         return "step" if left == "step" or right == "step" else "run"
+    if isinstance(expr, UnaryOp):
+        return rate_stage(expr.arg, params_are_static=params_are_static)
     if isinstance(expr, Interp):
         parts = (
             *expr.breakpoints,
@@ -149,6 +152,9 @@ def build_hoist_table(roots: Sequence[RateOps], *, params_are_static: bool) -> H
             walk(node.centre)
             walk(node.width)
             walk(node.height)
+            return
+        if isinstance(node, UnaryOp):
+            walk(node.arg)
             return
         # Capture and unknown custom nodes: do not descend.
 
