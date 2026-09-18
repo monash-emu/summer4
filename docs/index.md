@@ -52,6 +52,13 @@ case-studies/index
 
 ```{toctree}
 :maxdepth: 2
+:caption: Cookbook
+
+cookbook/index
+```
+
+```{toctree}
+:maxdepth: 2
 :caption: Developer guide
 
 dev/index
@@ -90,6 +97,7 @@ api/index
 | Stream | Audience | Focus | Status |
 |--------|----------|-------|--------|
 | **User guide** | Modellers with moderate Python | Taxonomy, flows, epi, timevarying, and running to a `Result` | Taxonomy + flows + results + epi + timevarying |
+| **Cookbook** | Domain experts with limited programming | Short recipes for one practical task | Custom rates |
 | **Developer guide** | Contributors to summer4 | Kleene algebra, array layout, performance, workflow | Current |
 | **Textbook** | Modellers learning infectious-disease concepts | Chapters adapted from the summer textbook | Chapters 1–12 and 14 full (2, 15 partial); 13 and 16–20 blocked |
 | **summer2 ports** | Migrators from summer2 | Runnable ports of summer2 doc notebooks | 11 of 11 full |
