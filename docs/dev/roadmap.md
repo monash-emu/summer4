@@ -71,11 +71,11 @@ Two conventions that are easy to get wrong:
 <!-- roadmap:current -->
 | Field | Value |
 | --- | --- |
-| Step | 2 |
+| Step | 3 |
 | Status | next |
-| Branch | `chore/release-v0.2` |
+| Branch | `chore/downstream-smoke-ci` |
 | Cut from | `main` |
-| Last landed | `chore/merge-flows-stack` |
+| Last landed | `chore/release-v0.2` |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -88,8 +88,8 @@ only step 2's tag.
 | Step | Phase | WP | Branch | Plan | Section | Status | Closes |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | A | WP12 | `chore/merge-flows-stack` | `plans/wp12-release.plan.md` | Step 1 | done | — |
-| 2 | A | WP12 | `chore/release-v0.2` | `plans/wp12-release.plan.md` | Step 2 | next | KI23 TM9 |
-| 3 | A | WP12 | `chore/downstream-smoke-ci` | `plans/wp12-release.plan.md` | Step 3 | planned | — |
+| 2 | A | WP12 | `chore/release-v0.2` | `plans/wp12-release.plan.md` | Step 2 | done | KI23 TM9 |
+| 3 | A | WP12 | `chore/downstream-smoke-ci` | `plans/wp12-release.plan.md` | Step 3 | next | — |
 | 4 | B | WP13 | `feat/rate-math` | `plans/tb-ports-feature-completeness.plan.md` | 13.1 | planned | — |
 | 5 | B | WP13 | `feat/table-interp` | `plans/tb-ports-feature-completeness.plan.md` | 13.2 | planned | KI6 KI10 KI11 TM4 |
 | 6 | B | WP13 | `feat/ageing-sugar` | `plans/tb-ports-feature-completeness.plan.md` | 13.3 | planned | KI2 TM3 |
@@ -184,6 +184,8 @@ themselves).
 
 ## Step 2 — `chore/release-v0.2`
 
+**Landed:** chore/release-v0.2, PR #10, 2026-09-18.
+
 ### Summary
 
 This step makes summer4 installable by tag instead of by commit SHA. It fixes
@@ -243,6 +245,15 @@ checkout. It then runs a three-compartment SIR through `compile` → `run` →
 `Result`. The point is to catch packaging regressions — a missing dependency, a
 module left out of the wheel — that a local editable install hides completely.
 It closes no ledger row and ships no notebook.
+
+### What the previous worker left you
+
+- Packaging arm 1: `jax`, `jaxlib`, `diffrax` and `equinox` are core dependencies. The `jax` extra was not emptied; it re-lists those packages for one release, because `src/summer4/solvers/diffrax_backend.py` still says `pip install summer4[jax]`. Emptying it would make that instruction a no-op. No `src/summer4` change, so the feature bar was not pulled onto this chore.
+- `summer4.__version__` was not added. The version is `importlib.metadata.version("summer4")`, which is `0.2.0a1` once this release is installed.
+- The installation page follows the JAX installation table, not the plan's "no native Windows" sentence. Native Windows x86_64 CPU is supported (experimental `jaxlib` wheel). Native Windows GPU is not. WSL2 is the Windows GPU route. This repo's pixi platforms stay `osx-arm64` and `linux-64`. The correction is in the table above.
+- Tag name is `v0.2.0a1`, created on the merge commit of PR #10 after that PR merges. The smoke job must pin that tag, not `main`.
+- `KI23` and `TM9` are `full`. Readiness `today` is 7 / 23 and 5 / 9. The delivery-status warning was already gone; it was not deleted again.
+- Step 20 (tb_macro port) is unblocked by the tag and may start in parallel with step 3. It still needs the tag to exist before a downstream pin will resolve.
 
 ### Read first
 
