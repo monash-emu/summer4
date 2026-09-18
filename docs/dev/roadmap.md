@@ -71,11 +71,11 @@ Two conventions that are easy to get wrong:
 <!-- roadmap:current -->
 | Field | Value |
 | --- | --- |
-| Step | 3 |
+| Step | 4 |
 | Status | next |
-| Branch | `chore/downstream-smoke-ci` |
+| Branch | `feat/rate-math` |
 | Cut from | `main` |
-| Last landed | `chore/release-v0.2` |
+| Last landed | `chore/downstream-smoke-ci` |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -89,8 +89,8 @@ only step 2's tag.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | A | WP12 | `chore/merge-flows-stack` | `plans/wp12-release.plan.md` | Step 1 | done | — |
 | 2 | A | WP12 | `chore/release-v0.2` | `plans/wp12-release.plan.md` | Step 2 | done | KI23 TM9 |
-| 3 | A | WP12 | `chore/downstream-smoke-ci` | `plans/wp12-release.plan.md` | Step 3 | next | — |
-| 4 | B | WP13 | `feat/rate-math` | `plans/tb-ports-feature-completeness.plan.md` | 13.1 | planned | — |
+| 3 | A | WP12 | `chore/downstream-smoke-ci` | `plans/wp12-release.plan.md` | Step 3 | done | — |
+| 4 | B | WP13 | `feat/rate-math` | `plans/tb-ports-feature-completeness.plan.md` | 13.1 | next | — |
 | 5 | B | WP13 | `feat/table-interp` | `plans/tb-ports-feature-completeness.plan.md` | 13.2 | planned | KI6 KI10 KI11 TM4 |
 | 6 | B | WP13 | `feat/ageing-sugar` | `plans/tb-ports-feature-completeness.plan.md` | 13.3 | planned | KI2 TM3 |
 | 7 | C | WP14 | `feat/epi-generalised-foi` | `plans/tb-ports-feature-completeness.plan.md` | 14a | planned | — |
@@ -237,6 +237,8 @@ actually chosen.
 
 ## Step 3 — `chore/downstream-smoke-ci`
 
+**Landed:** chore/downstream-smoke-ci, PR #11, 2026-09-18.
+
 ### Summary
 
 This step adds a CI job that installs summer4 the way a downstream repository
@@ -291,6 +293,14 @@ callback, which blocks hoisting and obscures the parameter dependencies. This
 step adds a `UnaryOp` node, extends `BinOp` with `pow`, `maximum` and `minimum`,
 and exports the operators and dunders. It closes no row on its own — steps 5 and
 6 do — but nothing else in phase B or C works without it.
+
+### What the previous worker left you
+
+- Phase A is finished. The flows stack is on `main`, tag `v0.2.0a1` exists, and the downstream smoke job is in the full pull-request suite.
+- Step 20 (tb_macro port) is unblocked and may run in parallel with phase B. It pins `tag = "v0.2.0a1"`.
+- The smoke job pins that tag, not `main` or the PR head. It ran green on PR #11 for `ubuntu-latest` (linux-64) and `macos-latest` (osx-arm64). The script is `scripts/downstream_smoke.py`. With `SUMMER4_SMOKE_REQUIRE_INSTALL=1` it refuses an import from `src/summer4`.
+- The susceptible check is `S(1) = 999 * exp(-0.3)`. A population check is looser on purpose: default JAX is float32, and a conserved 1000 drifted by about `1e-3`.
+- No ledger rows moved. No `src/summer4` change.
 
 ### Read first
 
