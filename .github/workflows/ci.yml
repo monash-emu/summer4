@@ -75,3 +75,47 @@ jobs:
           cache: true
           locked: true
       - run: pixi run --environment ${{ matrix.environment }} test
+
+  # Not the repo's pixi.toml. That install is editable
+  # (`summer4 = { path = ".", editable = true }`) and will not notice a
+  # dependency missing from the wheel. This job builds a scratch project that
+  # pins the git tag, the way a downstream repository does.
+  # Runners: ubuntu-latest is linux-64; macos-latest is osx-arm64. Those are
+  # the two platforms this repository solves. There is no osx-64 runner here.
+  downstream-smoke:
+    name: Downstream smoke (${{ matrix.os }})
+    if: >-
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'workflow_dispatch' && inputs.suite == 'full')
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: prefix-dev/setup-pixi@v0.10.1
+        with:
+          pixi-version: v0.80.0
+          run-install: false
+          cache: false
+      - name: Install the tagged release into a scratch project
+        run: |
+          set -euo pipefail
+          scratch="${RUNNER_TEMP}/summer4-smoke"
+          mkdir -p "${scratch}"
+          cat > "${scratch}/pixi.toml" <<'EOF'
+          [workspace]
+          channels = ["conda-forge"]
+          name = "summer4-downstream-smoke"
+          platforms = ["osx-arm64", "linux-64"]
+
+          [dependencies]
+          python = "3.13.*"
+
+          [pypi-dependencies]
+          summer4 = { git = "https://github.com/monash-emu/summer4.git", tag = "v0.2.0a1" }
+          EOF
+          cd "${scratch}"
+          pixi install
+          SUMMER4_SMOKE_REQUIRE_INSTALL=1 pixi run python "${GITHUB_WORKSPACE}/scripts/downstream_smoke.py"
