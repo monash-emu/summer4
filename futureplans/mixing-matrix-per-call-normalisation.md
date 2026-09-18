@@ -13,3 +13,8 @@ so a param-only matrix is hoisted, or the yearly/static stack is built in
 
 Related: `futureplans/wp10-preprocess-is-prepare-fn.md` for Kiribati's yearly
 mixing stack.
+
+**After step 5:** `Lookup` gathers one row of a parameter stack inside the
+vector field, so that stack is not rebuilt on every call. `resolved_matrix`
+still row-normalises the gathered matrix on every call when
+`normalize="rows"`. Hoisting that normalisation is still open.

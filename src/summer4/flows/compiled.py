@@ -28,9 +28,11 @@ from summer4.flows.rates import (
     FlowRef,
     GaussianPulse,
     Interp,
+    Lookup,
     Overwrite,
     RateOps,
     Reduce,
+    TableInterp,
     Time,
     Transform,
     UnaryOp,
@@ -210,12 +212,21 @@ def _eval_interp(
     x: Any,
     sharpness: float,
 ) -> Any:
+    import jax
     import jax.numpy as jnp
 
     xs = jnp.asarray(breakpoints)
     vals = jnp.asarray(values)
     x_arr = jnp.asarray(x)
     if kind == "linear":
+        # One ``interp`` for every column. ``vmap`` stays a single equation, so
+        # the program does not grow with the number of knots or columns.
+        if vals.ndim == 2:
+
+            def _column(col: Any) -> Any:
+                return jnp.interp(x_arr, xs, col)
+
+            return jax.vmap(_column, in_axes=1, out_axes=0)(vals)
         return jnp.interp(x_arr, xs, vals)
     if kind == "step":
         idx = jnp.searchsorted(xs, x_arr, side="right")
@@ -334,6 +345,23 @@ def _eval_rate(
             else:
                 stacked = jnp.stack([jnp.asarray(child(value)) for value in values])
             return _eval_interp(kind, stacked_bps, stacked, child(arg), sharpness)
+        case TableInterp(
+            kind=kind,
+            times=times,
+            values=values,
+            arg=arg,
+            sharpness=sharpness,
+            over=over,
+        ):
+            data = _eval_interp(kind, child(times), child(values), child(arg), sharpness)
+            return GroupedRate(data=data, properties=(over,))
+        case Lookup(table=ref, index=index, clamp=clamp):
+            arr = jnp.asarray(child(ref))
+            raw = jnp.asarray(child(index))
+            i = jnp.asarray(jnp.trunc(raw), dtype=jnp.int32)
+            if clamp:
+                i = jnp.clip(i, 0, arr.shape[0] - 1)
+            return jnp.take(arr, i, axis=0)
         case GaussianPulse(arg=arg, centre=centre, width=width, height=height):
             x = child(arg)
             c = child(centre)
