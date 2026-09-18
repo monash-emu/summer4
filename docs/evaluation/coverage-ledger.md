@@ -186,11 +186,9 @@ ported on this stack), the summer2 pages under `docs/summer2/`, and
 WP5, WP6 and the textbook catch-up sweep
 (`plans/textbook-catchup.plan.md`) are **applied** on this stack.
 
-**WP9 still has no detailed plan.** What exists is its paragraph in *The path
-to 100%* above and one line in the *Remaining to the 46/52 ceiling* section of
-`plans/flows-derived-outputs.plan.md`. That is a scope statement, not a plan: it
-names no modules, types, tests or notebook, which is what the landed phases each
-had before they were built.
+WP9 now has a detailed plan, `plans/wp9-contact-surveys.plan.md`; the paragraph
+in *The path to 100%* below is its scope statement, not its design. Every
+remaining package is planned.
 
 WP3 and WP10, and the new WP12–WP16, are planned in
 `plans/tb-ports-feature-completeness.plan.md`. That plan exists to make two
@@ -203,13 +201,14 @@ package closes is recorded, by row ID, in {doc}`tb-ports`.
 | WP5 | Time-varying function library | `plans/time-varying.plan.md` (5.1–5.5) | **Applied.** `Time()`, `summer4.timevarying`, `summer4.data`, summer2 time-varying page |
 | WP6 | Force of infection and mixing | `plans/epi-infection-mixing.plan.md` (6.1–6.6) | **Applied.** `GroupedRate`, `Reduce`, `summer4.epi` (`MixingMatrix`, `ForceOfInfection`, `EpiModel`) (`EpiModel` later removed: `plans/remove-epimodel.plan.md`) |
 | — | Textbook / docs catch-up | `plans/textbook-catchup.plan.md` (C1–C4) | **Applied.** Ports for unblocked chapters and summer2 pages; evaluation prose refresh |
-| WP9 | Contact survey data | Ledger paragraph only | Depends on WP6; loading, validating and scaling empirical matrices |
+| WP9 | Contact survey data | `plans/wp9-contact-surveys.plan.md` | Settled there: `ContactMatrix` loading and validation, rebinning, reciprocity, population adaptation, scaling, textbook 16-19 |
 | WP10 | Calibration | `plans/tb-ports-feature-completeness.plan.md` | Settled there: priors, likelihoods on `Target`, numpyro samplers (NUTS and gradient-free ensemble), MAP, posterior runs; lives in `summer4.epi` |
 | WP12 | Pinnable release | `plans/tb-ports-feature-completeness.plan.md` | Merge the stack to `main` and tag, so downstream repos pin a release |
 | WP13 | Rate-tree math and tabular time series | `plans/tb-ports-feature-completeness.plan.md` | Math nodes, vector-valued table interpolation, `Lookup`, ageing sugar |
 | WP14 | Generalised force of infection | `plans/tb-ports-feature-completeness.plan.md` | `kind="generalised"` with an exponent; compartment-level infectiousness |
 | WP15 | Output algebra | `plans/tb-ports-feature-completeness.plan.md` | `Trace` operators, windowed cumulative, multi-flow outputs, `OutputSet`, frames |
 | WP16 | Scale and solver safety | `plans/tb-ports-feature-completeness.plan.md` | TB-scale benchmark, surfaced `max_steps` failure, vmap-safe reciprocity check |
+| WP17 | FOI susceptibility surface | `plans/wp17-foi-susceptibility.plan.md` | Settled there: `ForceOfInfection(susceptibility=...)`; raises textbook 15 to `full` |
 
 WP5 lands before WP6, and before WP3, because every other part of a model may be
 parameterised in a time-varying fashion. WP6 is then the ordering constraint for
@@ -218,9 +217,11 @@ what follows: WP9 and WP10 both sit behind it, and it closes four API rows
 population split. Deferred gotchas that a plan for the unplanned packages should
 read first are in `futureplans/`.
 
-**Next steps after WP3.** Promote WP12 (pinnable release) then WP13 (rate-tree
-math / tables — closes `KI2` `KI6` `KI10` `KI11` `TM3` `TM4`) from
-`plans/tb-ports-feature-completeness.plan.md`. Track
+**Where the work has got to is recorded in {doc}`../dev/roadmap`**, not here.
+That file sequences every remaining package into numbered steps — one branch
+each — names the next one, and tells a session with no other context how to run
+it. This ledger stays the authority on *capability*; the roadmap is the
+authority on *position*. Track
 `futureplans/derived-fn-blocks-hoisting.md`,
 `futureplans/mixing-matrix-per-call-normalisation.md`, and
 `futureplans/wp10-preprocess-is-prepare-fn.md` when planning WP10 / mixing work.
@@ -363,6 +364,7 @@ table below is **computed** from these declarations by
 | WP14 | Generalised force of infection | *(no API rows; unblocks the TB ports)* |
 | WP15 | Output algebra | *(no API rows; unblocks the TB ports)* |
 | WP16 | Scale and solver safety | *(no API rows; unblocks the TB ports)* |
+| WP17 | Force-of-infection susceptibility surface | *(no API rows; unblocks textbook 15)* |
 <!-- /ledger:packages -->
 
 ## Coverage after each package
@@ -385,6 +387,7 @@ table below is **computed** from these declarations by
 | WP14 | 47 / 52 | 90% |
 | WP15 | 47 / 52 | 90% |
 | WP16 | 47 / 52 | 90% |
+| WP17 | 47 / 52 | 90% |
 <!-- /ledger:progression -->
 
 ## What never reaches `full`, and why that is fine
