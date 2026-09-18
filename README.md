@@ -6,7 +6,7 @@ NumPy-backed `PropertyMap`) and a flows layer (`FlowModel`, `CompiledModel`,
 named transition/entry/exit flows, a JAX vector field). `euler` returns the
 final state only.
 
-The taxonomy layer depends on NumPy only. Compiled flows import JAX.
+Importing summer4 imports JAX. JAX, jaxlib, diffrax and equinox are core dependencies.
 
 ## Concepts
 

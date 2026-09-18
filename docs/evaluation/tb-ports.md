@@ -38,16 +38,12 @@ original analyses re-run on numpyro.
 
 ## Verdict
 
-- **tb_macro** — tb_macro rows complete today: **4 of 9**, and every other row is `partial`. It is **implementable today** with hand-written glue: a `derived_fn` force of infection and a hand-written numpyro model (the original hand-writes that too).
-- **Kiribati** — Kiribati rows complete today: **6 of 23**. Every capability except calibration and scale has *some* route, but a faithful, calibratable port would re-implement several layers by hand. Remaining blockers:
+- **tb_macro** — tb_macro rows complete today: **5 of 9**, and every other row is `partial`. It is **implementable today** with hand-written glue: a `derived_fn` force of infection and a hand-written numpyro model (the original hand-writes that too).
+- **Kiribati** — Kiribati rows complete today: **7 of 23**. Every capability except calibration and scale has *some* route, but a faithful, calibratable port would re-implement several layers by hand. Remaining blockers:
   1. **Generalised force of infection** with compartment × age infectiousness — `KI4` `KI5`. `ForceOfInfection`'s custom `kind` receives no parameters, there is no power node, and `infectiousness=` keys only on the grouping property.
   2. **Output algebra** at summer2 scale — `KI13`–`KI17`. `Trace` has no operators, `cumulative()` has no start, `FlowMass` names one flow, there is no summer2 midpoint convention and no `Result` → frame.
   3. **Calibration workflow** — `KI18`–`KI21`. No priors, likelihoods, gradient-free sampler or posterior-run tooling exist.
-  4. **Delivery and scale** — `KI22` `KI23`. The flows stack is not on `main`, and nothing measures a 160-compartment, 185-year model.
-
-A shared limitation is delivery: `summer4.flows` exists only on the unmerged
-branch stack, so a downstream `pixi.toml` must pin a commit
-(`377e3f84a803d6898d42d06d7cf10d47d9875d5a`) until `WP12` tags a release.
+  4. **Scale** — `KI22`. Nothing measures a 160-compartment, 185-year model, and a solver that exceeds its step ceiling fails silently.
 
 ## Ports ledger
 
@@ -76,7 +72,7 @@ branch stack, so a downstream `pixi.toml` must pin a commit
 | KI20 | Kiribati | MAP fit (replacing nevergrad) | `partial` | Hand-written optax loop, as in the case study | WP10 |
 | KI21 | Kiribati | Posterior full runs × scenarios, quantiles, averted differences | `none` | — | WP10 |
 | KI22 | Kiribati | Verified compile time, step cost and solver safety at TB scale | `none` | — | WP16 |
-| KI23 | Kiribati | summer4 installable from a tagged GitHub release | `partial` | Pin the unmerged stack commit | WP12 |
+| KI23 | Kiribati | summer4 installable from a tagged GitHub release | `full` | Pin `tag = "v0.2.0a1"` | — |
 | TM1 | tb_macro | Ragged map: clinical × infectious only on `active` | `full` | `stratify(prop, where=state["active"])` | — |
 | TM2 | tb_macro | Partial destination (even split), collapse, expand | `full` | `identity_join` equal split; source-only properties dropped | — |
 | TM3 | tb_macro | Ageing 0 → 5 → 15 | `partial` | Hand-written `TraitChain` | WP13 |
@@ -85,7 +81,7 @@ branch stack, so a downstream `pixi.toml` must pin a commit
 | TM6 | tb_macro | Initial population with even split over ragged strata | `full` | `InitialPopulation` | — |
 | TM7 | tb_macro | Rolling-sum flow target queried at times | `full` | `FlowMass` → `rolling(7, how="sum")` → `at_times` (unrolled jaxpr, fixed in WP15) | — |
 | TM8 | tb_macro | Poisson likelihood, uniform prior, NUTS | `partial` | Hand-written numpyro model over `run` | WP10 |
-| TM9 | tb_macro | summer4 installable from a tagged GitHub release | `partial` | Pin the unmerged stack commit | WP12 |
+| TM9 | tb_macro | summer4 installable from a tagged GitHub release | `full` | Pin `tag = "v0.2.0a1"` | — |
 <!-- /ledger:ports -->
 
 ## Port order
@@ -112,7 +108,7 @@ Computed by `scripts/coverage_report.py`; do not edit by hand.
 <!-- ledger:port-readiness -->
 | After | Kiribati | tb_macro |
 | --- | --- | --- |
-| today | 6 / 23 | 4 / 9 |
+| today | 7 / 23 | 5 / 9 |
 | WP12 | 7 / 23 | 5 / 9 |
 | WP13 | 11 / 23 | 7 / 9 |
 | WP3 | 11 / 23 | 7 / 9 |

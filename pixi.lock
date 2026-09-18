@@ -9663,6 +9663,10 @@ packages:
   name: summer4
   requires_dist:
   - numpy>=1.26
+  - jax>=0.6.0
+  - jaxlib>=0.6.0
+  - diffrax>=0.7.2
+  - equinox
   - jax>=0.6.0 ; extra == 'jax'
   - jaxlib>=0.6.0 ; extra == 'jax'
   - diffrax>=0.7.2 ; extra == 'jax'
@@ -9670,6 +9674,8 @@ packages:
   - numpyro>=0.16.0 ; extra == 'calibration'
   - optax>=0.2.0 ; extra == 'calibration'
   - pandas>=2.0 ; extra == 'pandas'
+  - polars>=1.0 ; extra == 'frames'
+  - pyarrow>=17.0 ; extra == 'frames'
   requires_python: '>=3.13'
 - pypi: https://files.pythonhosted.org/packages/01/f9/575c8d760eae1fc99651b7cc5efd96ad5379ca4d6b53750b0fb4fe983f34/imagesize-2.0.1-py3-none-any.whl
   name: imagesize

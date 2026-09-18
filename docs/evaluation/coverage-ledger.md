@@ -168,8 +168,8 @@ contains every branch above it.
 | 3.0–3.7 | WP3 — initial population and run stages | `feat/initial-population` | *(this stack)* | `plans/initial-population.plan.md` |
 
 Every phase in the table is now on `main`, as of the merge of PR #7
-(`eceba1e`) and PR #8 (`769f9f1`). The table is kept as history of the
-stack order.
+(`eceba1e`) and PR #8 (`769f9f1`), and is pinnable as tag `v0.2.0a1`. The
+table is kept as history of the stack order.
 
 Every phase shipped its notebook: `examples/notebooks/01-taxonomy.ipynb`
 through `11-run-stages.ipynb`, plus textbook chapters 1–12 and 14–15 (13
@@ -185,8 +185,9 @@ WP9 now has a detailed plan, `plans/wp9-contact-surveys.plan.md`; the paragraph
 in *The path to 100%* below is its scope statement, not its design. Every
 remaining package is planned.
 
-WP3 and WP10, and the new WP12–WP16, are planned in
-`plans/tb-ports-feature-completeness.plan.md`. That plan exists to make two
+WP10 and WP13–WP16 are planned in
+`plans/tb-ports-feature-completeness.plan.md`. WP12 shipped as
+`plans/wp12-release.plan.md`. That plan exists to make two
 tuberculosis models portable to summer4; which of their capabilities each
 package closes is recorded, by row ID, in {doc}`tb-ports`.
 
@@ -198,7 +199,7 @@ package closes is recorded, by row ID, in {doc}`tb-ports`.
 | — | Textbook / docs catch-up | `plans/textbook-catchup.plan.md` (C1–C4) | **Applied.** Ports for unblocked chapters and summer2 pages; evaluation prose refresh |
 | WP9 | Contact survey data | `plans/wp9-contact-surveys.plan.md` | Settled there: `ContactMatrix` loading and validation, rebinning, reciprocity, population adaptation, scaling, textbook 16-19 |
 | WP10 | Calibration | `plans/tb-ports-feature-completeness.plan.md` | Settled there: priors, likelihoods on `Target`, numpyro samplers (NUTS and gradient-free ensemble), MAP, posterior runs; lives in `summer4.epi` |
-| WP12 | Pinnable release | `plans/tb-ports-feature-completeness.plan.md` | Stack is on `main` (PR #7 `eceba1e`, PR #8 `769f9f1`). Tagging is step 2 of `plans/wp12-release.plan.md` |
+| WP12 | Pinnable release | `plans/wp12-release.plan.md` | **Applied.** Tag `v0.2.0a1`. JAX is a core dependency; `frames` declares polars and pyarrow. Downstream smoke CI is step 3 of {doc}`../dev/roadmap` |
 | WP13 | Rate-tree math and tabular time series | `plans/tb-ports-feature-completeness.plan.md` | Math nodes, vector-valued table interpolation, `Lookup`, ageing sugar |
 | WP14 | Generalised force of infection | `plans/tb-ports-feature-completeness.plan.md` | `kind="generalised"` with an exponent; compartment-level infectiousness |
 | WP15 | Output algebra | `plans/tb-ports-feature-completeness.plan.md` | `Trace` operators, windowed cumulative, multi-flow outputs, `OutputSet`, frames |
@@ -320,7 +321,8 @@ everything above, including WP11's declarative targets.
 **Closes:** *(no API rows)* · **Unblocks:** the Kiribati and tb_macro ports;
 see {doc}`tb-ports` for the rows each closes and the computed readiness after each.
 
-WP12 tags a pinnable release. WP13 adds math nodes (`Pow`, `Log`, `Maximum`, …),
+WP12 is **applied**: tag `v0.2.0a1`. Where the work has got to after that is
+{doc}`../dev/roadmap`, not this page. WP13 adds math nodes (`Pow`, `Log`, `Maximum`, …),
 vector-valued table interpolation and a `Lookup` node. WP14 adds a generalised
 force of infection with a calibratable exponent and compartment-level
 infectiousness. WP15 adds output algebra: `Trace` operators, a windowed
