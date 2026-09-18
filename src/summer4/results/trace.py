@@ -105,6 +105,88 @@ class Trace:
             dims=self.dims if dims is None else dims,
         )
 
+    __array_priority__ = 1000
+
+    def _map_unary(self, op: str) -> Trace:
+        """Pointwise unary op, same kernel as a rate-tree :class:`UnaryOp`."""
+        from summer4.flows.algebra import apply_unary
+
+        return self._with(values=apply_unary(op, self.values))
+
+    @staticmethod
+    def _combine(left: object, right: object, op: str) -> Trace:
+        """Binary op of a Trace with a scalar or array.
+
+        The numeric kernel is :func:`summer4.flows.algebra.apply_binary`, shared with
+        rate evaluation. An unevaluated rate expression (a parameter transform
+        such as ``tanh(Param("s"))``) is rejected: evaluate it with
+        :func:`summer4.flows.compiled.eval_closed` and combine with the array.
+        Trace-to-Trace name alignment is not done here.
+        """
+        from summer4.flows.algebra import apply_binary
+        from summer4.flows.rates import RateOps
+
+        left_trace = isinstance(left, Trace)
+        right_trace = isinstance(right, Trace)
+        if left_trace and right_trace:
+            raise TypeError(
+                "Trace-to-Trace arithmetic needs name-aligned broadcasting, "
+                "which is not implemented yet."
+            )
+        if not left_trace and not right_trace:
+            raise TypeError("Trace._combine expects one Trace.")
+        if isinstance(left, RateOps) or isinstance(right, RateOps):
+            raise TypeError(
+                "Cannot combine a Trace with an unevaluated rate expression. "
+                "Evaluate parameter-only expressions with eval_closed(expr, params) "
+                "and combine the Trace with that array."
+            )
+        owner = left if left_trace else right
+        if not isinstance(owner, Trace):
+            raise TypeError("Trace._combine expects one Trace.")
+        values = apply_binary(
+            op,
+            left.values if isinstance(left, Trace) else left,
+            right.values if isinstance(right, Trace) else right,
+        )
+        return owner._with(values=values)
+
+    def __neg__(self) -> Trace:
+        return self._map_unary("neg")
+
+    def __abs__(self) -> Trace:
+        return self._map_unary("abs")
+
+    def __add__(self, other: object) -> Trace:
+        return Trace._combine(self, other, "add")
+
+    def __radd__(self, other: object) -> Trace:
+        return Trace._combine(other, self, "add")
+
+    def __sub__(self, other: object) -> Trace:
+        return Trace._combine(self, other, "sub")
+
+    def __rsub__(self, other: object) -> Trace:
+        return Trace._combine(other, self, "sub")
+
+    def __mul__(self, other: object) -> Trace:
+        return Trace._combine(self, other, "mul")
+
+    def __rmul__(self, other: object) -> Trace:
+        return Trace._combine(other, self, "mul")
+
+    def __truediv__(self, other: object) -> Trace:
+        return Trace._combine(self, other, "div")
+
+    def __rtruediv__(self, other: object) -> Trace:
+        return Trace._combine(other, self, "div")
+
+    def __pow__(self, other: object) -> Trace:
+        return Trace._combine(self, other, "pow")
+
+    def __rpow__(self, other: object) -> Trace:
+        return Trace._combine(other, self, "pow")
+
     def _pmap(self) -> PropertyMap | None:
         return self.values.pmap if isinstance(self.values, PropertyData) else None
 

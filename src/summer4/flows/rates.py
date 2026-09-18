@@ -69,6 +69,18 @@ class RateOps:
     def __rtruediv__(self, other: object) -> BinOp:
         return BinOp("div", as_rate(other), as_rate(self))
 
+    def __pow__(self, other: object) -> BinOp:
+        return BinOp("pow", as_rate(self), as_rate(other))
+
+    def __rpow__(self, other: object) -> BinOp:
+        return BinOp("pow", as_rate(other), as_rate(self))
+
+    def __neg__(self) -> UnaryOp:
+        return UnaryOp("neg", as_rate(self))
+
+    def __abs__(self) -> UnaryOp:
+        return UnaryOp("abs", as_rate(self))
+
 
 @dataclass(frozen=True, slots=True)
 class Const(RateOps):
@@ -155,10 +167,18 @@ class FlowRef(RateOps):
 
 
 @dataclass(frozen=True, slots=True)
+class UnaryOp(RateOps):
+    """Pointwise unary operation on one rate expression."""
+
+    op: Literal["neg", "exp", "log", "abs", "tanh", "sqrt", "floor"]
+    arg: RateOps
+
+
+@dataclass(frozen=True, slots=True)
 class BinOp(RateOps):
     """Binary arithmetic on two rate expressions."""
 
-    op: Literal["add", "sub", "mul", "div"]
+    op: Literal["add", "sub", "mul", "div", "pow", "maximum", "minimum"]
     left: RateOps
     right: RateOps
 
@@ -341,6 +361,136 @@ def as_rate(value: object) -> RateOps:
     raise TypeError(f"Cannot use {type(value).__name__} as a flow rate.")
 
 
+def _is_value(value: object) -> bool:
+    """True when ``value`` is already evaluated, not a rate-tree node.
+
+    Python scalars stay symbolic (``tanh(0.5)`` is a node). Arrays, grouped
+    rates, property data and traces are applied immediately, which is how a
+    parameter array inside a jitted loss meets the same operator a rate tree
+    uses.
+    """
+    if value is None or isinstance(value, RateOps):
+        return False
+    if isinstance(value, (bool, int, float, np.integer, np.floating)):
+        return False
+    import jax
+
+    from summer4.flows.compiled import GroupedRate
+    from summer4.jax.propertydata import PropertyData
+    from summer4.results.trace import Trace
+
+    return isinstance(value, (Trace, GroupedRate, PropertyData, np.ndarray, jax.Array))
+
+
+_MIXED_EXPR = (
+    "Cannot combine an evaluated value with an unevaluated rate expression. "
+    "Evaluate parameter-only expressions with eval_closed(expr, params)."
+)
+
+
+def _apply_value_unary(op: str, arg: object) -> Any:
+    from summer4.flows.algebra import apply_unary
+    from summer4.results.trace import Trace
+
+    if isinstance(arg, Trace):
+        return arg._map_unary(op)
+    return apply_unary(op, arg)
+
+
+def _apply_value_binary(op: str, left: object, right: object) -> Any:
+    from summer4.flows.algebra import apply_binary
+    from summer4.results.trace import Trace
+
+    if isinstance(left, RateOps) or isinstance(right, RateOps):
+        raise TypeError(_MIXED_EXPR)
+    if isinstance(left, Trace) or isinstance(right, Trace):
+        return Trace._combine(left, right, op)
+    return apply_binary(op, left, right)
+
+
+def _unary(op: Literal["neg", "exp", "log", "abs", "tanh", "sqrt", "floor"], arg: object) -> Any:
+    if _is_value(arg):
+        return _apply_value_unary(op, arg)
+    return UnaryOp(op, as_rate(arg))
+
+
+def _binary(
+    op: Literal["pow", "maximum", "minimum"],
+    left: object,
+    right: object,
+) -> Any:
+    if _is_value(left) or _is_value(right):
+        return _apply_value_binary(op, left, right)
+    return BinOp(op, as_rate(left), as_rate(right))
+
+
+def exp(arg: object) -> Any:
+    """Exponential. A rate node, or the value if ``arg`` is already evaluated."""
+    return _unary("exp", arg)
+
+
+def log(arg: object) -> Any:
+    """Natural log. A rate node, or the value if ``arg`` is already evaluated."""
+    return _unary("log", arg)
+
+
+def tanh(arg: object) -> Any:
+    """Hyperbolic tangent. A rate node, or the value if ``arg`` is already evaluated."""
+    return _unary("tanh", arg)
+
+
+def sqrt(arg: object) -> Any:
+    """Square root. A rate node, or the value if ``arg`` is already evaluated."""
+    return _unary("sqrt", arg)
+
+
+def floor(arg: object) -> Any:
+    """Round toward -inf. A rate node, or the value if ``arg`` is already evaluated.
+
+    The derivative is zero, so ``floor`` does not stop ``jax.grad`` of a larger
+    expression.
+    """
+    return _unary("floor", arg)
+
+
+def maximum(left: object, right: object) -> Any:
+    """Pointwise maximum. A rate node, unless either side is already evaluated."""
+    return _binary("maximum", left, right)
+
+
+def minimum(left: object, right: object) -> Any:
+    """Pointwise minimum. A rate node, unless either side is already evaluated."""
+    return _binary("minimum", left, right)
+
+
+def clip(x: object, lo: object | None = None, hi: object | None = None) -> Any:
+    """Clamp ``x`` to ``[lo, hi]`` via ``maximum`` / ``minimum``.
+
+    Either bound may be omitted. Both omitted is an error. Bounds and ``x``
+    follow the same split as :func:`maximum`: rate expressions stay symbolic,
+    evaluated values (including a :class:`~summer4.results.trace.Trace`) are
+    applied now. Mixing the two raises; evaluate the expression with
+    :func:`~summer4.flows.compiled.eval_closed` first.
+    """
+    if lo is None and hi is None:
+        raise ValueError("clip requires a lower bound, an upper bound, or both.")
+    if _is_value(x) or _is_value(lo) or _is_value(hi):
+        if isinstance(x, RateOps) or isinstance(lo, RateOps) or isinstance(hi, RateOps):
+            raise TypeError(_MIXED_EXPR)
+        out = x
+        if lo is not None:
+            out = _apply_value_binary("maximum", out, lo)
+        if hi is not None:
+            out = _apply_value_binary("minimum", out, hi)
+        return out
+    expr = as_rate(x)
+    if lo is not None:
+        expr = BinOp("maximum", expr, as_rate(lo))
+    if hi is not None:
+        expr = BinOp("minimum", expr, as_rate(hi))
+    return expr
+
+
 def as_adjust(value: object) -> Adjustment:
     """Coerce a bare rate or explicit adjustment into an :class:`Adjustment`."""
     if isinstance(value, (Multiply, Overwrite, Transform)):
@@ -360,6 +510,8 @@ def _flow_refs(expr: RateOps) -> set[str]:
             return {name}
         case BinOp(left=left, right=right):
             return _flow_refs(left) | _flow_refs(right)
+        case UnaryOp(arg=arg):
+            return _flow_refs(arg)
         case Interp(breakpoints=breakpoints, values=values, arg=arg):
             refs: set[str] = set()
             for bp in breakpoints:
@@ -402,6 +554,8 @@ def _field_paths(expr: RateOps) -> set[tuple[str, ...]]:
             return {path}
         case BinOp(left=left, right=right):
             return _field_paths(left) | _field_paths(right)
+        case UnaryOp(arg=arg):
+            return _field_paths(arg)
         case Interp(breakpoints=breakpoints, values=values, arg=arg):
             paths: set[tuple[str, ...]] = set()
             for bp in breakpoints:
@@ -548,7 +702,9 @@ def _rate_bytes(expr: RateOps) -> bytes:
         case FlowRef(name=name, reduce=reduce):
             return b"flow" + name.encode() + b"|" + repr(reduce).encode()
         case BinOp(op=op, left=left, right=right):
-            return b"binop" + op.encode() + _rate_bytes(left) + _rate_bytes(right)
+            return b"binop:" + op.encode() + _rate_bytes(left) + _rate_bytes(right)
+        case UnaryOp(op=op, arg=arg):
+            return b"unary:" + op.encode() + _rate_bytes(arg)
         case Interp(
             kind=kind,
             breakpoints=breakpoints,

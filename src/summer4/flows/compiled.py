@@ -18,6 +18,7 @@ from summer4.flows.actualize import (
     actualize,
     topo_sort,
 )
+from summer4.flows.algebra import apply_binary, apply_unary
 from summer4.flows.edges import EdgeMap
 from summer4.flows.initial import InitialPopulation, InitPlan
 from summer4.flows.rates import (
@@ -32,6 +33,7 @@ from summer4.flows.rates import (
     Reduce,
     Time,
     Transform,
+    UnaryOp,
     _adjust_bytes,
     _adjust_field_paths,
     _field_paths,
@@ -105,6 +107,18 @@ class GroupedRate:
 
     def __rtruediv__(self, other: object) -> GroupedRate:
         return self._combine(other, lambda a, b: b / a)
+
+    def __pow__(self, other: object) -> GroupedRate:
+        result = apply_binary("pow", self, other)
+        if not isinstance(result, GroupedRate):
+            raise TypeError(f"pow did not preserve GroupedRate, got {type(result).__name__}.")
+        return result
+
+    def __rpow__(self, other: object) -> GroupedRate:
+        result = apply_binary("pow", other, self)
+        if not isinstance(result, GroupedRate):
+            raise TypeError(f"pow did not preserve GroupedRate, got {type(result).__name__}.")
+        return result
 
     def __matmul__(self, other: object) -> GroupedRate:
         """``grouped @ M`` — right-multiply the last axis by a square matrix."""
@@ -299,15 +313,9 @@ def _eval_rate(
                 )
             return value
         case BinOp(op=op, left=left, right=right):
-            left_v = child(left)
-            right_v = child(right)
-            if op == "add":
-                return left_v + right_v
-            if op == "sub":
-                return left_v - right_v
-            if op == "mul":
-                return left_v * right_v
-            return left_v / right_v
+            return apply_binary(op, child(left), child(right))
+        case UnaryOp(op=op, arg=arg):
+            return apply_unary(op, child(arg))
         case Interp(
             kind=kind,
             breakpoints=breakpoints,
@@ -345,6 +353,39 @@ def _eval_rate(
                     captures=captures,
                 )
             raise TypeError(f"Unsupported rate expression {type(expr).__name__}.")
+
+
+def eval_closed(expr: RateOps, derived: object) -> Any:
+    """Evaluate a parameter-only rate expression against ``derived``.
+
+    ``tanh(Param("s"))`` can multiply a flow and, once evaluated, a saved
+    :class:`~summer4.results.trace.Trace`. This is that evaluation: constants
+    and parameters only, including the unary and binary nodes built from them.
+    An expression that reads time, compartment state, or another flow raises
+    ``ValueError`` — it has to run inside the vector field, where those inputs
+    exist. ``Trace`` arithmetic then takes the array this returns.
+    """
+    from summer4.flows.stages import rate_stage
+
+    if not isinstance(expr, RateOps):
+        raise TypeError(f"eval_closed expects a rate expression, got {type(expr).__name__}.")
+    if rate_stage(expr, params_are_static=True) != "run":
+        raise ValueError(
+            "eval_closed only evaluates parameter-only expressions "
+            "(constants and parameters, including exp, log, tanh and pow of them). "
+            "This expression depends on time, compartment state, or another flow, "
+            "so it has to be evaluated inside the vector field."
+        )
+    return _eval_rate(
+        expr,
+        derived=derived,
+        flow_values={},
+        flow_meta={},
+        pmap=cast(PropertyMap, None),
+        t=None,
+        y_arr=None,
+        captures={},
+    )
 
 
 def _as_array(value: Any) -> Any:
@@ -561,7 +602,7 @@ def _scatter_add(target: Any, indices: NDArray[np.int32], values: Any) -> Any:
 
 def _collect_capture_meta(expr: RateOps) -> dict[str, tuple[Property, ...]]:
     """Walk a rate tree for nodes that expose ``__capture_meta__``."""
-    from summer4.flows.rates import BinOp, GaussianPulse, Interp
+    from summer4.flows.rates import BinOp, GaussianPulse, Interp, UnaryOp
 
     out: dict[str, tuple[Property, ...]] = {}
     meta_fn = getattr(expr, "__capture_meta__", None)
@@ -572,6 +613,8 @@ def _collect_capture_meta(expr: RateOps) -> dict[str, tuple[Property, ...]]:
         case BinOp(left=left, right=right):
             out.update(_collect_capture_meta(left))
             out.update(_collect_capture_meta(right))
+        case UnaryOp(arg=arg):
+            out.update(_collect_capture_meta(arg))
         case Interp(breakpoints=breakpoints, values=values, arg=arg):
             for bp in breakpoints:
                 out.update(_collect_capture_meta(bp))
