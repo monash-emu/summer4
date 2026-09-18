@@ -38,8 +38,8 @@ original analyses re-run on numpyro.
 
 ## Verdict
 
-- **tb_macro** — tb_macro rows complete today: **5 of 9**, and every other row is `partial`. It is **implementable today** with hand-written glue: a `derived_fn` force of infection and a hand-written numpyro model (the original hand-writes that too).
-- **Kiribati** — Kiribati rows complete today: **7 of 23**. Every capability except calibration and scale has *some* route, but a faithful, calibratable port would re-implement several layers by hand. Remaining blockers:
+- **tb_macro** — tb_macro rows complete today: **6 of 9**, and every other row is `partial`. It is **implementable today** with hand-written glue: a `derived_fn` force of infection and a hand-written numpyro model (the original hand-writes that too).
+- **Kiribati** — Kiribati rows complete today: **10 of 23**. Every capability except calibration and scale has *some* route, but a faithful, calibratable port would re-implement several layers by hand. Remaining blockers:
   1. **Generalised force of infection** with compartment × age infectiousness — `KI4` `KI5`. `ForceOfInfection`'s custom `kind` receives no parameters, there is no power node, and `infectiousness=` keys only on the grouping property.
   2. **Output algebra** at summer2 scale — `KI13`–`KI17`. `Trace` has no operators, `cumulative()` has no start, `FlowMass` names one flow, there is no summer2 midpoint convention and no `Result` → frame.
   3. **Calibration workflow** — `KI18`–`KI21`. No priors, likelihoods, gradient-free sampler or posterior-run tooling exist.
@@ -55,12 +55,12 @@ original analyses re-run on numpyro.
 | KI3 | Kiribati | Initial population: seed in `clin_inf`, reachability split by `Param` | `full` | `InitialPopulation` | — |
 | KI4 | Kiribati | Generalised FOI `M @ (I_g / N_g**exp)` with a calibrated exponent | `partial` | `**` exists on the rate tree; the custom `kind` callable still receives no parameters, so the FOI stays in `derived_fn` | WP14 |
 | KI5 | Kiribati | Infectiousness weights by compartment × age | `partial` | One `ForceOfInfection` per compartment summed, or `derived_fn` | WP14 |
-| KI6 | Kiribati | Time-varying, parameterised mixing matrix (UN weights, fertility age gaps, spectral normalisation) | `partial` | Matrix rebuilt in `derived_fn` every vector-field call; no yearly table lookup node | WP13 |
+| KI6 | Kiribati | Time-varying, parameterised mixing matrix (UN weights, fertility age gaps, spectral normalisation) | `full` | `Lookup(Param("mixing"), floor(Time() - year0))` inside `MixingMatrix`; the yearly stack is a parameter | — |
 | KI7 | Kiribati | Flow adjustments by age and reachability with params and time functions | `full` | Stacked `Multiply(..., where=)` and `Transform` | — |
 | KI8 | Kiribati | Deaths recycled to (`mtb_naive`, age 0) preserving reachability | `full` | `TransitionFlow(state[x] & age[a], state["mtb_naive"] & age["0"], ...)` | — |
 | KI9 | Kiribati | Births into one stratum from sigmoidal interpolation × param | `full` | `EntryFlow` with `sigmoidal(...) * Param(...)` | — |
-| KI10 | Kiribati | Per-age time series from UN tables (death rates, treatment outcomes) | `partial` | Eight scalar `Interp` trees, or `derived_fn`; `Interp` is scalar-only | WP13 |
-| KI11 | Kiribati | Interpolation knots derived with log / max (screening rate, outcome floors) | `partial` | Scalar knots can be `log` / `maximum` nodes; per-age tables are still one `Interp` each or a `derived_fn` | WP13 |
+| KI10 | Kiribati | Per-age time series from UN tables (death rates, treatment outcomes) | `full` | `Data.table(times, values, over=age).interp()` — one `TableInterp`, a `GroupedRate` over age | — |
+| KI11 | Kiribati | Interpolation knots derived with log / max (screening rate, outcome floors) | `full` | `log` / `maximum` on a `TableInterp` or on scalar `Interp` knots | — |
 | KI12 | Kiribati | Computed values (detection rates, matrix distance) | `full` | `ComputedValue` over `derived_fn` | — |
 | KI13 | Kiribati | Outputs summed over several flows and filtered by strata | `partial` | One `FlowMass` per flow added by hand, or `SaveFn` | WP15 |
 | KI14 | Kiribati | Output arithmetic: per-capita, percentages, × parameter | `partial` | `Trace` × scalar/array, and `eval_closed` for a parameter expression such as `tanh(Param(...))`; no name-aligned `Trace` ÷ `Trace` | WP15 |
@@ -76,7 +76,7 @@ original analyses re-run on numpyro.
 | TM1 | tb_macro | Ragged map: clinical × infectious only on `active` | `full` | `stratify(prop, where=state["active"])` | — |
 | TM2 | tb_macro | Partial destination (even split), collapse, expand | `full` | `identity_join` equal split; source-only properties dropped | — |
 | TM3 | tb_macro | Ageing 0 → 5 → 15 | `partial` | Hand-written `TraitChain` | WP13 |
-| TM4 | tb_macro | Rates as functions of `t` and params (triangular seed, tanh scale-up) | `partial` | `clip(h * (1 - abs(Time() - peak) / w), 0)` and a `tanh` scale-up tree; ports still glue `Transform` until they switch | WP13 |
+| TM4 | tb_macro | Rates as functions of `t` and params (triangular seed, tanh scale-up) | `full` | `clip(h * (1 - abs(Time() - peak) / w), 0)` and a `tanh` scale-up rate tree | — |
 | TM5 | tb_macro | Per-age FOI `I / N**exp` with rel_sus per source compartment | `partial` | `derived_fn` FOI, `Multiply(Param, where=)` for rel_sus | WP14 |
 | TM6 | tb_macro | Initial population with even split over ragged strata | `full` | `InitialPopulation` | — |
 | TM7 | tb_macro | Rolling-sum flow target queried at times | `full` | `FlowMass` → `rolling(7, how="sum")` → `at_times` (unrolled jaxpr, fixed in WP15) | — |
@@ -108,8 +108,8 @@ Computed by `scripts/coverage_report.py`; do not edit by hand.
 <!-- ledger:port-readiness -->
 | After | Kiribati | tb_macro |
 | --- | --- | --- |
-| today | 7 / 23 | 5 / 9 |
-| WP12 | 7 / 23 | 5 / 9 |
+| today | 10 / 23 | 6 / 9 |
+| WP12 | 10 / 23 | 6 / 9 |
 | WP13 | 11 / 23 | 7 / 9 |
 | WP3 | 11 / 23 | 7 / 9 |
 | WP14 | 13 / 23 | 8 / 9 |

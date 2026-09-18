@@ -221,6 +221,93 @@ class ArrayConst(RateOps):
 
 
 @dataclass(frozen=True, slots=True)
+class TableInterp(RateOps):
+    """Interpolate every column of a ``(T, K)`` table at one argument.
+
+    ``times`` and ``values`` are literal arrays (:class:`ArrayConst`), not one
+    node per knot, so the traced program does not grow with ``T`` or ``K``.
+    The result is a :class:`~summer4.flows.compiled.GroupedRate` over ``over``,
+    in trait order. Outside the time range the value clamps to the end column
+    — it does not extrapolate.
+
+    For ``kind="step"``, ``values`` has one more row than ``times``: the
+    leading row is the value before the first time, matching
+    :func:`~summer4.timevarying.step`. :meth:`summer4.data.TableData.interp`
+    prepends that row. ``linear`` and ``sigmoidal`` have one row per time.
+    """
+
+    kind: Literal["linear", "sigmoidal", "step"]
+    times: ArrayConst
+    values: ArrayConst
+    over: Property
+    arg: RateOps = Time()
+    sharpness: float = 1.0
+
+    def __post_init__(self) -> None:
+        if self.kind not in ("linear", "sigmoidal", "step"):
+            raise ValueError(
+                f"Unknown TableInterp kind {self.kind!r}. Known: linear, sigmoidal, step."
+            )
+        times = np.asarray(self.times.value, dtype=np.float64).reshape(-1)
+        values = np.asarray(self.values.value, dtype=np.float64)
+        if times.size < 1:
+            raise ValueError("TableInterp requires at least one time.")
+        if values.ndim != 2:
+            raise ValueError(
+                f"TableInterp values must have shape (n_times, n_traits), got {values.shape}."
+            )
+        n_traits = len(self.over.traits)
+        if values.shape[1] != n_traits:
+            raise ValueError(
+                f"TableInterp has {values.shape[1]} columns but property {self.over.name!r} "
+                f"has traits {self.over.traits}."
+            )
+        if self.kind == "step":
+            if values.shape[0] != times.size + 1:
+                raise ValueError(
+                    "step TableInterp requires len(values) == len(times) + 1; "
+                    f"got {values.shape[0]} vs {times.size} + 1."
+                )
+        else:
+            if times.size < 2:
+                raise ValueError(f"{self.kind} TableInterp requires at least two times.")
+            if values.shape[0] != times.size:
+                raise ValueError(
+                    f"{self.kind} TableInterp requires one value row per time; "
+                    f"got {values.shape[0]} rows and {times.size} times."
+                )
+        if times.size >= 2 and bool(np.any(np.diff(times) <= 0)):
+            raise ValueError("TableInterp times must be strictly increasing.")
+        object.__setattr__(self, "sharpness", float(self.sharpness))
+
+
+@dataclass(frozen=True, slots=True)
+class Lookup(RateOps):
+    """Gather one row of an array carried in the parameters.
+
+    ``index`` is typically ``floor(Time() - year0)``. With ``clamp=True``
+    (the default) the index is clipped into ``[0, n_rows - 1]`` before
+    :func:`jax.numpy.take`, so a time outside the table holds the end row.
+    A ``(n_years, K, K)`` table therefore yields a ``(K, K)`` matrix, which
+    is what :class:`~summer4.epi.mixing.MixingMatrix` evaluates.
+    """
+
+    table: FieldRef
+    index: RateOps
+    clamp: bool = True
+
+    def __init__(self, table: FieldRef, index: object, *, clamp: bool = True) -> None:
+        if not isinstance(table, FieldRef):
+            raise TypeError(
+                "Lookup table must be a FieldRef (Param(...) or FieldRef(...)), "
+                f"got {type(table).__name__}."
+            )
+        object.__setattr__(self, "table", table)
+        object.__setattr__(self, "index", as_rate(index))
+        object.__setattr__(self, "clamp", bool(clamp))
+
+
+@dataclass(frozen=True, slots=True)
 class Multiply:
     """Multiply the previous aligned rate by ``value`` (optional ``where`` mask)."""
 
@@ -523,6 +610,10 @@ def _flow_refs(expr: RateOps) -> set[str]:
             return _flow_refs(arg) | _flow_refs(centre) | _flow_refs(width) | _flow_refs(height)
         case Time() | Const() | FieldRef() | Reduce() | ArrayConst():
             return set()
+        case TableInterp(arg=arg):
+            return _flow_refs(arg)
+        case Lookup(index=index):
+            return _flow_refs(index)
         case Capture(inner=inner):
             return _flow_refs(inner)
         case _:
@@ -572,6 +663,10 @@ def _field_paths(expr: RateOps) -> set[tuple[str, ...]]:
             )
         case Time() | Const() | FlowRef() | Reduce() | ArrayConst():
             return set()
+        case TableInterp(arg=arg):
+            return _field_paths(arg)
+        case Lookup(table=table, index=index):
+            return _field_paths(table) | _field_paths(index)
         case Capture(inner=inner):
             return _field_paths(inner)
         case _:
@@ -738,6 +833,27 @@ def _rate_bytes(expr: RateOps) -> bytes:
             return b"capture" + name.encode() + _rate_bytes(inner)
         case ArrayConst(value=value):
             return b"array" + np.ascontiguousarray(value, dtype=np.float64).tobytes()
+        case TableInterp(
+            kind=kind,
+            times=times,
+            values=values,
+            over=over,
+            arg=arg,
+            sharpness=sharpness,
+        ):
+            return (
+                b"tableinterp"
+                + kind.encode()
+                + np.float64(sharpness).tobytes()
+                + over.name.encode()
+                + repr(over.traits).encode()
+                + _rate_bytes(times)
+                + _rate_bytes(values)
+                + _rate_bytes(arg)
+            )
+        case Lookup(table=table, index=index, clamp=clamp):
+            flag = b"1" if clamp else b"0"
+            return b"lookup" + flag + _rate_bytes(table) + _rate_bytes(index)
         case _:
             # Extension nodes (e.g. epi) must register a stable encoding via
             # ``_rate_bytes`` fallback on class name + ``repr`` of fields is

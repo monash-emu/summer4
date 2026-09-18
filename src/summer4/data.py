@@ -2,23 +2,26 @@
 
 Pandas is an optional extra. Importing this module never requires it;
 :meth:`Data.from_series` and :meth:`Data.from_csv` raise a clear error if it
-is missing.
+is missing. :meth:`Data.table` accepts a DataFrame when pandas is installed,
+and a plain array otherwise.
 """
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
 import numpy as np
-from numpy.typing import NDArray
+from numpy.typing import ArrayLike, NDArray
 
-from summer4.flows.rates import Interp, Time
+from summer4.flows.rates import ArrayConst, Interp, RateOps, TableInterp, Time, as_rate
+from summer4.properties import Property
 from summer4.time import Epoch
 from summer4.timevarying import linear, sigmoidal, step
 
-__all__ = ["Data"]
+__all__ = ["Data", "TableData"]
 
 
 def _require_pandas() -> Any:
@@ -110,3 +113,128 @@ class Data:
         if kind == "step":
             return step(Time(), bps, (vals[0], *vals))
         raise ValueError(f"Unknown interp kind {kind!r}.")
+
+    @classmethod
+    def table(
+        cls,
+        times: ArrayLike,
+        values: ArrayLike | Any,
+        *,
+        over: Property,
+        columns: Sequence[str] | None = None,
+    ) -> TableData:
+        """Build a column-per-trait table sharing one time axis.
+
+        ``values`` is an array of shape ``(n_times, n_traits)`` in trait
+        order, or a DataFrame whose columns are the trait names. ``columns``,
+        when given, must equal ``over.traits`` in order; it selects those
+        columns from a wider frame. A frame passed without ``columns`` must
+        already have exactly those columns, in that order.
+        """
+        knot_times = np.asarray(times, dtype=np.float64).reshape(-1)
+        matrix = _table_matrix(values, over, columns)
+        if knot_times.size < 1:
+            raise ValueError("Data.table requires at least one time.")
+        if knot_times.shape[0] != matrix.shape[0]:
+            raise ValueError(
+                f"Data.table times length {knot_times.shape[0]} != "
+                f"values rows {matrix.shape[0]}."
+            )
+        if knot_times.size >= 2 and bool(np.any(np.diff(knot_times) <= 0)):
+            raise ValueError("Data.table times must be strictly increasing.")
+        return TableData(times=knot_times, values=matrix, over=over)
+
+
+def _frame_column_names(values: object) -> tuple[str, ...] | None:
+    columns = getattr(values, "columns", None)
+    to_numpy = getattr(values, "to_numpy", None)
+    if columns is None or not callable(to_numpy):
+        return None
+    return tuple(str(column) for column in columns)
+
+
+def _table_matrix(
+    values: ArrayLike | Any,
+    over: Property,
+    columns: Sequence[str] | None,
+) -> NDArray[np.float64]:
+    names = _frame_column_names(values)
+    if names is not None:
+        frame: Any = values
+        if columns is None:
+            if names != over.traits:
+                raise ValueError(
+                    f"Data.table columns {names} do not match property {over.name!r} "
+                    f"traits {over.traits}."
+                )
+            selected = over.traits
+        else:
+            selected = tuple(columns)
+            if selected != over.traits:
+                raise ValueError(
+                    f"Data.table columns {selected} do not match property {over.name!r} "
+                    f"traits {over.traits}."
+                )
+            missing = [name for name in selected if name not in names]
+            if missing:
+                raise ValueError(
+                    f"Data.table is missing columns {missing} for property {over.name!r}."
+                )
+        matrix = np.asarray(frame[list(selected)].to_numpy(), dtype=np.float64)
+    else:
+        if columns is not None and tuple(columns) != over.traits:
+            raise ValueError(
+                f"Data.table columns {tuple(columns)} do not match property {over.name!r} "
+                f"traits {over.traits}."
+            )
+        matrix = np.asarray(values, dtype=np.float64)
+    if matrix.ndim != 2:
+        raise ValueError(
+            f"Data.table values must have shape (n_times, n_traits), got {matrix.shape}."
+        )
+    if matrix.shape[1] != len(over.traits):
+        raise ValueError(
+            f"Data.table has {matrix.shape[1]} columns but property {over.name!r} "
+            f"has traits {over.traits}."
+        )
+    return matrix
+
+
+@dataclass(frozen=True, slots=True)
+class TableData:
+    """One observed series per trait, sharing :attr:`times`.
+
+    Built by :meth:`Data.table`. Column ``i`` is ``over.traits[i]``.
+    """
+
+    times: NDArray[np.float64]
+    values: NDArray[np.float64]
+    over: Property
+
+    def interp(
+        self,
+        kind: Literal["linear", "sigmoidal", "step"] = "linear",
+        *,
+        arg: RateOps | None = None,
+        sharpness: float = 1.0,
+    ) -> TableInterp:
+        """Return a :class:`~summer4.flows.rates.TableInterp` over this table.
+
+        ``arg`` defaults to :class:`~summer4.flows.rates.Time`. For
+        ``kind="step"`` the first row is prepended so the table matches
+        :meth:`Data.interp` — the value before the first time is the first
+        observation, and the value changes at each later time.
+        """
+        if kind not in ("linear", "sigmoidal", "step"):
+            raise ValueError(f"Unknown interp kind {kind!r}.")
+        vals = self.values
+        if kind == "step":
+            vals = np.concatenate([vals[:1], vals], axis=0)
+        return TableInterp(
+            kind=kind,
+            times=ArrayConst(self.times),
+            values=ArrayConst(vals),
+            over=self.over,
+            arg=Time() if arg is None else as_rate(arg),
+            sharpness=float(sharpness),
+        )

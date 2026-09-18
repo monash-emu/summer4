@@ -71,11 +71,11 @@ Two conventions that are easy to get wrong:
 <!-- roadmap:current -->
 | Field | Value |
 | --- | --- |
-| Step | 5 |
+| Step | 6 |
 | Status | next |
-| Branch | `feat/table-interp` |
+| Branch | `feat/ageing-sugar` |
 | Cut from | `main` |
-| Last landed | `feat/rate-math` |
+| Last landed | `feat/table-interp` |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -91,8 +91,8 @@ only step 2's tag.
 | 2 | A | WP12 | `chore/release-v0.2` | `plans/wp12-release.plan.md` | Step 2 | done | KI23 TM9 |
 | 3 | A | WP12 | `chore/downstream-smoke-ci` | `plans/wp12-release.plan.md` | Step 3 | done | — |
 | 4 | B | WP13 | `feat/rate-math` | `plans/tb-ports-feature-completeness.plan.md` | 13.1 | done | — |
-| 5 | B | WP13 | `feat/table-interp` | `plans/tb-ports-feature-completeness.plan.md` | 13.2 | next | KI6 KI10 KI11 TM4 |
-| 6 | B | WP13 | `feat/ageing-sugar` | `plans/tb-ports-feature-completeness.plan.md` | 13.3 | planned | KI2 TM3 |
+| 5 | B | WP13 | `feat/table-interp` | `plans/tb-ports-feature-completeness.plan.md` | 13.2 | done | KI6 KI10 KI11 TM4 |
+| 6 | B | WP13 | `feat/ageing-sugar` | `plans/tb-ports-feature-completeness.plan.md` | 13.3 | next | KI2 TM3 |
 | 7 | C | WP14 | `feat/epi-generalised-foi` | `plans/tb-ports-feature-completeness.plan.md` | 14a | planned | — |
 | 8 | C | WP14 | `feat/epi-compartment-infectiousness` | `plans/tb-ports-feature-completeness.plan.md` | 14b | planned | KI4 KI5 TM5 |
 | 9 | D | WP15 | `feat/trace-algebra` | `plans/tb-ports-feature-completeness.plan.md` | 15a | planned | — |
@@ -337,6 +337,8 @@ were deferred.
 
 ## Step 5 — `feat/table-interp`
 
+**Landed:** feat/table-interp, PR #12, 2026-09-18.
+
 ### Summary
 
 `Interp` is scalar, so a per-age time series has to become one interpolation
@@ -395,6 +397,17 @@ age property's traits and builds that chain. It is pure sugar: the acceptance
 test is that it compiles to the same digest as the hand-written version. It
 closes `KI2` and `TM3`, finishes WP13, and carries the blocking user sign-off
 for the notebook that steps 4–6 built together.
+
+### What the previous worker left you
+
+- This branch was cut from `feat/rate-math`, not `main`. Step 4 had not been pushed. It is now `origin/feat/rate-math` (`15a9a80`) and this step's PR #12 targets it. `main` still ends at step 3. Cut step 6 from `feat/table-interp` until those two branches are on `main`; the step table's `main` is the intended merge target, not a branch you can compile from today.
+- Jaxpr sizes, default JAX float32. Linear table interpolation is one `vmap` of `jnp.interp`: 1 equation at `T=4,K=2`, `T=40,K=2` and `T=4,K=8`. Sigmoidal is 61, step is 6, same three shapes. A compiled exit-flow vector field that uses `TableInterp` is 29 equations at 4 knots and at 32 knots. The scalar `Interp` equivalent grows from 24 equations at 4 knots to 84 at 32.
+- Step and sigmoidal index the `(T, K)` value array in one gather. Linear is the `vmap`. Both go through `_eval_interp`, which still takes a 1-D value vector for scalar `Interp`.
+- `TableInterp` is not hoisted as a value. A `GroupedRate` in `Prepared.hoisted` is not an array. The argument is walked, so a parameter-only piece inside it still hoists. A `Lookup` whose index does not read time is hoisted; `floor(Time() - year0)` is not.
+- `MixingMatrix.resolved_matrix` still row-normalises a gathered matrix on every call when `normalize="rows"`. That note is `futureplans/mixing-matrix-per-call-normalisation.md`. `Lookup` only stops the stack being rebuilt.
+- `examples/notebooks/13-rate-math-and-tables.ipynb` now also asserts a per-age death table and a yearly mixing `Lookup`. Ageing from breakpoints is still this step. The user-gate checklist for all three subphases belongs on this step's PR.
+- `KI6`, `KI10`, `KI11` and `TM4` are `full`. `KI2` and `TM3` stay `partial`. No API-ledger row moved. `S6` is untouched.
+- Tests use `rtol=1e-5` because the default JAX dtype is float32.
 
 ### Read first
 

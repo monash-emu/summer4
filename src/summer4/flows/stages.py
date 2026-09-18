@@ -18,10 +18,12 @@ from summer4.flows.rates import (
     FlowRef,
     GaussianPulse,
     Interp,
+    Lookup,
     Multiply,
     Overwrite,
     RateOps,
     Reduce,
+    TableInterp,
     Time,
     Transform,
     UnaryOp,
@@ -93,6 +95,13 @@ def rate_stage(expr: RateOps, *, params_are_static: bool) -> Stage:
         if any(rate_stage(p, params_are_static=params_are_static) == "step" for p in parts):
             return "step"
         return "run"
+    if isinstance(expr, TableInterp):
+        # Knot arrays are constants. The stage is whatever the argument reads.
+        return rate_stage(expr.arg, params_are_static=params_are_static)
+    if isinstance(expr, Lookup):
+        table = rate_stage(expr.table, params_are_static=params_are_static)
+        index = rate_stage(expr.index, params_are_static=params_are_static)
+        return "step" if table == "step" or index == "step" else "run"
     stage_fn = getattr(expr, "__rate_stage__", None)
     if callable(stage_fn):
         result = stage_fn()
@@ -119,6 +128,12 @@ def build_hoist_table(roots: Sequence[RateOps], *, params_are_static: bool) -> H
         entries.append(HoistEntry(node=node, part=part))
 
     def walk(node: RateOps) -> None:
+        # A table evaluates to a GroupedRate. Hoisting that object would put a
+        # non-array in ``Prepared.hoisted``. Walk the argument instead so a
+        # parameter-only piece inside it still hoists.
+        if isinstance(node, TableInterp):
+            walk(node.arg)
+            return
         stage = rate_stage(node, params_are_static=params_are_static)
         if stage == "run" and not _is_leaf(node):
             add(node, "value")
@@ -155,6 +170,9 @@ def build_hoist_table(roots: Sequence[RateOps], *, params_are_static: bool) -> H
             return
         if isinstance(node, UnaryOp):
             walk(node.arg)
+            return
+        if isinstance(node, Lookup):
+            walk(node.index)
             return
         # Capture and unknown custom nodes: do not descend.
 
