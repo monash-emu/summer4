@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+import hashlib
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -12,6 +13,7 @@ from summer4.properties import Property, Trait
 from summer4.selectors import (
     Absent,
     And,
+    Dest,
     Everything,
     IsIn,
     Not,
@@ -20,6 +22,7 @@ from summer4.selectors import (
     Present,
     Selector,
     SelectorOps,
+    Source,
 )
 
 _NA: int = -1
@@ -42,6 +45,41 @@ def _freeze_int32(values: NDArray[np.int32]) -> NDArray[np.int32]:
 
 def _as_int8(values: np.ndarray) -> NDArray[np.int8]:
     return values.astype(np.int8, copy=False)
+
+
+def _digest_bytes(codes: NDArray[np.int16], parent_row: NDArray[np.int32] | None) -> bytes:
+    hasher = hashlib.blake2b(digest_size=16)
+    hasher.update(codes.tobytes())
+    if parent_row is not None:
+        hasher.update(b"|pr|")
+        hasher.update(parent_row.tobytes())
+    else:
+        hasher.update(b"|pr|none")
+    return hasher.digest()
+
+
+@dataclass(frozen=True, slots=True)
+class Groups[V](Mapping[tuple[Trait, ...], V]):
+    """Ordered mapping from realised trait combinations to values.
+
+    Returned by :meth:`PropertyMap.group_by`. Keys are always tuples of
+    :class:`~summer4.properties.Trait` (length equals the number of grouping
+    properties). Empty combinations are omitted.
+    """
+
+    _data: dict[tuple[Trait, ...], V]
+
+    def __getitem__(self, key: tuple[Trait, ...]) -> V:
+        return self._data[key]
+
+    def __iter__(self) -> Iterator[tuple[Trait, ...]]:
+        return iter(self._data)
+
+    def __len__(self) -> int:
+        return len(self._data)
+
+    def __repr__(self) -> str:
+        return f"Groups({self._data!r})"
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,6 +109,7 @@ class PropertyMap:
     parent_row: NDArray[np.int32] | None = None
     _cache: dict[Selector, NDArray[np.int8]] = field(init=False, repr=False, compare=False)
     _prop_index: dict[str, int] = field(init=False, repr=False, compare=False)
+    _digest: bytes = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         names = [prop.name for prop in self.properties]
@@ -97,6 +136,7 @@ class PropertyMap:
             "_prop_index",
             {prop.name: i for i, prop in enumerate(self.properties)},
         )
+        object.__setattr__(self, "_digest", _digest_bytes(codes, self.parent_row))
 
     @classmethod
     def from_property(cls, prop: Property) -> PropertyMap:
@@ -104,6 +144,16 @@ class PropertyMap:
         n = len(prop.traits)
         codes = np.arange(n, dtype=np.int16).reshape(n, 1)
         return cls(properties=(prop,), codes=codes)
+
+    @classmethod
+    def from_properties(cls, props: Sequence[Property]) -> PropertyMap:
+        """Bootstrap a fully-crossed map from one or more properties."""
+        if not props:
+            raise ValueError("from_properties requires at least one property.")
+        pmap = cls.from_property(props[0])
+        for prop in props[1:]:
+            pmap = pmap.stratify(prop)
+        return pmap
 
     @property
     def size(self) -> int:
@@ -115,12 +165,33 @@ class PropertyMap:
         """Number of properties (columns)."""
         return int(self.codes.shape[1])
 
+    def __len__(self) -> int:
+        """Number of compartments (same as :attr:`size`)."""
+        return self.size
+
     def get_property(self, name: str) -> Property:
         """Return the registered property called ``name``."""
         try:
             return self.properties[self._prop_index[name]]
         except KeyError:
             raise KeyError(f"Unknown property {name!r}. Known: {list(self._prop_index)}") from None
+
+    def column_index(self, prop: Property | str) -> int:
+        """Return the column index of ``prop`` on this map."""
+        return self._prop_index[self._resolve_property(prop).name]
+
+    def column(self, prop: Property | str) -> NDArray[np.int16]:
+        """Return the ``int16`` code column for ``prop``."""
+        return self.codes[:, self.column_index(prop)]
+
+    def label(self, row: int) -> str:
+        """Return a human-readable label for compartment ``row``."""
+        parts = [
+            f"{prop.name}={prop.traits[int(code)]}"
+            for prop, code in zip(self.properties, self.codes[row], strict=True)
+            if code != _NA
+        ]
+        return "_".join(parts)
 
     def copy(self) -> PropertyMap:
         """Return a map with the same table and an empty query cache."""
@@ -143,7 +214,7 @@ class PropertyMap:
             matched = np.ones(self.size, dtype=bool)
         else:
             self._validate_selector(strat.where)
-            matched = self._kleene(strat.where) == _TRUE
+            matched = self.kleene(strat.where) == _TRUE
 
         k = len(prop.traits)
         reps = np.where(matched, k, 1).astype(np.int32, copy=False)
@@ -161,10 +232,25 @@ class PropertyMap:
             parent_row=row_src,
         )
 
+    def take(self, idx: NDArray[np.int32]) -> PropertyMap:
+        """Return a sub-map containing only rows ``idx`` (gather, not stratify).
+
+        ``idx`` indexes rows of this map. ``parent_row`` on the result is ``idx``
+        itself — one hop back to this map — matching the convention used by
+        :meth:`stratify`. Pair with the same ``idx`` to gather an aligned data array.
+        """
+        idx = np.asarray(idx, dtype=np.int32)
+        return PropertyMap(
+            properties=self.properties,
+            codes=self.codes[idx],
+            history=self.history,
+            parent_row=idx,
+        )
+
     def mask(self, sel: Selector) -> NDArray[np.bool_]:
         """Return a boolean mask of compartments where ``sel`` is true."""
         self._validate_selector(sel)
-        return np.asarray(self._kleene(sel) == _TRUE, dtype=np.bool_)
+        return np.asarray(self.kleene(sel) == _TRUE, dtype=np.bool_)
 
     def select(self, sel: Selector) -> NDArray[np.int32]:
         """Return integer indices of compartments where ``sel`` is true."""
@@ -178,56 +264,67 @@ class PropertyMap:
         return int(indices[0])
 
     def partition(self, prop: Property | str) -> dict[Trait, NDArray[np.int32]]:
-        """Return per-trait index arrays covering ``prop.present()``."""
+        """Return per-trait index arrays covering ``prop.present()``.
+
+        Includes empty groups. Keys are unwrapped :class:`~summer4.properties.Trait`
+        values (single property).
+        """
         resolved = self._resolve_property(prop)
-        col = self.codes[:, self._prop_index[resolved.name]]
+        col = self.column(resolved)
         return {
             resolved.trait(name): np.flatnonzero(col == code).astype(np.int32, copy=False)
             for code, name in enumerate(resolved.traits)
         }
 
-    def group_by(
-        self, *props: Property | str
-    ) -> Iterator[tuple[tuple[Trait, ...], NDArray[np.int32]]]:
-        """Yield ``(traits, indices)`` for each existing combination of ``props``.
+    def group_by(self, *props: Property | str) -> Groups[NDArray[np.int32]]:
+        """Return groups for each existing combination of ``props``.
 
         Compartments missing any of the requested properties are omitted.
-        Groups are ordered lexicographically by trait code.
+        Groups are ordered lexicographically by trait code. Empty combinations
+        are not included. Keys are always ``tuple[Trait, ...]``.
         """
         if not props:
             raise ValueError("group_by requires at least one property.")
         resolved = [self._resolve_property(prop) for prop in props]
-        columns = np.column_stack([self.codes[:, self._prop_index[p.name]] for p in resolved])
+        columns = np.column_stack([self.column(p) for p in resolved])
         present = np.all(columns != _NA, axis=1)
         if not np.any(present):
-            return
+            return Groups(_data={})
         present_idx = np.flatnonzero(present).astype(np.int32, copy=False)
         present_codes = columns[present]
         unique, inverse = np.unique(present_codes, axis=0, return_inverse=True)
         order = np.lexsort(unique.T[::-1])
+        data: dict[tuple[Trait, ...], NDArray[np.int32]] = {}
         for group_pos in order:
             key_codes = unique[group_pos]
             traits = tuple(
                 resolved[i].trait(resolved[i].traits[int(code)]) for i, code in enumerate(key_codes)
             )
             members = present_idx[inverse == group_pos]
-            yield traits, members
+            data[traits] = members
+        return Groups(_data=data)
 
     def labels(self) -> tuple[str, ...]:
         """Return a human-readable label for every compartment."""
-        return tuple(self._label(i) for i in range(self.size))
+        return tuple(self.label(i) for i in range(self.size))
 
     def to_dicts(self) -> list[dict[str, str]]:
         """Return each compartment as ``{property: trait}``, omitting absent properties."""
         return [self._as_dict(i) for i in range(self.size)]
 
-    def _label(self, row: int) -> str:
-        parts = [
-            f"{prop.name}={prop.traits[int(code)]}"
-            for prop, code in zip(self.properties, self.codes[row], strict=True)
-            if code != _NA
-        ]
-        return "_".join(parts)
+    def to_frame(self) -> object:
+        """Return a polars DataFrame with one column per property.
+
+        Absent properties are null. Polars is imported lazily so the taxonomy
+        package stays NumPy-only at import time.
+        """
+        import polars as pl
+
+        columns: dict[str, list[str | None]] = {prop.name: [] for prop in self.properties}
+        for row in range(self.size):
+            for prop, code in zip(self.properties, self.codes[row], strict=True):
+                columns[prop.name].append(None if code == _NA else prop.traits[int(code)])
+        return pl.DataFrame(columns)
 
     def _as_dict(self, row: int) -> dict[str, str]:
         return {
@@ -246,9 +343,6 @@ class PropertyMap:
                 f"not {prop.traits}."
             )
         return existing
-
-    def _column(self, name: str) -> NDArray[np.int16]:
-        return self.codes[:, self._prop_index[name]]
 
     def _validate_selector(self, sel: Selector) -> None:
         if not isinstance(sel, SelectorOps):
@@ -280,10 +374,13 @@ class PropertyMap:
                     raise ValueError(
                         f"Trait {trait!r} does not match registered property {prop.name!r}."
                     )
+            case Source() | Dest():
+                raise TypeError("Source()/Dest() select flow edges, not compartments")
             case _:
                 raise TypeError(f"Unsupported selector {type(sel).__name__}.")
 
-    def _kleene(self, sel: Selector) -> NDArray[np.int8]:
+    def kleene(self, sel: Selector) -> NDArray[np.int8]:
+        """Evaluate ``sel`` to a cached Kleene ``int8`` array over compartments."""
         cached = self._cache.get(sel)
         if cached is not None:
             return cached
@@ -295,33 +392,38 @@ class PropertyMap:
     def _evaluate(self, sel: Selector) -> NDArray[np.int8]:
         match sel:
             case And(left=left, right=right):
-                return _as_int8(np.minimum(self._kleene(left), self._kleene(right)))
+                return _as_int8(np.minimum(self.kleene(left), self.kleene(right)))
             case Or(left=left, right=right):
-                return _as_int8(np.maximum(self._kleene(left), self._kleene(right)))
+                return _as_int8(np.maximum(self.kleene(left), self.kleene(right)))
             case Not(inner=inner):
-                return np.negative(self._kleene(inner), dtype=np.int8)
+                return np.negative(self.kleene(inner), dtype=np.int8)
             case Everything():
                 return np.full(self.size, _TRUE, dtype=np.int8)
             case Nothing():
                 return np.full(self.size, _FALSE, dtype=np.int8)
             case Present(property=name):
-                return _as_int8(np.where(self._column(name) != _NA, _TRUE, _FALSE))
+                return _as_int8(np.where(self.column(name) != _NA, _TRUE, _FALSE))
             case Absent(property=name):
-                return _as_int8(np.where(self._column(name) == _NA, _TRUE, _FALSE))
+                return _as_int8(np.where(self.column(name) == _NA, _TRUE, _FALSE))
             case IsIn(property=name, names=names):
                 prop = self.get_property(name)
                 codes = np.array([prop._index[trait] for trait in names], dtype=np.int16)
-                col = self._column(name)
+                col = self.column(name)
                 present = col != _NA
                 hit = np.isin(col, codes)
                 return _as_int8(np.where(present, np.where(hit, _TRUE, _FALSE), _UNKNOWN))
             case Trait() as trait:
-                col = self._column(trait.property)
+                col = self.column(trait.property)
                 present = col != _NA
                 hit = np.where(col == trait.code, _TRUE, _FALSE)
                 return _as_int8(np.where(present, hit, _UNKNOWN))
+            case Source() | Dest():
+                raise TypeError("Source()/Dest() select flow edges, not compartments")
             case _:
                 raise TypeError(f"Unsupported selector {type(sel).__name__}.")
+
+    def __hash__(self) -> int:
+        return hash((self.properties, self.history, self._digest))
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, PropertyMap):
@@ -343,7 +445,7 @@ class PropertyMap:
         lines = [f"PropertyMap(n={self.size}, properties={names})"]
         max_rows = 20
         for i in range(min(self.size, max_rows)):
-            lines.append(f"  {i:>4}  {self._label(i)}")
+            lines.append(f"  {i:>4}  {self.label(i)}")
         if self.size > max_rows:
             lines.append(f"  ... ({self.size - max_rows} more)")
         return "\n".join(lines)

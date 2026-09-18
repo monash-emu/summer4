@@ -1,11 +1,12 @@
 # summer4
 
-JAX-native compartmental modelling. Stage 1 is the compartment taxonomy:
-`Property`, `Trait`, a Kleene three-valued selector algebra, and an immutable
-NumPy-backed `PropertyMap`.
+JAX-native compartmental modelling. This release ships the compartment taxonomy
+(`Property`, `Trait`, a Kleene three-valued selector algebra, an immutable
+NumPy-backed `PropertyMap`) and a flows layer (`FlowModel`, `CompiledModel`,
+named transition/entry/exit flows, a JAX vector field). `euler` returns the
+final state only.
 
-The taxonomy layer depends on NumPy only. JAX lives in the pixi environment
-matrix so later stages can benchmark solvers across versions.
+The taxonomy layer depends on NumPy only. Compiled flows import JAX.
 
 ## Concepts
 
@@ -57,6 +58,33 @@ pixi run lint
 pixi run check-branch
 pixi run bench
 ```
+
+## Coverage
+
+`docs/evaluation/coverage-ledger.md` records what summer4 covers against the
+summer2 API and the summer textbook, and the ordered work packages that lead to
+full coverage. It is the reference other branches and agents should plan
+against.
+
+```bash
+pixi run coverage
+```
+
+## Documentation
+
+```bash
+pixi run -e docs docs         # build HTML into docs/_build/html
+pixi run -e docs docs-serve   # http://localhost:8765
+pixi run -e docs docs-strict  # warnings become errors
+```
+
+The site has a **user guide** (properties, maps, selectors, ragged
+stratification, partitions, provenance, and flows), a **developer guide**
+(architecture, data structures, Kleene evaluation, measured performance,
+tooling), a partial **textbook** port, a **project evaluation** of feature
+completeness against summer2 and the summer textbook, and the generated **API
+reference**. Every notebook on the site is executed at build time, so a docs
+build is also a test run.
 
 The default environment includes `ipykernel` so example notebooks run in VS Code/Cursor.
 Select the interpreter at `.pixi/envs/default/bin/python`, or run `pixi run register-kernel`

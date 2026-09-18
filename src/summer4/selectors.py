@@ -105,4 +105,30 @@ class Not(SelectorOps):
     inner: Selector
 
 
-type Selector = Trait | IsIn | Present | Absent | Everything | Nothing | And | Or | Not
+@dataclass(frozen=True, slots=True)
+class Source(SelectorOps):
+    """Select flow edges by a predicate on the source compartment.
+
+    On a compartment :class:`~summer4.propertymap.PropertyMap` this raises.
+    Evaluate it on an :class:`~summer4.flows.edges.EdgeMap` from
+    :meth:`~summer4.flows.compiled.CompiledModel.edges`.
+    """
+
+    inner: Selector
+
+
+@dataclass(frozen=True, slots=True)
+class Dest(SelectorOps):
+    """Select flow edges by a predicate on the destination compartment.
+
+    On a compartment :class:`~summer4.propertymap.PropertyMap` this raises.
+    Evaluate it on an :class:`~summer4.flows.edges.EdgeMap` from
+    :meth:`~summer4.flows.compiled.CompiledModel.edges`.
+    """
+
+    inner: Selector
+
+
+type Selector = (
+    Trait | IsIn | Present | Absent | Everything | Nothing | And | Or | Not | Source | Dest
+)
