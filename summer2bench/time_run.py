@@ -54,3 +54,32 @@ def time_runner(
         warm.append(time.perf_counter() - started)
 
     return built, TimedRun(build_s=build_s, compile_s=compile_s, warm_s=tuple(warm))
+
+
+def reduce_runner_outputs(
+    runner: Any,
+    parameters: dict[str, Any],
+    flow_names: tuple[str, ...],
+    seen: dict[str, Any] | None = None,
+) -> Any:
+    """Sum compartments and each named flow series.
+
+    The return value is the reduced output later steps pass to
+    ``jax.block_until_ready``. When ``seen`` is set, stash the arrays used
+    for shape and dtype checks; those stashes are not a second timer.
+    """
+    results = runner.function(parameters=parameters)
+    outputs = results["outputs"]
+    derived = results["derived_outputs"]
+    total = outputs.sum()
+    flows: dict[str, Any] = {}
+    for name in flow_names:
+        series = derived[name]
+        flows[name] = series
+        total = total + series.sum()
+    if seen is not None:
+        seen["outputs"] = outputs
+        seen["flows"] = flows
+        seen["derived_keys"] = tuple(derived.keys())
+        seen["reduced"] = total
+    return total

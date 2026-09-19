@@ -6,6 +6,7 @@ version = "0.1.0"
 
 [tasks]
 probe = { cmd = "python probe.py", description = "Float64 SIR probe: euler and rk4, 20 steps" }
+smoke = { cmd = "python smoke.py", description = "Smoke unstratified summer2 models at 200 steps" }
 
 [dependencies]
 python = "3.10.*"
