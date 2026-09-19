@@ -1,8 +1,7 @@
-"""Unstratified summer2 models driven only by ``spec.json``.
+"""Summer2 models driven only by ``spec.json``.
 
 Import this module before any other ``summer2`` import. It enables float64
-first, then imports summer2. Later steps add stratified builders here rather
-than a second model module.
+first, then imports summer2.
 """
 
 from __future__ import annotations
@@ -18,14 +17,15 @@ import jax.numpy as jnp
 
 jax.config.update("jax_enable_x64", True)
 
-from computegraph.types import Function  # noqa: E402
-from summer2 import CompartmentalModel  # noqa: E402
+from computegraph.types import Data, Function  # noqa: E402
+from summer2 import CompartmentalModel, StrainStratification, Stratification  # noqa: E402
 from summer2.functions import get_linear_interpolation_function  # noqa: E402
 from summer2.functions.time import get_time_callable  # noqa: E402
-from summer2.parameters import Parameter  # noqa: E402
+from summer2.parameters import Parameter, Time  # noqa: E402
 
 SPEC_PATH = Path(__file__).resolve().parent / "spec.json"
 MODEL_NAMES = ("sir", "sir_adjust", "sir_tv")
+STRATIFIED_NAMES = ("age_mix", "age_mix_tv", "stress")
 
 _HOST_CALLBACKS = (
     "pure_callback",
@@ -44,6 +44,7 @@ class PreparedModel:
     model: CompartmentalModel
     parameters: dict[str, float]
     contact: Any
+    mixing: Any = None
 
 
 @dataclass(frozen=True)
@@ -72,12 +73,12 @@ def adjustment_parameter_key(index: int) -> str:
 
 def parameter_values(name: str, spec: dict[str, Any]) -> dict[str, float]:
     """Values ``get_runner`` should be given. Unused keys are dropped by summer2."""
-    if name not in MODEL_NAMES:
+    if name not in MODEL_NAMES and name not in STRATIFIED_NAMES:
         raise KeyError(name)
     values = {"recovery": float(spec["recovery"])}
-    if name != "sir_tv":
+    if name not in ("sir_tv", "stress"):
         values["contact_rate"] = float(spec["contact_rate"])
-    if name == "sir_adjust":
+    if name in ("sir_adjust", "stress"):
         for index, factor in enumerate(spec["adjustments"]):
             values[adjustment_parameter_key(index)] = float(factor)
     return values
@@ -105,9 +106,46 @@ def time_varying_contact(spec: dict[str, Any]) -> Function:
     return get_linear_interpolation_function(times, values)
 
 
+def static_mixing_matrix(spec: dict[str, Any]) -> Any:
+    """Age mixing as a float64 array. Not a Python callable."""
+    return jnp.asarray(spec["static_mixing"], dtype=jnp.float64)
+
+
+def _select_mixing_matrix(time: Any, stack: Any, bin_width: Any, last_index: Any) -> Any:
+    """Index the frozen stack inside a traced step. Clamp outside ``0 .. last_index``."""
+    index = jnp.floor(time / bin_width).astype(jnp.int32)
+    index = jnp.clip(index, 0, last_index)
+    return stack[index]
+
+
+def time_varying_mixing(spec: dict[str, Any]) -> Function:
+    """Stack of spec matrices, indexed by ``floor(t / bin_width)`` on ``Time``.
+
+    The stack is ``Data``, not a host callable. ``set_mixing_matrix`` receives
+    this Function.
+    """
+    stack = jnp.asarray(spec["tv_mixing"], dtype=jnp.float64)
+    bin_width = jnp.asarray(spec["tv_mixing_bin_width"], dtype=jnp.float64)
+    last_index = jnp.asarray(stack.shape[0] - 1, dtype=jnp.int32)
+    return Function(
+        _select_mixing_matrix,
+        (Time, Data(stack), Data(bin_width), Data(last_index)),
+    )
+
+
+def stress_contact(spec: dict[str, Any]) -> Function:
+    """Time-varying contact rate, then the 24 adjustment factors, as graph multiplies."""
+    rate: Any = time_varying_contact(spec)
+    for index, _factor in enumerate(spec["adjustments"]):
+        rate = rate * Parameter(adjustment_parameter_key(index))
+    if not isinstance(rate, Function):
+        raise TypeError("stress contact did not build a computegraph Function")
+    return rate
+
+
 def prepare_model(name: str, steps: int, spec: dict[str, Any] | None = None) -> PreparedModel:
-    """Build one unstratified model and request flow outputs. Does not call ``get_runner``."""
-    if name not in MODEL_NAMES:
+    """Build one model and request flow outputs. Does not call ``get_runner``."""
+    if name not in MODEL_NAMES and name not in STRATIFIED_NAMES:
         raise KeyError(name)
     loaded = load_spec() if spec is None else spec
     _require_layout(loaded)
@@ -121,6 +159,7 @@ def prepare_model(name: str, steps: int, spec: dict[str, Any] | None = None) -> 
         compartments[1],
         compartments[2],
     )
+    mixing = _apply_stratification(name, model, loaded)
     for flow_name in loaded["flows"]:
         model.request_output_for_flow(str(flow_name), str(flow_name))
     return PreparedModel(
@@ -128,6 +167,7 @@ def prepare_model(name: str, steps: int, spec: dict[str, Any] | None = None) -> 
         model=model,
         parameters=parameter_values(name, loaded),
         contact=contact,
+        mixing=mixing,
     )
 
 
@@ -138,6 +178,43 @@ def runner_for(prepared: PreparedModel, solver: str) -> Any:
         include_full_outputs=True,
         solver=solver,
     )
+
+
+def traced_mixing_matrix(runner: Any, parameters: dict[str, float], time: float) -> Any:
+    """Mixing matrix the timestep graph actually feeds to force of infection."""
+    step = runner.impl_dict["one_step"](parameters=parameters, t=time)
+    values = step.ts_graph_vals
+    if "mixing_matrix" not in values:
+        raise KeyError("timestep graph has no mixing_matrix")
+    return values["mixing_matrix"]
+
+
+def assert_mixing_matches_spec(
+    runner: Any, parameters: dict[str, float], spec: dict[str, Any], name: str
+) -> None:
+    """The traced mixing matrix is the spec array, not a new draw."""
+    if name == "age_mix":
+        actual = traced_mixing_matrix(runner, parameters, float(spec["t0"]))
+        expected = jnp.asarray(spec["static_mixing"], dtype=jnp.float64)
+        if not jnp.array_equal(actual, expected):
+            raise ValueError(f"{name} traced mixing is not spec['static_mixing']")
+        return
+    if name not in ("age_mix_tv", "stress"):
+        raise KeyError(name)
+    stack = jnp.asarray(spec["tv_mixing"], dtype=jnp.float64)
+    width = float(spec["tv_mixing_bin_width"])
+    origin = float(spec["t0"])
+    last = int(stack.shape[0]) - 1
+    checks = (
+        (origin, 0),
+        (width, 1),
+        (origin - float(spec["dt"]), 0),
+        (width * float(stack.shape[0]), last),
+    )
+    for time_value, index in checks:
+        actual = traced_mixing_matrix(runner, parameters, time_value)
+        if not jnp.array_equal(actual, stack[index]):
+            raise ValueError(f"{name} mixing at t={time_value} is not spec slice {index}")
 
 
 def inspect_multiply_chain(node: Any) -> MultiplyChain:
@@ -244,10 +321,44 @@ def _base_model(spec: dict[str, Any], steps: int) -> CompartmentalModel:
 
 
 def _contact_for(name: str, spec: dict[str, Any]) -> Any:
-    if name == "sir":
+    if name in ("sir", "age_mix", "age_mix_tv"):
         return Parameter("contact_rate")
     if name == "sir_adjust":
         return contact_with_adjustments(spec)
     if name == "sir_tv":
         return time_varying_contact(spec)
+    if name == "stress":
+        return stress_contact(spec)
+    raise KeyError(name)
+
+
+def _age_stratification(spec: dict[str, Any], mixing: Any) -> Stratification:
+    """Age bands from the spec. Not ``AgeStratification``: that adds ageing flows."""
+    strat = Stratification("age", list(spec["age_bands"]), list(spec["compartments"]))
+    strat.set_mixing_matrix(mixing)
+    return strat
+
+
+def _apply_stratification(name: str, model: CompartmentalModel, spec: dict[str, Any]) -> Any:
+    """Stratify in place. Returns the mixing object passed to summer2, or ``None``."""
+    if name in MODEL_NAMES:
+        return None
+    if name == "age_mix":
+        mixing = static_mixing_matrix(spec)
+        model.stratify_with(_age_stratification(spec, mixing))
+        return mixing
+    if name == "age_mix_tv":
+        mixing = time_varying_mixing(spec)
+        model.stratify_with(_age_stratification(spec, mixing))
+        return mixing
+    if name == "stress":
+        mixing = time_varying_mixing(spec)
+        model.stratify_with(_age_stratification(spec, mixing))
+        model.stratify_with(
+            Stratification("location", list(spec["locations"]), list(spec["compartments"]))
+        )
+        model.stratify_with(
+            StrainStratification("strain", list(spec["strains"]), list(spec["compartments"]))
+        )
+        return mixing
     raise KeyError(name)

@@ -134,3 +134,56 @@ Living note for `performance-review-s2`. The contract is
     accepts one. If the age-mixing API only takes a host callable, stop and
     record that. Do not time the callable path. The pattern that did trace
     is frozen `Data` plus `interpolate_linear` inside the step.
+
+## After step 3
+
+- Smoke command, from the repo root:
+
+  ```bash
+  pixi run --manifest-path summer2bench/pixi.toml smoke-stratified
+  ```
+
+  Nothing failed to trace. No blank cells. Do not switch these models to
+  `AgeStratification`: spec bands are `a0`..`a15`, and that class requires
+  integer strata starting at 0 and inserts ageing flows. Age is a plain
+  `Stratification("age", spec["age_bands"], spec["compartments"])`. Population
+  split is that class's default, `1/n` per stratum.
+- `mixing_matrix` arguments `get_runner` accepted. Only the age stratification
+  has one. Location and strain leave `mixing_matrix` as `None`.
+  - Static (`age_mix`): `set_mixing_matrix(jnp.asarray(spec["static_mixing"], dtype=jnp.float64))`.
+    A float64 array, shape `(16, 16)`, not a callable. The traced matrix at
+    `t0` equals that spec array.
+  - Time-varying (`age_mix_tv`, `stress`): `set_mixing_matrix(time_varying_mixing(spec))`.
+    That is a `computegraph` `Function`, not a host callable:
+
+    ```python
+    Function(_select_mixing_matrix, (Time, Data(stack), Data(bin_width), Data(last_index)))
+    ```
+
+    `_select_mixing_matrix` is `floor(t / bin_width)` then `clip` to
+    `0 .. len(stack) - 1`, then `stack[index]`. `bin_width` is
+    `spec["tv_mixing_bin_width"]`. Euler jaxpr of both models has no host
+    callback. Checked against the spec slices at `t0` (index 0), one bin
+    later (index 1), just below `t0` (clamped to 0), and past the last bin
+    (clamped to the last slice).
+- Within-strain infection is `StrainStratification("strain", spec["strains"], spec["compartments"])`
+  applied after age and location, with no mixing matrix. summer2 sets
+  `_disease_strains` to `s0`..`s3` (confirmed on the runner) and the jax
+  runner computes force of infection per strain. Both ends of infection are
+  stratified, so each flow stays inside one strain. Location is
+  `Stratification("location", spec["locations"], spec["compartments"])` and
+  does not get a mixing matrix.
+- `stress` contact rate is `stress_contact`: the step-2 interpolator, then
+  the same 24 `Parameter.__mul__` adjustments. Not `contact_rate` times the
+  interpolator.
+- `stress` build time is construction plus `get_runner`, not the solve.
+  Euler `1.370s`, RK4 `0.569s`. Not minutes. Euler is the cold build; RK4
+  reuses the process. Compile was euler `0.593s`, rk4 `1.259s`.
+- Counts from `len(model.compartments)`, both solvers: `age_mix` 48,
+  `age_mix_tv` 48, `stress` 3840. Flows float64 shape `(201,)`, compartments
+  `(201, 48)` or `(201, 3840)`, sums finite. At 200 steps (`t` in `[0, 20]`)
+  `age_mix` and `age_mix_tv` euler sums match (`203482887.8567661`) because
+  every step is still in bin 0 and `tv_mixing[0]` is the static matrix.
+  That is not a failed time index. `stress` euler reduced
+  `201000912.24408036`, rk4 `201712150.98083156`.
+

@@ -1,7 +1,8 @@
-"""Smoke ``sir``, ``sir_adjust``, and ``sir_tv`` at the spec's smoke step count.
+"""Smoke summer2 models at the spec's smoke step count.
 
-Both fixed-step solvers. One warm call each. Does not time the full ladder
-and does not build age or stress models.
+``python smoke.py`` runs the unstratified three. ``python smoke.py stratified``
+runs ``age_mix``, ``age_mix_tv``, and ``stress``. Both fixed-step solvers, one
+warm call each. Does not run 2_000 or 8_000 steps.
 """
 
 from __future__ import annotations
@@ -15,9 +16,11 @@ import jax
 
 from models import (
     MODEL_NAMES,
+    STRATIFIED_NAMES,
+    assert_knots_clamped,
+    assert_mixing_matches_spec,
     host_callback_primitives,
     inspect_multiply_chain,
-    assert_knots_clamped,
     load_spec,
     prepare_model,
     runner_for,
@@ -125,6 +128,83 @@ def _check_adjust_chain(
     print(f"{label} jaxpr host_callback=False", flush=True)
 
 
+_EXPECTED_COMPARTMENTS = {"age_mix": 48, "age_mix_tv": 48, "stress": 3840}
+
+
+def _mixing_label(mixing: Any) -> str:
+    func = getattr(mixing, "func", None)
+    if func is not None:
+        return f"Function {getattr(func, '__module__', '')}.{getattr(func, '__name__', '')}"
+    shape = getattr(mixing, "shape", None)
+    dtype = getattr(getattr(mixing, "dtype", None), "name", None)
+    return f"{type(mixing).__name__} dtype={dtype} shape={shape}"
+
+
+def stratified_main() -> None:
+    """Smoke the three stratified models. Compartment counts come from the model."""
+    spec = load_spec()
+    steps = int(spec["smoke_steps"])
+    if steps not in spec["step_counts"]:
+        _fail(f"smoke_steps {steps} is not in step_counts {spec['step_counts']}")
+    flow_names = tuple(str(name) for name in spec["flows"])
+    rows = steps + 1
+
+    print(f"summerepi2 {importlib.metadata.version('summerepi2')}", flush=True)
+    print(f"jax {jax.__version__}", flush=True)
+    print(f"jax_enable_x64 {jax.config.jax_enable_x64}", flush=True)
+    print(f"smoke_steps {steps} rows {rows}", flush=True)
+
+    for name in STRATIFIED_NAMES:
+        for solver in SOLVERS:
+            label = f"{name} {solver}"
+            seen: dict[str, Any] = {}
+            box: dict[str, Any] = {}
+
+            def build(model_name: str = name, solver_name: str = solver) -> Any:
+                prepared = prepare_model(model_name, steps, spec)
+                box["prepared"] = prepared
+                box["strat_mixing"] = {
+                    strat_name: strat.mixing_matrix
+                    for strat_name, strat in prepared.model.stratifications.items()
+                }
+                return runner_for(prepared, solver_name)
+
+            def call(runner: Any, stash: dict[str, Any] = seen, held: dict[str, Any] = box) -> Any:
+                return reduce_runner_outputs(runner, held["prepared"].parameters, flow_names, stash)
+
+            runner, timed = time_runner(build, call, n_warm=1)
+            count = len(runner.model.compartments)
+            print(
+                f"{label} times build={timed.build_s:.3f}s "
+                f"compile={timed.compile_s:.3f}s warm={timed.warm_s[0]:.3f}s",
+                flush=True,
+            )
+            print(f"{label} model.compartments {count}", flush=True)
+            if count != _EXPECTED_COMPARTMENTS[name]:
+                _fail(f"{label} compartment count {count}, expected {_EXPECTED_COMPARTMENTS[name]}")
+            _check_saved(label, seen, flow_names, rows, count)
+            only_age = [key for key, value in box["strat_mixing"].items() if value is not None]
+            if only_age != ["age"]:
+                _fail(f"{label} mixing attached to {only_age}, expected age only")
+            print(f"{label} mixing {_mixing_label(box['prepared'].mixing)}", flush=True)
+            if name == "stress":
+                strains = list(runner.model._disease_strains)
+                print(f"{label} disease_strains {strains}", flush=True)
+                if strains != list(spec["strains"]):
+                    _fail(f"{label} disease strains {strains}")
+            if solver == SOLVERS[0]:
+                assert_mixing_matches_spec(runner, box["prepared"].parameters, spec, name)
+                print(f"{label} mixing matches spec", flush=True)
+                if name in ("age_mix_tv", "stress"):
+                    closed = jax.make_jaxpr(lambda params: runner.function(params))(
+                        box["prepared"].parameters
+                    )
+                    callbacks = host_callback_primitives(closed)
+                    if callbacks:
+                        _fail(f"{label} jaxpr host callbacks {callbacks}")
+                    print(f"{label} jaxpr host_callback=False", flush=True)
+
+
 def main() -> None:
     """Smoke every unstratified model on both solvers."""
     spec = load_spec()
@@ -188,8 +268,12 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    which = sys.argv[1] if len(sys.argv) > 1 else "unstratified"
+    entry = stratified_main if which == "stratified" else main
+    if which not in ("unstratified", "stratified"):
+        raise SystemExit(f"unknown smoke target {which}")
     try:
-        main()
+        entry()
     except SystemExit:
         raise
     except Exception as exc:
