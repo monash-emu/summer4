@@ -187,3 +187,36 @@ Living note for `performance-review-s2`. The contract is
   That is not a failed time index. `stress` euler reduced
   `201000912.24408036`, rk4 `201712150.98083156`.
 
+## After step 4
+
+- Recorded matrix is `summer2bench/recorded.json`: a JSON list of 36 records.
+  **36 ok, 0 failed.** No blank cells, no checkpoint stop. Command, from the
+  repo root:
+
+  ```bash
+  pixi run --manifest-path summer2bench/pixi.toml record
+  ```
+
+  Each cell is its own process, so a kill would have been `status: failed`
+  instead of a lost file. Do not compare `build_s` with step 3. There the RK4
+  build reused the process; here every build is cold. Summer2 import sits
+  outside the timer. `build_s` is still construction plus `get_runner`.
+  `compile_s` is the first call. `warm_median_s` is the median of the next
+  five, each reduced and `block_until_ready`. The first call is not one of
+  the five. `warm_s` keeps those five samples.
+- Sanity pair, both float64, Apple M4. `sir` / euler / 200 warm median
+  `0.000170s` (compile `0.157s`). `sir` / rk4 / 200 warm median `0.000427s`
+  (compile `0.263s`). The spot check passed: the euler warm median is smaller
+  than compile. One longer cell does not: `stress` / rk4 / 2000 warm median
+  `4.800s` against compile `4.478s`. That is the solve. The five samples are
+  all multi-second and the slowest is not the first, so the timer was not
+  rerun.
+- `stress` at 8_000 steps did not run out of memory. Peak RSS of that child
+  (`ru_maxrss`, bytes on macOS, includes the JAX process) was euler
+  `1353695232` (1.26 GiB) and rk4 `1388462080` (1.29 GiB). Warm medians were
+  euler `2.800s` and rk4 `8.401s`.
+- Machine and date, copied from every record: `macOS-15.7.9-arm64-arm-64bit;
+  arm64; Apple M4; 24 GiB`, date `2026-09-20`. JAX `0.4.38`, `summerepi2`
+  `1.3.6`, dtype `float64`. Compartment counts: `sir` / `sir_adjust` /
+  `sir_tv` 3, `age_mix` / `age_mix_tv` 48, `stress` 3840.
+

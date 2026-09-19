@@ -8,6 +8,7 @@ version = "0.1.0"
 probe = { cmd = "python probe.py", description = "Float64 SIR probe: euler and rk4, 20 steps" }
 smoke = { cmd = "python smoke.py", description = "Smoke unstratified summer2 models at 200 steps" }
 "smoke-stratified" = { cmd = "python smoke.py stratified", description = "Smoke stratified summer2 models at 200 steps" }
+record = { cmd = "python record.py", description = "Record the summer2 timing matrix into recorded.json" }
 
 [dependencies]
 python = "3.10.*"
