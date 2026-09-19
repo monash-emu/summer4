@@ -174,9 +174,18 @@ A branch that adds or changes **features** (new public API, new modelling capabi
 
 Notebook rules:
 
+Example notebooks are the **user gate**, not only a pytest smoke test. A person
+runs `pixi run notebook` and signs the feature off by reading them. Write every
+gate notebook in the summer2 documentation style (see `docs/summer2/`): prose a
+modeller can follow, a figure of the claim, and an assertion of that same claim.
+A notebook that only asserts is not a user gate.
+
 - One notebook per feature (or a clearly named extension of an existing notebook when the feature is a small addition).
 - Code cells must be plain Python: no IPython magics, no hidden manual steps.
-- The notebook should tell a short story (what the feature is, a realistic example) and **assert** the outcomes it claims.
+- Open with what the page is for and which claim the reader is checking.
+- Before each code section, a markdown heading and a short explanation of what the next cells do and what the figure should show.
+- **Plot** every series, comparison, or size the reader is asked to judge. Use the pandas Plotly backend (`pd.options.plotting.backend = "plotly"`, `pio.renderers.default = "notebook_connected"`), with a title and axis labels. A structural page (taxonomy, jaxpr size, hoist-table length) still plots that comparison — compartment counts, edge counts, loop-body size — rather than only printing it.
+- **Assert** the outcomes the prose and the figure claim. Do not replace a plot with an assert, or an assert with a plot.
 - Prefer `from summer4 import ...` over re-implementing library code inline.
 
 Bug-fix branches need regression tests. Add or update a notebook only when the fix changes documented user-facing behaviour.
