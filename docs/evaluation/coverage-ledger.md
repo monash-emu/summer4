@@ -186,9 +186,9 @@ WP9 now has a detailed plan, `plans/wp9-contact-surveys.plan.md`; the paragraph
 in *The path to 100%* below is its scope statement, not its design. Every
 remaining package is planned.
 
-WP10 and WP13–WP16 are planned in
-`plans/tb-ports-feature-completeness.plan.md`. WP12 shipped as
-`plans/wp12-release.plan.md`. That plan exists to make two
+WP10 and WP14–WP16 remain planned in
+`plans/tb-ports-feature-completeness.plan.md`. WP12 and WP13 have shipped.
+That plan exists to make two
 tuberculosis models portable to summer4; which of their capabilities each
 package closes is recorded, by row ID, in {doc}`tb-ports`.
 

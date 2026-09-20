@@ -142,11 +142,12 @@ also applied: a model can be built with infection and mixing, given a
 declarative initial population, run to a `Result`, queried, time-parameterised
 and fitted to sparse targets.
 
-The next leverage is **WP12** (pinnable release on `main`), then **WP13**
-(rate-tree math and tabular time series — `KI2` `KI6` `KI10` `KI11` `TM3` `TM4`),
-followed by WP14–WP16 and WP10. See `plans/tb-ports-feature-completeness.plan.md`
-and the notes in `futureplans/` (`derived-fn-blocks-hoisting`,
-`mixing-matrix-per-call-normalisation`, `wp10-preprocess-is-prepare-fn`).
+The next leverage is **WP14** (generalised FOI and compartment infectiousness),
+then WP15–WP16 and WP10. WP12 (pinnable release) and WP13 (rate-tree math,
+tables, ageing sugar — `KI2` `KI6` `KI10` `KI11` `TM3` `TM4`) are applied. See
+`plans/tb-ports-feature-completeness.plan.md` and the notes in `futureplans/`
+(`derived-fn-blocks-hoisting`, `mixing-matrix-per-call-normalisation`,
+`wp10-preprocess-is-prepare-fn`).
 
 `Present` / `Absent` binding is **settled**: they are non-binding in flow
 pairing.

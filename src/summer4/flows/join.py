@@ -433,6 +433,48 @@ class TraitChain:
                 f"{len(self.pairs)} pairs."
             )
 
+    @classmethod
+    def from_breakpoints(cls, age: Property, *, unit: float = 1.0) -> TraitChain:
+        """Build an ageing chain from numeric lower-bound trait names.
+
+        Each trait must parse as a float lower bound (``\"0\"``, ``\"5\"``,
+        ``\"15\"``). Consecutive traits form pairs; rates are
+        ``1 / (width * unit)``. The last band has no outgoing edge. Raise if a
+        trait does not parse, bounds are not strictly increasing, there are
+        fewer than two traits, or ``unit`` is not positive.
+        """
+        if unit <= 0.0:
+            raise ValueError(f"unit must be positive, got {unit}.")
+        if len(age.traits) < 2:
+            raise ValueError(
+                f"Property {age.name!r} needs at least two traits for "
+                f"from_breakpoints, got {list(age.traits)}."
+            )
+        bounds: list[float] = []
+        for trait in age.traits:
+            try:
+                bound = float(trait)
+            except ValueError as exc:
+                raise ValueError(
+                    f"Trait {trait!r} of property {age.name!r} is not a "
+                    f"numeric lower bound (expected names like '0', '5', '15')."
+                ) from exc
+            bounds.append(bound)
+        for index in range(1, len(bounds)):
+            if bounds[index] <= bounds[index - 1]:
+                raise ValueError(
+                    f"Age breakpoints for {age.name!r} must be strictly "
+                    f"increasing; got {age.traits[index - 1]!r}={bounds[index - 1]} "
+                    f"then {age.traits[index]!r}={bounds[index]}."
+                )
+        pairs = tuple(
+            (age.traits[index], age.traits[index + 1]) for index in range(len(bounds) - 1)
+        )
+        rates = tuple(
+            1.0 / ((bounds[index + 1] - bounds[index]) * unit) for index in range(len(bounds) - 1)
+        )
+        return cls(age, pairs, rates=rates)
+
 
 @dataclass(frozen=True, slots=True)
 class TraitMatrix:

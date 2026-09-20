@@ -111,8 +111,8 @@ def test_ports_reject_bad_status(ports_text: str, text: str) -> None:
     from scripts.coverage_report import read_ports
 
     broken = ports_text.replace(
-        "| `partial` | Hand-written `TraitChain` pairs",
-        "| `mostly` | Hand-written `TraitChain` pairs",
+        "| `partial` | One `ForceOfInfection` per compartment summed, or `derived_fn`",
+        "| `mostly` | One `ForceOfInfection` per compartment summed, or `derived_fn`",
         1,
     )
     with pytest.raises(ValueError, match="Unknown status"):
@@ -123,8 +123,8 @@ def test_ports_reject_undeclared_package(ports_text: str, text: str) -> None:
     from scripts.coverage_report import read_ports
 
     broken = ports_text.replace(
-        "| Hand-written `TraitChain` | WP13 |",
-        "| Hand-written `TraitChain` | WP99 |",
+        "| One `ForceOfInfection` per compartment summed, or `derived_fn` | WP14 |",
+        "| One `ForceOfInfection` per compartment summed, or `derived_fn` | WP99 |",
         1,
     )
     with pytest.raises(ValueError, match="undeclared package"):
