@@ -38,8 +38,8 @@ original analyses re-run on numpyro.
 
 ## Verdict
 
-- **tb_macro** — tb_macro rows complete today: **6 of 9**, and every other row is `partial`. It is **implementable today** with hand-written glue: a `derived_fn` force of infection and a hand-written numpyro model (the original hand-writes that too).
-- **Kiribati** — Kiribati rows complete today: **10 of 23**. Every capability except calibration and scale has *some* route, but a faithful, calibratable port would re-implement several layers by hand. Remaining blockers:
+- **tb_macro** — tb_macro rows complete today: **7 of 9**, and every other row is `partial`. It is **implementable today** with hand-written glue: a `derived_fn` force of infection and a hand-written numpyro model (the original hand-writes that too).
+- **Kiribati** — Kiribati rows complete today: **11 of 23**. Every capability except calibration and scale has *some* route, but a faithful, calibratable port would re-implement several layers by hand. Remaining blockers:
   1. **Generalised force of infection** with compartment × age infectiousness — `KI4` `KI5`. `ForceOfInfection`'s custom `kind` receives no parameters, there is no power node, and `infectiousness=` keys only on the grouping property.
   2. **Output algebra** at summer2 scale — `KI13`–`KI17`. `Trace` has no operators, `cumulative()` has no start, `FlowMass` names one flow, there is no summer2 midpoint convention and no `Result` → frame.
   3. **Calibration workflow** — `KI18`–`KI21`. No priors, likelihoods, gradient-free sampler or posterior-run tooling exist.
@@ -51,7 +51,7 @@ original analyses re-run on numpyro.
 | ID | Model | Capability | Status | Route today | Closed by |
 | --- | --- | --- | --- | --- | --- |
 | KI1 | Kiribati | State × 8 uneven age bands × reachability map | `full` | `PropertyMap.from_property(state).stratify(age).stratify(reach)` | — |
-| KI2 | Kiribati | Ageing between uneven bands at rate 1/width | `partial` | Hand-written `TraitChain` pairs and float rates | WP13 |
+| KI2 | Kiribati | Ageing between uneven bands at rate 1/width | `full` | `TraitChain.from_breakpoints(age)` | — |
 | KI3 | Kiribati | Initial population: seed in `clin_inf`, reachability split by `Param` | `full` | `InitialPopulation` | — |
 | KI4 | Kiribati | Generalised FOI `M @ (I_g / N_g**exp)` with a calibrated exponent | `partial` | `**` exists on the rate tree; the custom `kind` callable still receives no parameters, so the FOI stays in `derived_fn` | WP14 |
 | KI5 | Kiribati | Infectiousness weights by compartment × age | `partial` | One `ForceOfInfection` per compartment summed, or `derived_fn` | WP14 |
@@ -75,7 +75,7 @@ original analyses re-run on numpyro.
 | KI23 | Kiribati | summer4 installable from a tagged GitHub release | `full` | Pin `tag = "v0.2.0a2"` | — |
 | TM1 | tb_macro | Ragged map: clinical × infectious only on `active` | `full` | `stratify(prop, where=state["active"])` | — |
 | TM2 | tb_macro | Partial destination (even split), collapse, expand | `full` | `identity_join` equal split; source-only properties dropped | — |
-| TM3 | tb_macro | Ageing 0 → 5 → 15 | `partial` | Hand-written `TraitChain` | WP13 |
+| TM3 | tb_macro | Ageing 0 → 5 → 15 | `full` | `TraitChain.from_breakpoints(age)` | — |
 | TM4 | tb_macro | Rates as functions of `t` and params (triangular seed, tanh scale-up) | `full` | `clip(h * (1 - abs(Time() - peak) / w), 0)` and a `tanh` scale-up rate tree | — |
 | TM5 | tb_macro | Per-age FOI `I / N**exp` with rel_sus per source compartment | `partial` | `derived_fn` FOI, `Multiply(Param, where=)` for rel_sus | WP14 |
 | TM6 | tb_macro | Initial population with even split over ragged strata | `full` | `InitialPopulation` | — |
@@ -108,8 +108,8 @@ Computed by `scripts/coverage_report.py`; do not edit by hand.
 <!-- ledger:port-readiness -->
 | After | Kiribati | tb_macro |
 | --- | --- | --- |
-| today | 10 / 23 | 6 / 9 |
-| WP12 | 10 / 23 | 6 / 9 |
+| today | 11 / 23 | 7 / 9 |
+| WP12 | 11 / 23 | 7 / 9 |
 | WP13 | 11 / 23 | 7 / 9 |
 | WP3 | 11 / 23 | 7 / 9 |
 | WP14 | 13 / 23 | 8 / 9 |

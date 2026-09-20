@@ -110,6 +110,43 @@ def test_ageing_chain_has_no_top_band_edge() -> None:
     assert not any(label.endswith("age=10+") for label, _ in pairs)
 
 
+def test_from_breakpoints_matches_hand_written_digest() -> None:
+    """Sugar compiles to the same digest as an explicit TraitChain."""
+    state = Property("state", ("S", "I", "R"))
+    age = Property("age", ("0", "5", "15"))
+    pmap = PropertyMap.from_property(state).stratify(age)
+
+    def digest(pairing: TraitChain) -> bytes:
+        model = FlowModel(pmap)
+        model.add_flow(TransitionFlow("ageing", age.present(), age.present(), 1.0, pairing=pairing))
+        return model.compile()._digest
+
+    hand = TraitChain(age, (("0", "5"), ("5", "15")), rates=(1.0 / 5.0, 1.0 / 10.0))
+    sugar = TraitChain.from_breakpoints(age)
+    assert sugar == hand
+    assert digest(sugar) == digest(hand)
+
+
+def test_from_breakpoints_unit_scales_rates() -> None:
+    age = Property("age", ("0", "5", "15"))
+    chain = TraitChain.from_breakpoints(age, unit=365.0)
+    assert chain.rates is not None
+    np.testing.assert_allclose(
+        chain.rates, (1.0 / (5.0 * 365.0), 1.0 / (10.0 * 365.0)), rtol=0.0, atol=0.0
+    )
+
+
+def test_from_breakpoints_rejects_non_numeric_and_non_increasing() -> None:
+    with pytest.raises(ValueError, match="numeric lower bound"):
+        TraitChain.from_breakpoints(Property("age", ("0-4", "5-9", "10+")))
+    with pytest.raises(ValueError, match="strictly increasing"):
+        TraitChain.from_breakpoints(Property("age", ("0", "10", "5")))
+    with pytest.raises(ValueError, match="at least two traits"):
+        TraitChain.from_breakpoints(Property("age", ("0",)))
+    with pytest.raises(ValueError, match="unit must be positive"):
+        TraitChain.from_breakpoints(Property("age", ("0", "5")), unit=0.0)
+
+
 def test_ageing_chain_pair_rates_are_edge_scales() -> None:
     _state, age, pm = _sir_age()
     flow = TransitionFlow(

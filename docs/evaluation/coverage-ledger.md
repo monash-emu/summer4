@@ -186,9 +186,9 @@ WP9 now has a detailed plan, `plans/wp9-contact-surveys.plan.md`; the paragraph
 in *The path to 100%* below is its scope statement, not its design. Every
 remaining package is planned.
 
-WP10 and WP13–WP16 are planned in
-`plans/tb-ports-feature-completeness.plan.md`. WP12 shipped as
-`plans/wp12-release.plan.md`. That plan exists to make two
+WP10 and WP14–WP16 remain planned in
+`plans/tb-ports-feature-completeness.plan.md`. WP12 and WP13 have shipped.
+That plan exists to make two
 tuberculosis models portable to summer4; which of their capabilities each
 package closes is recorded, by row ID, in {doc}`tb-ports`.
 
@@ -201,7 +201,7 @@ package closes is recorded, by row ID, in {doc}`tb-ports`.
 | WP9 | Contact survey data | `plans/wp9-contact-surveys.plan.md` | Settled there: `ContactMatrix` loading and validation, rebinning, reciprocity, population adaptation, scaling, textbook 16-19 |
 | WP10 | Calibration | `plans/tb-ports-feature-completeness.plan.md` | Settled there: priors, likelihoods on `Target`, numpyro samplers (NUTS and gradient-free ensemble), MAP, posterior runs; lives in `summer4.epi` |
 | WP12 | Pinnable release | `plans/wp12-release.plan.md` | **Applied.** First tag `v0.2.0a1`; current tag `v0.2.0a2`. JAX is a core dependency; `frames` declares polars and pyarrow. Downstream smoke CI is step 3 of {doc}`../dev/roadmap` |
-| WP13 | Rate-tree math and tabular time series | `plans/tb-ports-feature-completeness.plan.md` | Math nodes, vector-valued table interpolation, `Lookup`, ageing sugar |
+| WP13 | Rate-tree math and tabular time series | `plans/tb-ports-feature-completeness.plan.md` | **Applied.** Math nodes, `TableInterp`, `Lookup`, `TraitChain.from_breakpoints` |
 | WP14 | Generalised force of infection | `plans/tb-ports-feature-completeness.plan.md` | `kind="generalised"` with an exponent; compartment-level infectiousness |
 | WP15 | Output algebra | `plans/tb-ports-feature-completeness.plan.md` | `Trace` operators, windowed cumulative, multi-flow outputs, `OutputSet`, frames |
 | WP16 | Scale and solver safety | `plans/tb-ports-feature-completeness.plan.md` | TB-scale benchmark, surfaced `max_steps` failure, vmap-safe reciprocity check |
@@ -322,14 +322,14 @@ everything above, including WP11's declarative targets.
 **Closes:** *(no API rows)* · **Unblocks:** the Kiribati and tb_macro ports;
 see {doc}`tb-ports` for the rows each closes and the computed readiness after each.
 
-WP12 is **applied**: first tag `v0.2.0a1`, current tag `v0.2.0a2`. Where the
-work has got to after that is {doc}`../dev/roadmap`, not this page. WP13 adds
-math nodes (`Pow`, `Log`, `Maximum`, …),
-vector-valued table interpolation and a `Lookup` node. WP14 adds a generalised
-force of infection with a calibratable exponent and compartment-level
-infectiousness. WP15 adds output algebra: `Trace` operators, a windowed
-`cumulative`, multi-flow `FlowMass`, and named output sets to frames. WP16
-benchmarks a TB-scale model and makes solver failure visible. Plan:
+WP12 is **applied**: first tag `v0.2.0a1`, current tag `v0.2.0a2`. WP13 is
+**applied**: math nodes (`Pow`, `Log`, `Maximum`, …), `TableInterp`, `Lookup`,
+and `TraitChain.from_breakpoints`. Where the work has got to after that is
+{doc}`../dev/roadmap`, not this page. WP14 adds a generalised force of infection
+with a calibratable exponent and compartment-level infectiousness. WP15 adds
+output algebra: `Trace` operators, a windowed `cumulative`, multi-flow
+`FlowMass`, and named output sets to frames. WP16 benchmarks a TB-scale model
+and makes solver failure visible. Plan:
 `plans/tb-ports-feature-completeness.plan.md`.
 
 ### WP11 — Sparse outputs and calibration targets (applied)
