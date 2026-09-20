@@ -266,3 +266,39 @@ Living note for `performance-review-s2`. The contract is
   Diffrax solvers (JAX 0.6.2). `benchmarks/harness.py` is the three-timer
   split for step 7. No `src/summer4` change. Stratified ports are step 6.
 
+## After step 6
+
+- Builders are all `build_model(name)` in `benchmarks/models.py`. Compile-time
+  compartment counts from `compiled.pmap.size`: `age_mix` 48, `age_mix_tv` 48,
+  `stress` 3840. Smoke command, from the repo root:
+
+  ```bash
+  pixi run python benchmarks/smoke_stratified.py
+  ```
+
+- Time-varying mixing is a `Lookup` inside the MixingMatrix rate tree, so it
+  evaluates in the jitted step:
+
+  ```python
+  Lookup(Param("tv_mixing"), floor(Time() / bin_width))  # clamp=True
+  ```
+
+  The table passed as the `tv_mixing` parameter is float64 shape `(8, 16, 16)`.
+  Static `age_mix` uses `jnp.asarray(spec["static_mixing"])` baked into
+  `MixingMatrix` with `normalize="none"`. `ForceOfInfection.group_by` is age
+  only. Location and strain are further `stratify` calls with no second mixing
+  matrix. Within-strain infection is `ForceOfInfection.per_trait`, which adds
+  flows `infection_s0`..`infection_s3`; a `SaveFn` sums them into the saved
+  key `infection`.
+- 200-step smoke status (all run, float64, finite sums):
+
+  | model | diffrax-euler | diffrax-rk4 |
+  | --- | --- | --- |
+  | age_mix | ok | ok |
+  | age_mix_tv | ok | ok |
+  | stress | ok | ok |
+
+  At 200 steps (`t` in `[0, 20]`), `age_mix` and `age_mix_tv` euler reduced
+  sums match (`203532235.19050047`) because every step is still in mixing bin
+  0. No `futureplans/` note. No `src/summer4` change.
+
