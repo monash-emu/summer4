@@ -74,11 +74,11 @@ Two conventions that are easy to get wrong:
 <!-- roadmap:current -->
 | Field | Value |
 | --- | --- |
-| Step | 7 |
+| Step | 8 |
 | Status | next |
-| Branch | `feat/epi-generalised-foi` |
+| Branch | `feat/epi-compartment-infectiousness` |
 | Cut from | `main` |
-| Last landed | `feat/ageing-sugar` |
+| Last landed | `feat/epi-generalised-foi` |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -96,8 +96,8 @@ only step 2's tag.
 | 4 | B | WP13 | `feat/rate-math` | `plans/tb-ports-feature-completeness.plan.md` | 13.1 | done | — |
 | 5 | B | WP13 | `feat/table-interp` | `plans/tb-ports-feature-completeness.plan.md` | 13.2 | done | KI6 KI10 KI11 TM4 |
 | 6 | B | WP13 | `feat/ageing-sugar` | `plans/tb-ports-feature-completeness.plan.md` | 13.3 | done | KI2 TM3 |
-| 7 | C | WP14 | `feat/epi-generalised-foi` | `plans/tb-ports-feature-completeness.plan.md` | 14a | next | — |
-| 8 | C | WP14 | `feat/epi-compartment-infectiousness` | `plans/tb-ports-feature-completeness.plan.md` | 14b | planned | KI4 KI5 TM5 |
+| 7 | C | WP14 | `feat/epi-generalised-foi` | `plans/tb-ports-feature-completeness.plan.md` | 14a | done | — |
+| 8 | C | WP14 | `feat/epi-compartment-infectiousness` | `plans/tb-ports-feature-completeness.plan.md` | 14b | next | KI4 KI5 TM5 |
 | 9 | D | WP15 | `feat/trace-algebra` | `plans/tb-ports-feature-completeness.plan.md` | 15a | planned | — |
 | 10 | D | WP15 | `feat/output-sets` | `plans/tb-ports-feature-completeness.plan.md` | 15c | planned | KI13 KI14 KI15 KI16 KI17 |
 | 11 | E | WP16 | `feat/tb-scale-bench` | `plans/tb-ports-feature-completeness.plan.md` | 16a | planned | — |
@@ -444,6 +444,8 @@ which textbook chapters, summer2 pages and port phases WP13 unblocked.
 
 ## Step 7 — `feat/epi-generalised-foi`
 
+**Landed:** feat/epi-generalised-foi, PR #19, 2026-09-21.
+
 ### Summary
 
 Kiribati's force of infection divides the infectious pool by population raised
@@ -515,6 +517,24 @@ nobody under 15 transmits" cannot be said — that is a weight per compartment
 before the group sum, keeping the existing trait-keyed form as sugar that
 converts to it. It closes `KI4`, `KI5` and `TM5`, finishes WP14, and is the
 machinery that step 16's susceptibility surface reuses.
+
+### What the previous worker left you
+
+- `ForceOfInfection` accepts `kind="generalised"` and `exponent=` (float /
+  `Param` / rate tree). Shedding is `i_grp / (n_grp ** eval(exponent))`.
+  Frequency ≡ generalised with `exponent=1.0` and density ≡ `exponent=0.0` are
+  bit-identical (`assert_array_equal`). Raise if kind/exponent pairing is wrong.
+- Plan pointer: `plans/epi-generalised-foi.plan.md`. Tests live in
+  `tests/test_epi_generalised.py` (formula parity with non-trivial `M`,
+  gradient w.r.t. exponent, digest covers exponent).
+- `examples/notebooks/09-epi-models.ipynb` already has a short generalised
+  section (exp=1 / exp=0 bars). This step extends it with the TB-shaped
+  reinfection model from §14e and owns the blocking user-gate checklist.
+- No ledger rows moved in step 7. `KI4`, `KI5`, `TM5` stay `partial` until
+  this step. Multi-property mixing and unstratified dummy-`pop` remain
+  `futureplans/foi-multi-property-mixing.md` and
+  `futureplans/foi-unstratified-dummy-pop.md`.
+- Ignore §14c (`EpiModel`); `adjust=` already exists on `TransitionFlow`.
 
 ### Read first
 
