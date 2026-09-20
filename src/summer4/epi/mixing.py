@@ -3,13 +3,29 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Literal
+from enum import StrEnum
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
 
+from summer4.enums import coerce_strenum
 from summer4.flows.rates import ArrayConst, FieldRef, RateOps, as_rate
 from summer4.properties import Property
+
+
+class MixingNormalize(StrEnum):
+    """Row treatment for a :class:`MixingMatrix`.
+
+    Prefer these members at call sites. Bare strings such as ``"rows"`` are
+    still accepted and coerced.
+    """
+
+    ROWS = "rows"
+    NONE = "none"
+
+
+type MixingNormalizeArg = MixingNormalize | str
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,7 +43,7 @@ class MixingMatrix:
 
     prop: Property
     matrix: RateOps
-    normalize: Literal["rows", "none"] = "rows"
+    normalize: MixingNormalize = MixingNormalize.ROWS
     check_reciprocal: bool = True
     _static: NDArray[np.float64] | None = None
 
@@ -36,9 +52,10 @@ class MixingMatrix:
         prop: Property,
         matrix: object,
         *,
-        normalize: Literal["rows", "none"] = "rows",
+        normalize: MixingNormalizeArg = MixingNormalize.ROWS,
         check_reciprocal: bool = True,
     ) -> None:
+        resolved = coerce_strenum(MixingNormalize, normalize, what="MixingMatrix normalize")
         n = len(prop.traits)
         static: NDArray[np.float64] | None = None
         if isinstance(matrix, (np.ndarray, list, tuple)):
@@ -47,7 +64,7 @@ class MixingMatrix:
                 raise ValueError(
                     f"MixingMatrix for {prop.name!r} expects shape ({n}, {n}), " f"got {arr.shape}."
                 )
-            if normalize == "rows":
+            if resolved is MixingNormalize.ROWS:
                 row_sums = arr.sum(axis=1, keepdims=True)
                 if np.any(row_sums == 0):
                     raise ValueError(
@@ -61,14 +78,13 @@ class MixingMatrix:
         else:
             rate = as_rate(matrix)
             if not isinstance(rate, FieldRef):
-                # as_rate of scalar is Const — not a matrix.
                 raise TypeError(
                     f"MixingMatrix matrix must be an array, FieldRef, or RateOps; "
                     f"got {type(matrix).__name__}."
                 )
         object.__setattr__(self, "prop", prop)
         object.__setattr__(self, "matrix", rate)
-        object.__setattr__(self, "normalize", normalize)
+        object.__setattr__(self, "normalize", resolved)
         object.__setattr__(self, "check_reciprocal", check_reciprocal)
         object.__setattr__(self, "_static", static)
 
@@ -86,7 +102,7 @@ class MixingMatrix:
                 f"MixingMatrix for {self.prop.name!r} expects shape ({n}, {n}), "
                 f"got {tuple(mat.shape)}."
             )
-        if self.normalize == "rows":
+        if self.normalize is MixingNormalize.ROWS:
             row_sums = jnp.sum(mat, axis=1, keepdims=True)
             mat = mat / row_sums
         return mat
@@ -109,7 +125,6 @@ class MixingMatrix:
                     f"max |K_ab N_a - K_ba N_b| = {float(d)}."
                 )
 
-        # Runs at concrete execution (including under jit via callback).
         import jax
 
         jax.debug.callback(_raise, diff)

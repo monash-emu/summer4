@@ -11,12 +11,22 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-from summer4.flows.rates import ArrayConst, Interp, RateOps, TableInterp, Time, as_rate
+from summer4.enums import coerce_strenum
+from summer4.flows.rates import (
+    ArrayConst,
+    Interp,
+    InterpKind,
+    InterpKindArg,
+    RateOps,
+    TableInterp,
+    Time,
+    as_rate,
+)
 from summer4.properties import Property
 from summer4.time import Epoch
 from summer4.timevarying import linear, sigmoidal, step
@@ -91,7 +101,7 @@ class Data:
 
     def interp(
         self,
-        kind: Literal["linear", "sigmoidal", "step"] = "linear",
+        kind: InterpKindArg = InterpKind.LINEAR,
         *,
         sharpness: float = 1.0,
     ) -> Interp:
@@ -100,19 +110,20 @@ class Data:
         Outside the observed range the interpolator clamps to the end value
         (``jax.numpy.interp`` behaviour for ``linear``).
 
-        For ``kind=\"step\"``, an extra leading plateau equal to the first
+        For ``kind=InterpKind.STEP``, an extra leading plateau equal to the first
         observation is prepended so ``len(values) == len(breakpoints) + 1``
         as required by :func:`~summer4.timevarying.step`.
         """
+        resolved = coerce_strenum(InterpKind, kind, what="Data.interp kind")
         bps = tuple(float(t) for t in self.times)
         vals = tuple(float(v) for v in self.values)
-        if kind == "linear":
+        if resolved is InterpKind.LINEAR:
             return linear(Time(), bps, vals)
-        if kind == "sigmoidal":
+        if resolved is InterpKind.SIGMOIDAL:
             return sigmoidal(Time(), bps, vals, sharpness=sharpness)
-        if kind == "step":
+        if resolved is InterpKind.STEP:
             return step(Time(), bps, (vals[0], *vals))
-        raise ValueError(f"Unknown interp kind {kind!r}.")
+        raise ValueError(f"Unknown interp kind {resolved!r}.")
 
     @classmethod
     def table(
@@ -213,7 +224,7 @@ class TableData:
 
     def interp(
         self,
-        kind: Literal["linear", "sigmoidal", "step"] = "linear",
+        kind: InterpKindArg = InterpKind.LINEAR,
         *,
         arg: RateOps | None = None,
         sharpness: float = 1.0,
@@ -221,17 +232,16 @@ class TableData:
         """Return a :class:`~summer4.flows.rates.TableInterp` over this table.
 
         ``arg`` defaults to :class:`~summer4.flows.rates.Time`. For
-        ``kind="step"`` the first row is prepended so the table matches
+        ``kind=InterpKind.STEP`` the first row is prepended so the table matches
         :meth:`Data.interp` — the value before the first time is the first
         observation, and the value changes at each later time.
         """
-        if kind not in ("linear", "sigmoidal", "step"):
-            raise ValueError(f"Unknown interp kind {kind!r}.")
+        resolved = coerce_strenum(InterpKind, kind, what="TableData.interp kind")
         vals = self.values
-        if kind == "step":
+        if resolved is InterpKind.STEP:
             vals = np.concatenate([vals[:1], vals], axis=0)
         return TableInterp(
-            kind=kind,
+            kind=resolved,
             times=ArrayConst(self.times),
             values=ArrayConst(vals),
             over=self.over,

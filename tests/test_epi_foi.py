@@ -20,7 +20,7 @@ from summer4 import (
     TransitionFlow,
     derived_refs,
 )
-from summer4.epi import ForceOfInfection, MixingMatrix
+from summer4.epi import FOIKind, ForceOfInfection, MixingMatrix
 from summer4.results.plan import GroupedOutput
 
 
@@ -45,13 +45,13 @@ def test_frequency_vs_density_differ_by_denominator() -> None:
     state, age, pmap = _sir_age()
     refs = derived_refs(_ContactParams)
 
-    def build(kind: str) -> object:
+    def build(kind: FOIKind) -> object:
         m = FlowModel(pmap)
         foi = ForceOfInfection(
             "infection",
             infectious=state["I"],
             group_by=age,
-            kind=kind,  # type: ignore[arg-type]
+            kind=kind,
             contact_rate=refs.contact_rate,
             mixing=MixingMatrix(age, np.eye(2), check_reciprocal=False),
         )
@@ -62,8 +62,8 @@ def test_frequency_vs_density_differ_by_denominator() -> None:
     # Growing population via unequal compartments so N changes the ratio.
     y = np.array([100.0, 400.0, 10.0, 40.0, 0.0, 0.0])
     params = {"contact_rate": 0.5, "mixing": np.eye(2)}
-    freq = np.asarray(build("frequency").observe(0.0, y, params).captures["infection"].data)
-    dens = np.asarray(build("density").observe(0.0, y, params).captures["infection"].data)
+    freq = np.asarray(build(FOIKind.FREQUENCY).observe(0.0, y, params).captures["infection"].data)
+    dens = np.asarray(build(FOIKind.DENSITY).observe(0.0, y, params).captures["infection"].data)
     n = np.asarray(PropertyData.wrap(pmap, y).sum_over(age).data)
     np.testing.assert_allclose(freq * n, dens)
 
@@ -82,7 +82,7 @@ def test_custom_kind_reimplements_frequency() -> None:
             "infection",
             infectious=state["I"],
             group_by=age,
-            kind=kind,  # type: ignore[arg-type]
+            kind=kind,
             contact_rate=refs.contact_rate,
             mixing=MixingMatrix(age, np.eye(2), check_reciprocal=False),
         )
@@ -91,7 +91,7 @@ def test_custom_kind_reimplements_frequency() -> None:
 
     y = np.array([100.0, 200.0, 10.0, 20.0, 0.0, 0.0])
     params = {"contact_rate": 1.0}
-    a = np.asarray(build("frequency").observe(0.0, y, params).captures["infection"].data)
+    a = np.asarray(build(FOIKind.FREQUENCY).observe(0.0, y, params).captures["infection"].data)
     b = np.asarray(build(as_freq).observe(0.0, y, params).captures["infection"].data)
     np.testing.assert_array_equal(a, b)
 
@@ -107,7 +107,7 @@ def test_homogeneous_lambda_identical_across_ages() -> None:
         "infection",
         infectious=state["I"],
         group_by=age,
-        kind="frequency",
+        kind=FOIKind.FREQUENCY,
         contact_rate=refs.contact_rate,
         mixing=MixingMatrix(age, K, normalize="none", check_reciprocal=False),
     )
@@ -143,7 +143,7 @@ def test_assortative_lambda_differs_across_ages() -> None:
         "infection",
         infectious=state["I"],
         group_by=age,
-        kind="frequency",
+        kind=FOIKind.FREQUENCY,
         contact_rate=refs.contact_rate,
         mixing=MixingMatrix(age, K, normalize="rows", check_reciprocal=False),
     )
@@ -202,7 +202,7 @@ def test_foi_matches_hand_derived_fn() -> None:
         "infection",
         infectious=state["I"],
         group_by=age,
-        kind="frequency",
+        kind=FOIKind.FREQUENCY,
         contact_rate=refs.contact_rate,
         mixing=MixingMatrix(age, K, normalize="none", check_reciprocal=False),
     )
@@ -253,7 +253,7 @@ def test_grad_contact_rate_finite() -> None:
         "infection",
         infectious=state["I"],
         group_by=age,
-        kind="frequency",
+        kind=FOIKind.FREQUENCY,
         contact_rate=refs.contact_rate,
         mixing=MixingMatrix(age, np.eye(2), check_reciprocal=False),
     )
@@ -286,7 +286,7 @@ def test_infectiousness_normalize_population() -> None:
             "infection",
             infectious=state["I"],
             group_by=age,
-            kind="frequency",
+            kind=FOIKind.FREQUENCY,
             contact_rate=refs.contact_rate,
             mixing=MixingMatrix(age, np.eye(2), check_reciprocal=False),
             infectiousness={age[k]: v for k, v in weights.items()},
@@ -348,7 +348,7 @@ def _compile_weighted_foi(
         "infection",
         infectious=state["I"],
         group_by=age,
-        kind="frequency",
+        kind=FOIKind.FREQUENCY,
         contact_rate=contact_rate,
         mixing=MixingMatrix(age, matrix, check_reciprocal=False),
         infectiousness={age[name]: value for name, value in weights.items()},
@@ -380,7 +380,7 @@ def test_infectiousness_param_matches_literal() -> None:
                 "infection",
                 infectious=state["I"],
                 group_by=age,
-                kind="frequency",
+                kind=FOIKind.FREQUENCY,
                 contact_rate=0.4,
                 mixing=MixingMatrix(age, np.eye(2), check_reciprocal=False),
                 infectiousness={"young": Param("nu_young"), "old": Param("nu_old")},
@@ -482,7 +482,7 @@ def test_mixing_matrix_param_swaps_without_recompile() -> None:
         "infection",
         infectious=state["I"],
         group_by=age,
-        kind="frequency",
+        kind=FOIKind.FREQUENCY,
         contact_rate=0.4,
         mixing=MixingMatrix(age, Param("K"), normalize="none", check_reciprocal=False),
     )

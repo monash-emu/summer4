@@ -14,13 +14,43 @@ from __future__ import annotations
 from collections.abc import Hashable
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
-from typing import Any, Literal
+from enum import StrEnum
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
 
+from summer4.enums import coerce_strenum
+
 type When = float | date | datetime | np.datetime64
 type CalendarRule = str | int
+
+
+class ReduceHow(StrEnum):
+    """Aggregation for time reductions (:meth:`TimeAxis.rolling`, Trace resample).
+
+    Prefer these members at call sites. Bare strings such as ``"sum"`` are still
+    accepted and coerced.
+    """
+
+    SUM = "sum"
+    MEAN = "mean"
+
+
+class TimeAxisKind(StrEnum):
+    """How a :class:`TimeAxis` was constructed.
+
+    Prefer these members at call sites. Bare strings such as ``"grid"`` are still
+    accepted and coerced.
+    """
+
+    GRID = "grid"
+    EXPLICIT = "explicit"
+    STEPS = "steps"
+
+
+type ReduceHowArg = ReduceHow | str
+type TimeAxisKindArg = TimeAxisKind | str
 
 
 def _is_tracer(value: object) -> bool:
@@ -125,14 +155,25 @@ class RollingSpec:
     """Static rolling-window plan (cumsum-difference, O(n))."""
 
     window: int
-    how: Literal["sum", "mean"]
+    how: ReduceHowArg
     center: bool
     min_periods: int
     valid_counts: NDArray[np.int32]
 
+    def __post_init__(self) -> None:
+        resolved = coerce_strenum(ReduceHow, self.how, what="RollingSpec how")
+        object.__setattr__(self, "how", resolved)
+
     def __hash__(self) -> int:
+        how = self.how if isinstance(self.how, ReduceHow) else ReduceHow(self.how)
         return hash(
-            (self.window, self.how, self.center, self.min_periods, self.valid_counts.tobytes())
+            (
+                self.window,
+                how.value,
+                self.center,
+                self.min_periods,
+                self.valid_counts.tobytes(),
+            )
         )
 
 
@@ -237,10 +278,15 @@ class TimeAxis:
 
     values: NDArray[np.float64] | Any
     epoch: Epoch | None = None
-    kind: Literal["grid", "explicit", "steps"] = "grid"
+    kind: TimeAxisKindArg = TimeAxisKind.GRID
     _group_cache: dict[tuple[CalendarRule, float | None], TimeGrouping] = field(
         default_factory=dict, repr=False, compare=False, hash=False
     )
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self, "kind", coerce_strenum(TimeAxisKind, self.kind, what="TimeAxis kind")
+        )
 
     def _concrete(self, *, op: str) -> NDArray[np.float64]:
         return _require_concrete(self.values, op=op)
@@ -332,7 +378,7 @@ class TimeAxis:
         self,
         window: int,
         *,
-        how: Literal["sum", "mean"] = "mean",
+        how: ReduceHowArg = ReduceHow.MEAN,
         center: bool = False,
         min_periods: int | None = None,
     ) -> RollingSpec:
@@ -348,6 +394,7 @@ class TimeAxis:
         mp = window if min_periods is None else int(min_periods)
         if mp < 1:
             raise ValueError(f"min_periods must be >= 1, got {mp}.")
+        resolved_how = coerce_strenum(ReduceHow, how, what="TimeAxis.rolling how")
         counts = np.zeros(n, dtype=np.int32)
         for i in range(n):
             if center:
@@ -360,7 +407,11 @@ class TimeAxis:
             hi = min(n, right)
             counts[i] = hi - lo
         return RollingSpec(
-            window=window, how=how, center=center, min_periods=mp, valid_counts=counts
+            window=window,
+            how=resolved_how,
+            center=center,
+            min_periods=mp,
+            valid_counts=counts,
         )
 
     def as_dates(self) -> NDArray[np.datetime64]:
@@ -378,11 +429,13 @@ class TimeAxis:
             return pd.Index(values, name="time")
         return pd.DatetimeIndex(self.epoch.from_model(values), name="time")
 
-    def tree_flatten(self) -> tuple[tuple[Any], tuple[Epoch | None, str]]:
+    def tree_flatten(self) -> tuple[tuple[Any], tuple[Epoch | None, TimeAxisKindArg]]:
         return (self.values,), (self.epoch, self.kind)
 
     @classmethod
-    def tree_unflatten(cls, aux: tuple[Epoch | None, str], children: tuple[Any, ...]) -> TimeAxis:
+    def tree_unflatten(
+        cls, aux: tuple[Epoch | None, TimeAxisKindArg], children: tuple[Any, ...]
+    ) -> TimeAxis:
         (values,) = children
         epoch, kind = aux
-        return cls(values=values, epoch=epoch, kind=kind)  # type: ignore[arg-type]
+        return cls(values=values, epoch=epoch, kind=kind)

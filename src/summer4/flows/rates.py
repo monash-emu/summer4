@@ -5,10 +5,12 @@ from __future__ import annotations
 import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any, Literal, NamedTuple, cast, get_type_hints
 
 import numpy as np
 
+from summer4.enums import coerce_strenum
 from summer4.properties import Property
 from summer4.selectors import (
     Absent,
@@ -27,6 +29,21 @@ from summer4.selectors import (
 type FlowReduce = Literal["identity", "sum"] | tuple[Literal["sum_over"], str]
 type Adjustment = Multiply | Overwrite | Transform
 type AdjustSpec = Sequence[object] | None
+
+
+class InterpKind(StrEnum):
+    """Interpolation shapes for :class:`Interp` and :class:`TableInterp`.
+
+    Prefer these members at call sites. Bare strings such as ``"linear"`` are
+    still accepted and coerced.
+    """
+
+    LINEAR = "linear"
+    SIGMOIDAL = "sigmoidal"
+    STEP = "step"
+
+
+type InterpKindArg = InterpKind | str
 
 # Extension point for rate nodes defined outside ``summer4.flows`` (e.g. epi).
 _RATE_EVALUATORS: dict[type, Callable[..., Any]] = {}
@@ -111,11 +128,18 @@ class Interp(RateOps):
     remain strictly increasing; they are not sorted at runtime.
     """
 
-    kind: Literal["linear", "sigmoidal", "step"]
+    kind: InterpKindArg
     breakpoints: tuple[RateOps, ...]
     values: tuple[RateOps, ...]
     arg: RateOps
     sharpness: float = 1.0
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "kind",
+            coerce_strenum(InterpKind, self.kind, what="Interp kind"),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -230,13 +254,13 @@ class TableInterp(RateOps):
     in trait order. Outside the time range the value clamps to the end column
     — it does not extrapolate.
 
-    For ``kind="step"``, ``values`` has one more row than ``times``: the
+    For ``kind=InterpKind.STEP``, ``values`` has one more row than ``times``: the
     leading row is the value before the first time, matching
     :func:`~summer4.timevarying.step`. :meth:`summer4.data.TableData.interp`
     prepends that row. ``linear`` and ``sigmoidal`` have one row per time.
     """
 
-    kind: Literal["linear", "sigmoidal", "step"]
+    kind: InterpKindArg
     times: ArrayConst
     values: ArrayConst
     over: Property
@@ -244,10 +268,8 @@ class TableInterp(RateOps):
     sharpness: float = 1.0
 
     def __post_init__(self) -> None:
-        if self.kind not in ("linear", "sigmoidal", "step"):
-            raise ValueError(
-                f"Unknown TableInterp kind {self.kind!r}. Known: linear, sigmoidal, step."
-            )
+        resolved = coerce_strenum(InterpKind, self.kind, what="TableInterp kind")
+        object.__setattr__(self, "kind", resolved)
         times = np.asarray(self.times.value, dtype=np.float64).reshape(-1)
         values = np.asarray(self.values.value, dtype=np.float64)
         if times.size < 1:
@@ -262,7 +284,7 @@ class TableInterp(RateOps):
                 f"TableInterp has {values.shape[1]} columns but property {self.over.name!r} "
                 f"has traits {self.over.traits}."
             )
-        if self.kind == "step":
+        if resolved is InterpKind.STEP:
             if values.shape[0] != times.size + 1:
                 raise ValueError(
                     "step TableInterp requires len(values) == len(times) + 1; "
@@ -270,10 +292,10 @@ class TableInterp(RateOps):
                 )
         else:
             if times.size < 2:
-                raise ValueError(f"{self.kind} TableInterp requires at least two times.")
+                raise ValueError(f"{resolved.value} TableInterp requires at least two times.")
             if values.shape[0] != times.size:
                 raise ValueError(
-                    f"{self.kind} TableInterp requires one value row per time; "
+                    f"{resolved.value} TableInterp requires one value row per time; "
                     f"got {values.shape[0]} rows and {times.size} times."
                 )
         if times.size >= 2 and bool(np.any(np.diff(times) <= 0)):
@@ -809,7 +831,7 @@ def _rate_bytes(expr: RateOps) -> bytes:
         ):
             return (
                 b"interp"
-                + kind.encode()
+                + str(kind).encode()
                 + np.float64(sharpness).tobytes()
                 + b"".join(_rate_bytes(bp) for bp in breakpoints)
                 + b"".join(_rate_bytes(v) for v in values)
@@ -843,7 +865,7 @@ def _rate_bytes(expr: RateOps) -> bytes:
         ):
             return (
                 b"tableinterp"
-                + kind.encode()
+                + str(kind).encode()
                 + np.float64(sharpness).tobytes()
                 + over.name.encode()
                 + repr(over.traits).encode()

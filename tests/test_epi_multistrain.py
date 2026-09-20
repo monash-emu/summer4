@@ -14,7 +14,7 @@ from summer4 import (
     SaveRequest,
     TransitionFlow,
 )
-from summer4.epi import ForceOfInfection, MixingMatrix
+from summer4.epi import FOIKind, ForceOfInfection, MixingMatrix
 from summer4.results.plan import GroupedOutput
 
 
@@ -33,7 +33,7 @@ def test_two_diseases_non_interference() -> None:
             infectious=state["I_a"],
             group_by=age,
             mixing=MixingMatrix(age, K, check_reciprocal=False),
-            kind="frequency",
+            kind=FOIKind.FREQUENCY,
             contact_rate=beta_a,
         )
         foi_b = ForceOfInfection(
@@ -41,7 +41,7 @@ def test_two_diseases_non_interference() -> None:
             infectious=state["I_b"],
             group_by=age,
             mixing=MixingMatrix(age, K, check_reciprocal=False),
-            kind="frequency",
+            kind=FOIKind.FREQUENCY,
             contact_rate=beta_b,
         )
         m.add_flow(TransitionFlow("inf_a", state["S"], state["I_a"], foi_a))

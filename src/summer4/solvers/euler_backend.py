@@ -145,9 +145,9 @@ def _lerp_snapshot(
     import jax
     import jax.numpy as jnp
 
-    from summer4.time import TimeAxis
+    from summer4.time import TimeAxis, TimeAxisKind
 
-    axis = TimeAxis(values=step_ts, kind="grid")
+    axis = TimeAxis(values=step_ts, kind=TimeAxisKind.GRID)
     idx, w = axis.weights_for(ts)
     idx_j = jnp.asarray(idx)
     w_j = jnp.asarray(w)
