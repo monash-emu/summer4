@@ -49,7 +49,10 @@ re-execution. Use it when a change should have invalidated a page and did not.
 ## Writing a page
 
 - **User guide** pages are notebooks. They teach one idea, build the smallest
-  map that shows it, and assert the result.
+  map that shows it, and assert the result. The same summer2 documentation
+  style applies: explain the claim, plot it (pandas Plotly backend, title,
+  axis labels), then assert it. Example notebooks under `examples/notebooks/`
+  are the manual user gate and follow that style; see {doc}`contributing`.
 - **Cookbook** pages are short recipes under {doc}`../cookbook/index`: one
   practical question, rung-ordered alternatives, assertions. Prefer them when
   the audience is domain experts with limited programming experience.
