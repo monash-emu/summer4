@@ -54,6 +54,7 @@ RECORD_KEYS = (
     "warm_median_s",
     "warm_s",
     "jax_version",
+    "diffrax_version",
     "summerepi2_version",
     "dtype",
     "machine",
@@ -62,6 +63,11 @@ RECORD_KEYS = (
     "reason",
     "peak_rss_bytes",
 )
+
+
+def _diffrax_version() -> str:
+    """Installed Diffrax version string for the record."""
+    return str(getattr(diffrax, "__version__", "unknown"))
 
 
 def machine_description() -> str:
@@ -132,6 +138,7 @@ def execute_cell(model: str, solver: str, steps: int, machine: str, date: str) -
         warm_median_s=float(statistics.median(warm)),
         warm_s=list(warm),
         jax_version=jax.__version__,
+        diffrax_version=_diffrax_version(),
         summerepi2_version=None,
         dtype=dtype_name.get("name"),
         machine=machine,
@@ -199,6 +206,13 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--cell", nargs=3, metavar=("MODEL", "SOLVER", "STEPS"))
     parser.add_argument("--machine", default=os.environ.get("SUMMER4_RECORD_MACHINE"))
     parser.add_argument("--date", default=os.environ.get("SUMMER4_RECORD_DATE"))
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="JSON path (default: benchmarks/recorded-summer4.json, or "
+        "recorded-summer4-jax-<ver>.json when SUMMER4_RECORD_VERSIONED=1).",
+    )
     args = parser.parse_args(argv)
     if args.cell is not None:
         model, solver, steps_text = args.cell
@@ -217,6 +231,7 @@ def main(argv: list[str] | None = None) -> None:
                 warm_median_s=None,
                 warm_s=None,
                 jax_version=jax.__version__,
+                diffrax_version=_diffrax_version(),
                 summerepi2_version=None,
                 dtype=None,
                 machine=machine,
@@ -228,9 +243,17 @@ def main(argv: list[str] | None = None) -> None:
         _require_keys(record)
         print(json.dumps(record), flush=True)
         return
-    records = run_matrix(RECORDED_PATH)
+    out = args.output or _default_output_path()
+    records = run_matrix(out)
     ok = sum(1 for record in records if record["status"] == "ok")
-    print(f"wrote {RECORDED_PATH} ok={ok} failed={len(records) - ok}", flush=True)
+    print(f"wrote {out} ok={ok} failed={len(records) - ok}", flush=True)
+
+
+def _default_output_path() -> Path:
+    """Canonical path, or a jax-versioned sibling when versioned recording is on."""
+    if os.environ.get("SUMMER4_RECORD_VERSIONED", "").strip() in {"1", "true", "yes"}:
+        return RECORDED_PATH.with_name(f"recorded-summer4-jax-{jax.__version__}.json")
+    return RECORDED_PATH
 
 
 def _run_subprocess(model: str, solver: str, steps: int, machine: str, date: str) -> dict[str, Any]:
@@ -307,6 +330,7 @@ def _failed_process(
         warm_median_s=None,
         warm_s=None,
         jax_version=None,
+        diffrax_version=None,
         summerepi2_version=None,
         dtype=None,
         machine=machine,
@@ -330,6 +354,7 @@ def _not_run(
         warm_median_s=None,
         warm_s=None,
         jax_version=None,
+        diffrax_version=None,
         summerepi2_version=None,
         dtype=None,
         machine=machine,

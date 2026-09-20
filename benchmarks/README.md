@@ -24,6 +24,9 @@ was re-recorded after that fix landed.
 
 JSON: `summer2bench/recorded.json`, `benchmarks/recorded-summer4.json`.
 
+JAX version sweep (same summer4 models on 0.4.38 / 0.6.2 / 0.11.1):
+`benchmarks/jax-sweep.md`, via `pixi run bench-models-jax-sweep`.
+
 | library | model | solver | steps | compartments | build | compile | warm median | dtype | JAX |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
 | summer2 | sir | euler | 200 | 3 | 892.44 ms | 157.33 ms | 170.1 µs | float64 | 0.4.38 |

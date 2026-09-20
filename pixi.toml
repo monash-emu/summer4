@@ -7,6 +7,23 @@ version = "0.1.0"
 [pypi-dependencies]
 summer4 = { path = ".", editable = true }
 
+[feature.jax04.dependencies]
+python = "3.13.*"
+
+# Same JAX as summer2bench (0.4.38). summer4's pyproject asks for jax>=0.6;
+# the overrides force the pin so we can measure that stack.
+[feature.jax04.pypi-options.dependency-overrides]
+jax = "==0.4.38"
+jaxlib = "==0.4.38"
+
+[feature.jax04.pypi-dependencies]
+jax = "==0.4.38"
+jaxlib = "==0.4.38"
+diffrax = "==0.7.2"
+numpyro = ">=0.16.0,<0.17"
+optax = ">=0.2.0"
+equinox = "*"
+
 [feature.jax06.dependencies]
 python = "3.13.*"
 
@@ -77,6 +94,7 @@ jupyterlab = ">=4.0"
 
 [environments]
 default = ["jax06", "dev"]
+jax04 = ["jax04", "dev"]
 latest = ["jaxlatest", "dev"]
 nb = ["jax06", "notebooks", "dev"]
 docs = ["docs"]
@@ -94,6 +112,7 @@ format-check = { cmd = "black --check src tests benchmarks scripts", description
 check-notebooks = { cmd = "python scripts/check_cleared_notebooks.py", description = "Require committed notebooks to have cleared outputs" }
 bench = { cmd = "pytest benchmarks/ --benchmark-only -v --benchmark-columns=min,max,median,ops", description = "Run taxonomy benchmarks in the current env" }
 bench-models = { cmd = "python benchmarks/record_models.py", description = "Record the summer4 model timing matrix into benchmarks/recorded-summer4.json" }
+bench-models-jax-sweep = { cmd = "python benchmarks/record_jax_sweep.py", description = "Record summer4 model timings on jax04, default, and latest JAX envs" }
 bench-json = { cmd = "python scripts/bench_json.py", description = "Write benchmark JSON keyed by JAX version" }
 coverage = { cmd = "python scripts/coverage_report.py --check", description = "Report feature coverage from docs/evaluation/coverage-ledger.md" }
 coverage-write = { cmd = "python scripts/coverage_report.py --write", description = "Regenerate the computed progression block in the coverage ledger" }

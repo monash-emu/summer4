@@ -60,6 +60,10 @@ Shared numeric spec: `summer2bench/spec.json`. Both libraries read that file.
   and `recovery` (no cumulative sums, per-capita rates, or `OutputSet`).
 - **Mixing:** age only on stratified models. Location and strain are real
   compartments but homogeneous on those axes.
+- **JAX pins:** `pixi run bench-models-jax-sweep` records the summer4 matrix
+  on `jax04` (0.4.38, same as summer2), `default` (0.6.x), and `latest`
+  (bleeding-edge). Diffrax is whatever each env resolves. Results live in
+  `benchmarks/recorded-summer4-jax-<ver>.json` and `benchmarks/jax-sweep.md`.
 
 JAX versions differ by design: summer2 stays on its 0.4.x pin in
 `summer2bench/`; this repo's default env is JAX 0.6.x. Do not put them in one

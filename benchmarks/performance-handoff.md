@@ -358,3 +358,21 @@ Living note for `performance-review-s2`. The contract is
   `futureplans/` or a new plan if someone starts optimizing Diffrax overhead
   relative to summer2.
 
+## After JAX version sweep
+
+- Environments: `jax04` (JAX **0.4.38**, Diffrax 0.7.2 — same JAX as
+  summer2), `default` (JAX **0.6.2**, Diffrax 0.7.2), `latest` (JAX
+  **0.11.1**, Diffrax 0.7.2). Diffrax has no newer release than 0.7.2, so
+  the sweep isolates JAX (and its transitive stack), not Diffrax.
+- Command: `pixi run bench-models-jax-sweep`. JSON:
+  `benchmarks/recorded-summer4-jax-{0.4.38,0.6.2,0.11.1}.json`. Table:
+  `benchmarks/jax-sweep.md`.
+- Failed cells: **0 / 36** on every pin.
+- Headline: on small models JAX version barely matters (`sir` / Euler / 200
+  warm ≈ 0.9–1.9 ms). On `stress`, **0.4.38 is far slower** than 0.6.2 /
+  0.11.1 (Euler / 8000: 19.4 s vs 1.6 s vs 1.1 s; RK4 / 8000: 87.5 s vs
+  5.1 s vs 4.1 s). Bleeding-edge 0.11.1 is the fastest large-model warm
+  time in this sweep; small-model warm times are slightly worse than 0.6.2.
+- `jax04` uses `[feature.jax04.pypi-options.dependency-overrides]` because
+  `pyproject.toml` requires `jax>=0.6`. That pin is for measurement only.
+
