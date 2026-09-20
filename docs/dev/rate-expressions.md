@@ -91,13 +91,18 @@ Honest accounting, because the cost is real:
 - **Seven touch points per node.** Adding `Lookup` meant editing `_eval_rate`,
   `rate_stage`, `build_hoist_table`, `_rate_bytes`, `_flow_refs`, `_field_paths`
   — six files-worth of `match` arms for one feature.
-- **Six silent-default dunders for extension nodes.** `__rate_bytes__`,
-  `__field_paths__`, `__flow_refs__`, `__rate_stage__`, `__capture_meta__`,
-  `__capture_children__`. Every one of them has a fallback that does something
-  reasonable-looking and wrong. `_rate_bytes` falling back to the class name is
-  a **silent miscompile**: two custom nodes of the same class with different
-  fields digest identically and share a jit cache entry. See
-  [`futureplans/custom-rate-node-digest-collision.md`](https://github.com/monash-emu/summer4/blob/main/futureplans/custom-rate-node-digest-collision.md).
+- **Six dunders for extension nodes, five of them silent-defaulting.**
+  `__rate_bytes__`, `__field_paths__`, `__flow_refs__`, `__rate_stage__`,
+  `__capture_meta__`, `__capture_children__`. The last five have a fallback that
+  does something reasonable-looking and can be wrong. `__rate_bytes__` used to
+  be the sixth, and it was the dangerous one: falling back to the class name was
+  a **silent miscompile**, because two custom nodes of the same class with
+  different fields digested identically and shared a jit cache entry. It is now
+  mandatory — `register_rate_eval` rejects a class that omits it and
+  `_rate_bytes` raises rather than guessing — so that failure is an import-time
+  `TypeError` instead of wrong numbers. The remaining five fail conservatively
+  (a redundant recompile, a step-stage node that could have hoisted), not
+  silently wrong.
 - **A closed operator set.** `UnaryOp` allows seven operations and `BinOp`
   seven. Anything else needs a node, an evaluator, and the dunders — or an
   escape hatch.
@@ -165,8 +170,8 @@ instead.
 
 The package-author path, documented in
 {doc}`../cookbook/01-custom-rates`. Worth it when the same named process
-appears in many models; overkill for one hazard. If you take it, **implement
-`__rate_bytes__`** — the default is unsafe.
+appears in many models; overkill for one hazard. If you take it you **must
+implement `__rate_bytes__`**; `register_rate_eval` raises without it.
 
 ## Could we have a better compute graph?
 
@@ -205,8 +210,9 @@ Generalising that is the real proposal behind the question. It looks like:
   become one generic fold plus a per-node leaf function, cutting the extension
   surface from six dunders to two (`__children__`, `__rate_bytes__`) and
   removing four of the silent-default failure modes.
-- **A required, total digest.** `_rate_bytes` should raise for a registered
-  node that does not encode itself, not fall back to the class name.
+- **A required, total digest.** Done: `_rate_bytes` raises for a node that does
+  not encode itself, and `register_rate_eval` refuses to register one, so the
+  error lands at the class definition rather than in the numerics.
 
 That is a refactor of the existing design, not a replacement of it — which is
 the point. The node zoo's problem is *duplicated traversal*, not *typed nodes*.

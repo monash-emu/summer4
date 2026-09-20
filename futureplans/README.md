@@ -50,6 +50,3 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
 - [`adjustment-expanding-arrays.md`](adjustment-expanding-arrays.md) — evaluate
   adjustment chains over unique value combinations (summer3proto `polarized`)
   instead of folding over every edge; benchmark-gated.
-- [`custom-rate-node-digest-collision.md`](custom-rate-node-digest-collision.md) —
-  a custom `RateOps` node without `__rate_bytes__` digests by class name, so
-  two such models share a jit cache entry and return the same wrong numbers.

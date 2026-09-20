@@ -50,7 +50,27 @@ _RATE_EVALUATORS: dict[type, Callable[..., Any]] = {}
 
 
 def register_rate_eval[T](cls: type[T]) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-    """Register an evaluator for a :class:`RateOps` subclass defined elsewhere."""
+    """Register an evaluator for a :class:`RateOps` subclass defined elsewhere.
+
+    ``cls`` **must** define ``__rate_bytes__(self) -> bytes``, returning a stable
+    encoding of every field that changes the node's numerics. The digest built
+    from it is both :meth:`CompiledModel.__hash__` and :meth:`__eq__`, and the
+    model is a static argument to :func:`jax.jit`: two models whose custom nodes
+    encode to the same bytes share a compiled program, so a node that omits a
+    field silently returns another model's numbers. Registration therefore
+    rejects a class without the dunder, at import time rather than at run time.
+
+    Raises:
+        TypeError: if ``cls`` does not define a callable ``__rate_bytes__``.
+    """
+    if not callable(getattr(cls, "__rate_bytes__", None)):
+        raise TypeError(
+            f"{cls.__name__} cannot be registered as a rate node: it must define "
+            "__rate_bytes__(self) -> bytes, a stable encoding of every field that "
+            "affects the node's value. Without it two models differing only in "
+            f"{cls.__name__}'s fields would compare equal and share a jax.jit "
+            "cache entry."
+        )
 
     def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
         _RATE_EVALUATORS[cls] = fn
@@ -877,13 +897,19 @@ def _rate_bytes(expr: RateOps) -> bytes:
             flag = b"1" if clamp else b"0"
             return b"lookup" + flag + _rate_bytes(table) + _rate_bytes(index)
         case _:
-            # Extension nodes (e.g. epi) must register a stable encoding via
-            # ``_rate_bytes`` fallback on class name + ``repr`` of fields is
-            # unsafe; require ``__rate_bytes__`` when registered evaluators exist.
+            # Extension nodes (e.g. epi) supply their own stable encoding. There
+            # is no safe fallback: digesting by class name alone would make two
+            # models differing only in this node's fields compare equal, hash
+            # equal, and share a ``jax.jit`` cache entry.
             custom = getattr(expr, "__rate_bytes__", None)
             if callable(custom):
                 return bytes(custom())
-            return type(expr).__name__.encode()
+            raise TypeError(
+                f"Rate node {type(expr).__name__} does not define "
+                "__rate_bytes__(self) -> bytes, so it cannot be digested for the "
+                "jax.jit cache key. Implement it, encoding every field that "
+                "affects the node's value."
+            )
 
 
 def _adjust_bytes(adj: Adjustment) -> bytes:
