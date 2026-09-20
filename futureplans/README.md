@@ -50,3 +50,6 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
 - [`adjustment-expanding-arrays.md`](adjustment-expanding-arrays.md) — evaluate
   adjustment chains over unique value combinations (summer3proto `polarized`)
   instead of folding over every edge; benchmark-gated.
+- [`split-adjust-selector-side.md`](split-adjust-selector-side.md) — a bare
+  trait in an `adjust=` on a `split=` flow binds to the source and raises, so
+  `docs-strict` is red on `main`.
