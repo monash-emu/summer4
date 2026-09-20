@@ -74,11 +74,11 @@ Two conventions that are easy to get wrong:
 <!-- roadmap:current -->
 | Field | Value |
 | --- | --- |
-| Step | 6 |
+| Step | 7 |
 | Status | next |
-| Branch | `feat/ageing-sugar` |
+| Branch | `feat/epi-generalised-foi` |
 | Cut from | `main` |
-| Last landed | `feat/table-interp` |
+| Last landed | `feat/ageing-sugar` |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -95,8 +95,8 @@ only step 2's tag.
 | 3 | A | WP12 | `chore/downstream-smoke-ci` | `plans/wp12-release.plan.md` | Step 3 | done | — |
 | 4 | B | WP13 | `feat/rate-math` | `plans/tb-ports-feature-completeness.plan.md` | 13.1 | done | — |
 | 5 | B | WP13 | `feat/table-interp` | `plans/tb-ports-feature-completeness.plan.md` | 13.2 | done | KI6 KI10 KI11 TM4 |
-| 6 | B | WP13 | `feat/ageing-sugar` | `plans/tb-ports-feature-completeness.plan.md` | 13.3 | next | KI2 TM3 |
-| 7 | C | WP14 | `feat/epi-generalised-foi` | `plans/tb-ports-feature-completeness.plan.md` | 14a | planned | — |
+| 6 | B | WP13 | `feat/ageing-sugar` | `plans/tb-ports-feature-completeness.plan.md` | 13.3 | done | KI2 TM3 |
+| 7 | C | WP14 | `feat/epi-generalised-foi` | `plans/tb-ports-feature-completeness.plan.md` | 14a | next | — |
 | 8 | C | WP14 | `feat/epi-compartment-infectiousness` | `plans/tb-ports-feature-completeness.plan.md` | 14b | planned | KI4 KI5 TM5 |
 | 9 | D | WP15 | `feat/trace-algebra` | `plans/tb-ports-feature-completeness.plan.md` | 15a | planned | — |
 | 10 | D | WP15 | `feat/output-sets` | `plans/tb-ports-feature-completeness.plan.md` | 15c | planned | KI13 KI14 KI15 KI16 KI17 |
@@ -391,6 +391,8 @@ Set step 5 `done`, step 6 `next`. Record the jaxpr sizes you measured.
 
 ## Step 6 — `feat/ageing-sugar`
 
+**Landed:** feat/ageing-sugar, PR #15, 2026-09-20.
+
 ### Summary
 
 Both models age people through uneven bands at a rate of one over the band
@@ -451,6 +453,29 @@ parameters. This step adds `kind="generalised"` with an `exponent`, built on the
 `pow` node from step 4. The correctness bar is that the existing kinds become
 special cases: frequency dependence must stay bit-identical to exponent 1, and
 density to exponent 0.
+
+### What the previous worker left you
+
+- Cut from `main` as written: steps 4–5 were already on `main` when this branch
+  landed, so the stale cut-from-`feat/table-interp` note no longer applies.
+- `TraitChain.from_breakpoints` lives on `TraitChain` in `flows/join.py`. Traits
+  must be numeric lower-bound names (`"0"`, `"5"`, `"15"`), not labels like
+  `"0-4"`. Optional `unit=` scales rates (`1/(width*unit)`). Digest equality with
+  the hand-written chain is the acceptance test.
+- Plan pointer for the feature-branch gate:
+  `plans/ageing-sugar.plan.md` (points at §13.3 of the TB-ports plan).
+- WP13 is **applied**. Ports readiness `today` is **11 / 23** (Kiribati) and
+  **7 / 9** (tb_macro). `KI2` and `TM3` are `full`. No API-ledger row moved
+  (still 47 / 52); `S6` stays `partial`.
+- Textbook chapters and summer2 doc pages: **none newly unblocked** at ledger
+  status — WP13 closes no API rows. Port-side, Phase B is finished; both
+  downstream ports can use ageing sugar, and demography for step 20 (tb_macro
+  port) no longer needs hand-written chains.
+- User gate for steps 4–6 is still open on PR #15:
+  `examples/notebooks/13-rate-math-and-tables.ipynb` (seed, tanh, trace scale,
+  death table, mixing Lookup, ageing).
+- `MixingMatrix` per-call row normalisation remains
+  `futureplans/mixing-matrix-per-call-normalisation.md`.
 
 ### Read first
 
