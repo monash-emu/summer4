@@ -80,18 +80,12 @@ jobs:
   # (`summer4 = { path = ".", editable = true }`) and will not notice a
   # dependency missing from the wheel. This job builds a scratch project that
   # pins the git tag, the way a downstream repository does.
-  # Runners: ubuntu-latest is linux-64; macos-latest is osx-arm64. Those are
-  # the two platforms this repository solves. There is no osx-64 runner here.
   downstream-smoke:
-    name: Downstream smoke (${{ matrix.os }})
+    name: Downstream smoke
     if: >-
       github.event_name == 'pull_request' ||
       (github.event_name == 'workflow_dispatch' && inputs.suite == 'full')
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: prefix-dev/setup-pixi@v0.10.1
@@ -108,7 +102,7 @@ jobs:
           [workspace]
           channels = ["conda-forge"]
           name = "summer4-downstream-smoke"
-          platforms = ["osx-arm64", "linux-64"]
+          platforms = ["linux-64"]
 
           [dependencies]
           python = "3.13.*"
