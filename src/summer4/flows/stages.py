@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from jax.tree_util import register_pytree_node_class
 
@@ -31,6 +31,29 @@ from summer4.flows.rates import (
 
 PrepareFn = Callable[[Any], Any]
 Stage = Literal["run", "step"]
+
+
+def box_float_leaves(params: Any) -> Any:
+    """Promote Python ``float`` leaves to float arrays for equinox ``filter_jit``.
+
+    Equinox treats plain Python floats as static, so a ``{str: float}`` params
+    dict would recompile Diffrax on every draw. Nested pytrees (dicts,
+    NamedTuples, …) are walked; ``int`` / ``bool`` leaves are left alone.
+    Uses float64 when JAX x64 is enabled, otherwise the default float width.
+    """
+    import jax
+    import jax.numpy as jnp
+    from jax.tree_util import tree_map
+
+    enable_x64 = bool(cast(Any, jax.config).jax_enable_x64)
+    dtype = jnp.float64 if enable_x64 else jnp.float32
+
+    def _leaf(x: Any) -> Any:
+        if isinstance(x, float):
+            return jnp.asarray(x, dtype=dtype)
+        return x
+
+    return tree_map(_leaf, params)
 
 
 @register_pytree_node_class

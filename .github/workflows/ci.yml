@@ -114,7 +114,7 @@ jobs:
           python = "3.13.*"
 
           [pypi-dependencies]
-          summer4 = { git = "https://github.com/monash-emu/summer4.git", tag = "v0.2.0a2" }
+          summer4 = { git = "https://github.com/monash-emu/summer4.git", tag = "v0.2.0a3" }
           EOF
           cd "${scratch}"
           pixi install
