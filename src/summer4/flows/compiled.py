@@ -206,7 +206,7 @@ def _norm_sigmoid(x: Any, sharpness: float) -> Any:
 
 
 def _eval_interp(
-    kind: str,
+    kind: object,
     breakpoints: Any,
     values: Any,
     x: Any,
@@ -215,10 +215,13 @@ def _eval_interp(
     import jax
     import jax.numpy as jnp
 
+    from summer4.flows.rates import InterpKind
+
+    resolved = kind if isinstance(kind, InterpKind) else InterpKind(str(kind))
     xs = jnp.asarray(breakpoints)
     vals = jnp.asarray(values)
     x_arr = jnp.asarray(x)
-    if kind == "linear":
+    if resolved is InterpKind.LINEAR:
         # One ``interp`` for every column. ``vmap`` stays a single equation, so
         # the program does not grow with the number of knots or columns.
         if vals.ndim == 2:
@@ -228,7 +231,7 @@ def _eval_interp(
 
             return jax.vmap(_column, in_axes=1, out_axes=0)(vals)
         return jnp.interp(x_arr, xs, vals)
-    if kind == "step":
+    if resolved is InterpKind.STEP:
         idx = jnp.searchsorted(xs, x_arr, side="right")
         return vals[idx]
     # sigmoidal — clamp outside the knot range, blend inside.
@@ -1136,7 +1139,7 @@ class CompiledModel:
         from summer4.solvers.base import SolveSpec
         from summer4.solvers.diffrax_backend import KNOWN_SOLVER_NAMES, diffrax_solve
         from summer4.solvers.euler_backend import euler_solve
-        from summer4.time import Epoch, TimeAxis
+        from summer4.time import Epoch, TimeAxis, TimeAxisKind
 
         prepared = self.prepare(params)
         if y0 is None:
@@ -1170,7 +1173,7 @@ class CompiledModel:
         times = TimeAxis(
             values=default_ts,
             epoch=epoch if isinstance(epoch, Epoch) else epoch,
-            kind="grid",
+            kind=TimeAxisKind.GRID,
         )
 
         spec = SolveSpec(
@@ -1227,7 +1230,7 @@ class CompiledModel:
             trace_times = TimeAxis(
                 values=group.ts,
                 epoch=epoch if isinstance(epoch, Epoch) else epoch,
-                kind="grid",
+                kind=TimeAxisKind.GRID,
             )
             values = values_for(req, raw, self)
             traces[key] = Trace(times=trace_times, values=values, dims=dims)

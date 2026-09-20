@@ -25,12 +25,12 @@ section (§14e) are roadmap step 8.
 ```python
 ForceOfInfection(
     ...,
-    kind=FoiKind.GENERALISED,
+    kind=FOIKind.GENERALISED,
     exponent=Param("infection_pop_scale"),  # RateOps | float
 )
 ```
 
-Raise if `kind=FoiKind.GENERALISED` without `exponent`, or `exponent` with any other
+Raise if `kind=FOIKind.GENERALISED` without `exponent`, or `exponent` with any other
 kind (including a custom callable). Frequency dependence must stay bit-identical
-to generalised with `exponent=1.0`; density to `exponent=0.0`. String kinds are
-rejected — use :class:`~summer4.epi.FoiKind`.
+to generalised with `exponent=1.0`; density to `exponent=0.0`. Prefer
+:class:`~summer4.epi.FOIKind` members; bare strings are still accepted and coerced.

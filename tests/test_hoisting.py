@@ -27,7 +27,7 @@ from summer4 import (  # noqa: E402
     Transform,
     TransitionFlow,
 )
-from summer4.epi import FoiKind, ForceOfInfection, MixingMatrix  # noqa: E402
+from summer4.epi import FOIKind, ForceOfInfection, MixingMatrix  # noqa: E402
 from summer4.flows.rates import (  # noqa: E402
     ArrayConst,
     BinOp,
@@ -212,7 +212,7 @@ def test_epi_unaffected_by_hoist() -> None:
                     infectious=infectious,
                     group_by=mixing.prop,
                     mixing=mixing,
-                    kind=FoiKind.FREQUENCY,
+                    kind=FOIKind.FREQUENCY,
                     contact_rate=Param("beta"),
                 ),
             )

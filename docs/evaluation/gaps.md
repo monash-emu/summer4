@@ -64,7 +64,7 @@ rebuilt maps share a hash and work as `jax.jit` static arguments.
 
 ### 2.1 Force of infection
 
-**State:** **done** (WP6). `ForceOfInfection(kind=FoiKind.FREQUENCY|DENSITY)`
+**State:** **done** (WP6). `ForceOfInfection(kind=FOIKind.FREQUENCY|DENSITY)`
 (F7, F8 `full`). Example: `examples/notebooks/09-epi-models.ipynb`.
 
 ### 2.2 Mixing matrices

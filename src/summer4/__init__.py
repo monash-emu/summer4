@@ -78,7 +78,14 @@ from summer4.selectors import (
     Selector,
     Source,
 )
-from summer4.time import Epoch, RollingSpec, TimeAxis, TimeGrouping
+from summer4.time import (
+    Epoch,
+    ReduceHow,
+    RollingSpec,
+    TimeAxis,
+    TimeAxisKind,
+    TimeGrouping,
+)
 
 __all__ = [
     "Absent",
@@ -119,6 +126,7 @@ __all__ = [
     "PropertyMap",
     "REMAINDER",
     "Reduce",
+    "ReduceHow",
     "Result",
     "RollingSpec",
     "SaveContext",
@@ -136,6 +144,7 @@ __all__ = [
     "TargetSet",
     "Time",
     "TimeAxis",
+    "TimeAxisKind",
     "TimeGrouping",
     "Trace",
     "Trait",

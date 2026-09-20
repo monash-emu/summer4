@@ -5,8 +5,9 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any, Literal
+from typing import Any
 
+from summer4.enums import coerce_strenum
 from summer4.epi.mixing import MixingMatrix
 from summer4.flows.rates import (
     Capture,
@@ -18,11 +19,12 @@ from summer4.properties import Property, Trait
 from summer4.selectors import Selector
 
 
-class FoiKind(StrEnum):
+class FOIKind(StrEnum):
     """Built-in force-of-infection shapes.
 
-    Custom shapes use a callable ``kind(infectious, denominator) -> GroupedRate``
-    instead of a member of this enum.
+    Prefer these members at call sites. Bare strings such as ``"frequency"`` are
+    still accepted and coerced. Custom shapes use a callable
+    ``kind(infectious, denominator) -> GroupedRate`` instead.
     """
 
     FREQUENCY = "frequency"
@@ -30,9 +32,16 @@ class FoiKind(StrEnum):
     GENERALISED = "generalised"
 
 
-type FoiKindArg = FoiKind | Callable[..., Any]
+class InfectiousnessNormalize(StrEnum):
+    """How per-group infectiousness weights are re-scaled."""
+
+    POPULATION = "population"
+    MEAN = "mean"
+
+
+type FOIKindArg = FOIKind | str | Callable[..., Any]
 type InfectiousnessMap = Mapping[Trait | str, object]
-type NormalizeWeights = Literal["population", "mean"] | None
+type InfectiousnessNormalizeArg = InfectiousnessNormalize | str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,13 +51,13 @@ class ForceOfInfection(RateOps):
     Evaluates to a :class:`~summer4.flows.compiled.GroupedRate` over
     ``group_by``, so no ``broadcast_over`` round trip is required.
 
-    :attr:`FoiKind.FREQUENCY` divides by the per-group denominator;
-    :attr:`FoiKind.DENSITY` does not. :attr:`FoiKind.GENERALISED` evaluates
+    :attr:`FOIKind.FREQUENCY` divides by the per-group denominator;
+    :attr:`FOIKind.DENSITY` does not. :attr:`FOIKind.GENERALISED` evaluates
     ``infectious / denominator ** exponent`` (requires ``exponent``). Frequency
     is bit-identical to generalised with ``exponent=1``; density to
     ``exponent=0``. A callable ``kind(infectious, denominator) -> GroupedRate``
     is the custom path — it receives no parameters; parameterised shapes use
-    :attr:`FoiKind.GENERALISED` or rate-tree arithmetic on ``Reduce``.
+    :attr:`FOIKind.GENERALISED` or rate-tree arithmetic on ``Reduce``.
 
     ``where`` polarity on the infectious selector is KEEP (via :class:`Reduce`).
     """
@@ -57,11 +66,11 @@ class ForceOfInfection(RateOps):
     infectious: Selector
     group_by: Property
     mixing: MixingMatrix | None = None
-    kind: FoiKindArg = FoiKind.FREQUENCY
+    kind: FOIKind | Callable[..., Any] = FOIKind.FREQUENCY
     contact_rate: RateOps = None  # type: ignore[assignment]
     denominator: Selector | None = None
     infectiousness: InfectiousnessMap | None = None
-    normalize_infectiousness: NormalizeWeights = None
+    normalize_infectiousness: InfectiousnessNormalize | None = None
     exponent: RateOps | None = None
 
     def __init__(
@@ -71,35 +80,46 @@ class ForceOfInfection(RateOps):
         infectious: Selector,
         group_by: Property,
         mixing: MixingMatrix | None = None,
-        kind: FoiKindArg = FoiKind.FREQUENCY,
+        kind: FOIKindArg = FOIKind.FREQUENCY,
         contact_rate: object = 1.0,
         denominator: Selector | None = None,
         infectiousness: InfectiousnessMap | None = None,
-        normalize_infectiousness: NormalizeWeights = None,
+        normalize_infectiousness: InfectiousnessNormalizeArg = None,
         exponent: object | None = None,
     ) -> None:
-        if not callable(kind) and not isinstance(kind, FoiKind):
-            raise TypeError(f"ForceOfInfection kind must be a FoiKind or callable, got {kind!r}.")
-        if kind is FoiKind.GENERALISED:
+        if callable(kind):
+            resolved_kind: FOIKind | Callable[..., Any] = kind
+        else:
+            resolved_kind = coerce_strenum(FOIKind, kind, what="ForceOfInfection kind")
+        if resolved_kind is FOIKind.GENERALISED:
             if exponent is None:
                 raise ValueError(
-                    "ForceOfInfection kind=FoiKind.GENERALISED requires exponent= "
+                    "ForceOfInfection kind=FOIKind.GENERALISED requires exponent= "
                     "(a float, Param, or other rate expression)."
                 )
         elif exponent is not None:
             raise ValueError(
                 "ForceOfInfection exponent= is only valid with "
-                f"kind=FoiKind.GENERALISED, not kind={kind!r}."
+                f"kind=FOIKind.GENERALISED, not kind={resolved_kind!r}."
+            )
+        resolved_norm: InfectiousnessNormalize | None
+        if normalize_infectiousness is None:
+            resolved_norm = None
+        else:
+            resolved_norm = coerce_strenum(
+                InfectiousnessNormalize,
+                normalize_infectiousness,
+                what="normalize_infectiousness",
             )
         object.__setattr__(self, "name", name)
         object.__setattr__(self, "infectious", infectious)
         object.__setattr__(self, "group_by", group_by)
         object.__setattr__(self, "mixing", mixing)
-        object.__setattr__(self, "kind", kind)
+        object.__setattr__(self, "kind", resolved_kind)
         object.__setattr__(self, "contact_rate", as_rate(contact_rate))
         object.__setattr__(self, "denominator", denominator)
         object.__setattr__(self, "infectiousness", infectiousness)
-        object.__setattr__(self, "normalize_infectiousness", normalize_infectiousness)
+        object.__setattr__(self, "normalize_infectiousness", resolved_norm)
         object.__setattr__(self, "exponent", None if exponent is None else as_rate(exponent))
         if mixing is not None and mixing.prop.name != group_by.name:
             raise ValueError(
@@ -120,7 +140,6 @@ class ForceOfInfection(RateOps):
 
     def __field_paths__(self) -> set[tuple[str, ...]]:
         paths = set()
-        # contact_rate and infectiousness FieldRefs
         from summer4.flows.rates import _field_paths
 
         paths |= _field_paths(self.contact_rate)
@@ -139,18 +158,20 @@ class ForceOfInfection(RateOps):
         body = b"foi" + self.name.encode() + self.group_by.name.encode()
         body += _selector_bytes(self.infectious)
         body += _rate_bytes(self.contact_rate)
-        if isinstance(self.kind, FoiKind):
+        if isinstance(self.kind, FOIKind):
             body += repr(self.kind.value).encode()
         else:
             body += repr(id(self.kind)).encode()
-        body += repr(self.normalize_infectiousness).encode()
+        body += repr(
+            None if self.normalize_infectiousness is None else self.normalize_infectiousness.value
+        ).encode()
         if self.exponent is not None:
             body += b"exp" + _rate_bytes(self.exponent)
         if self.denominator is not None:
             body += _selector_bytes(self.denominator)
         if self.mixing is not None:
             body += _rate_bytes(self.mixing.matrix)
-            body += self.mixing.normalize.encode()
+            body += self.mixing.normalize.value.encode()
             body += b"1" if self.mixing.check_reciprocal else b"0"
         if self.infectiousness is not None:
             for key, value in sorted(
@@ -238,17 +259,12 @@ def _eval_force_of_infection(
         import jax.numpy as jnp
 
         w = weights
-        if expr.normalize_infectiousness == "population":
-            # Population-weighted mean of weights is 1.
-            import jax.numpy as jnp
-
+        if expr.normalize_infectiousness is InfectiousnessNormalize.POPULATION:
             n_data = jnp.asarray(n_grp.data)
             total_n = jnp.sum(n_data)
             mean_w = jnp.sum(w * n_data) / jnp.maximum(total_n, 1e-12)
             w = w / mean_w
-        elif expr.normalize_infectiousness == "mean":
-            import jax.numpy as jnp
-
+        elif expr.normalize_infectiousness is InfectiousnessNormalize.MEAN:
             w = w / jnp.mean(w)
         i_grp = GroupedRate(i_grp.data * w, (prop,))
 
@@ -260,13 +276,13 @@ def _eval_force_of_infection(
                 f"ForceOfInfection kind callable must return GroupedRate, "
                 f"got {type(shedding).__name__}."
             )
-    elif kind is FoiKind.FREQUENCY:
+    elif kind is FOIKind.FREQUENCY:
         shedding = i_grp / n_grp
-    elif kind is FoiKind.DENSITY:
+    elif kind is FOIKind.DENSITY:
         shedding = i_grp
-    elif kind is FoiKind.GENERALISED:
+    elif kind is FOIKind.GENERALISED:
         if expr.exponent is None:  # pragma: no cover - validated in __init__
-            raise ValueError("kind=FoiKind.GENERALISED requires exponent=.")
+            raise ValueError("kind=FOIKind.GENERALISED requires exponent=.")
         shedding = i_grp / (n_grp ** eval_child(expr.exponent))
     else:
         raise ValueError(f"Unknown ForceOfInfection kind {kind!r}.")

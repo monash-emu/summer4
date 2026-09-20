@@ -21,7 +21,16 @@ from summer4.jax.propertydata import PropertyData
 from summer4.properties import Property, Trait
 from summer4.propertymap import Groups, PropertyMap
 from summer4.selectors import Selector
-from summer4.time import CalendarRule, RollingSpec, TimeAxis, TimeGrouping, When
+from summer4.time import (
+    CalendarRule,
+    ReduceHow,
+    ReduceHowArg,
+    RollingSpec,
+    TimeAxis,
+    TimeAxisKind,
+    TimeGrouping,
+    When,
+)
 
 type QuadMethod = Literal["trapezoid", "simpson"]
 
@@ -306,7 +315,7 @@ class Trace:
         new_times = TimeAxis(
             values=np.asarray([float(np.asarray(self.times.values)[i])]),
             epoch=self.times.epoch,
-            kind="explicit",
+            kind=TimeAxisKind.EXPLICIT,
         )
         dims = self.dims[:t_ax] + self.dims[t_ax + 1 :]
         if isinstance(self.values, PropertyData):
@@ -327,18 +336,21 @@ class Trace:
         w1 = xp.asarray(w[:, 1]).reshape((-1,) + (1,) * (left.ndim - 1))
         out = w0 * left + w1 * right
         out = xp.moveaxis(out, 0, t_ax)
-        new_times = TimeAxis(values=targets, epoch=self.times.epoch, kind="explicit")
+        new_times = TimeAxis(values=targets, epoch=self.times.epoch, kind=TimeAxisKind.EXPLICIT)
         if isinstance(self.values, PropertyData):
             out = PropertyData(self.values.pmap, out)
         return self._with(values=out, times=new_times)
 
     # --- reductions along time --------------------------------------------------------
 
-    def reduce_by(self, grouping: TimeGrouping, how: Literal["sum", "mean"] = "sum") -> Trace:
+    def reduce_by(self, grouping: TimeGrouping, how: ReduceHowArg = ReduceHow.SUM) -> Trace:
         """Segment-reduce along time using a static :class:`TimeGrouping`."""
+        from summer4.enums import coerce_strenum
+
         xp = _xp()
         import jax
 
+        resolved = coerce_strenum(ReduceHow, how, what="Trace.reduce_by how")
         t_ax = _time_axis_index(self.dims)
         data = _as_array(self.values)
         data_t = xp.moveaxis(data, t_ax, 0)
@@ -350,18 +362,20 @@ class Trace:
             return jax.ops.segment_sum(col, ids, num_segments=n)
 
         summed = jax.vmap(_col, in_axes=1, out_axes=1)(flat)
-        if how == "mean":
+        if resolved is ReduceHow.MEAN:
             counts = xp.asarray(grouping.counts, dtype=data_t.dtype).reshape((n, 1))
             summed = summed / xp.maximum(counts, 1)
         new_shape = (n,) + data_t.shape[1:]
         out = xp.reshape(summed, new_shape)
         out = xp.moveaxis(out, 0, t_ax)
-        new_times = TimeAxis(values=grouping.starts, epoch=self.times.epoch, kind="explicit")
+        new_times = TimeAxis(
+            values=grouping.starts, epoch=self.times.epoch, kind=TimeAxisKind.EXPLICIT
+        )
         if isinstance(self.values, PropertyData):
             out = PropertyData(self.values.pmap, out)
         return self._with(values=out, times=new_times)
 
-    def resample(self, rule: CalendarRule, how: Literal["sum", "mean"] = "sum") -> Trace:
+    def resample(self, rule: CalendarRule, how: ReduceHowArg = ReduceHow.SUM) -> Trace:
         """Sugar over :meth:`reduce_by` with a cached :class:`TimeGrouping`."""
         return self.reduce_by(self.times.grouping(rule), how=how)
 
@@ -369,7 +383,7 @@ class Trace:
         self,
         window: int,
         *,
-        how: Literal["sum", "mean"] = "mean",
+        how: ReduceHowArg = ReduceHow.MEAN,
         center: bool = False,
         min_periods: int | None = None,
     ) -> Trace:
@@ -400,7 +414,7 @@ class Trace:
                 out_rows.append(xp.full(data_t.shape[1:], xp.nan, dtype=data_t.dtype))
             else:
                 total = csum[hi] - csum[lo]
-                out_rows.append(total / count if spec.how == "mean" else total)
+                out_rows.append(total / count if spec.how is ReduceHow.MEAN else total)
         out = xp.stack(out_rows, axis=0)
         out = xp.moveaxis(out, 0, t_ax)
         if isinstance(self.values, PropertyData):
@@ -454,7 +468,7 @@ class Trace:
             raise ValueError(f"Unknown incidence method {method!r}.")
 
         out = xp.moveaxis(panels, 0, t_ax)
-        new_times = TimeAxis(values=new_t, epoch=self.times.epoch, kind="explicit")
+        new_times = TimeAxis(values=new_t, epoch=self.times.epoch, kind=TimeAxisKind.EXPLICIT)
         return self._with(values=_wrap_like(self.values, out), times=new_times)
 
     def integrate(self, method: QuadMethod = "trapezoid") -> Trace:
@@ -491,7 +505,7 @@ class Trace:
         new_times = TimeAxis(
             values=np.asarray([float(times[-1])], dtype=np.float64),
             epoch=self.times.epoch,
-            kind="explicit",
+            kind=TimeAxisKind.EXPLICIT,
         )
         return Trace(times=new_times, values=_wrap_like(self.values, total), dims=dims)
 

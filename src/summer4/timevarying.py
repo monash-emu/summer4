@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from summer4.flows.rates import Const, GaussianPulse, Interp, RateOps, as_rate
+from summer4.flows.rates import Const, GaussianPulse, Interp, InterpKind, RateOps, as_rate
 
 __all__ = [
     "GaussianPulse",
@@ -62,7 +62,7 @@ def linear(
         raise ValueError(
             f"linear requires len(values) == len(breakpoints); got {len(vals)} vs {len(bps)}."
         )
-    return Interp(kind="linear", breakpoints=bps, values=vals, arg=as_rate(arg))
+    return Interp(kind=InterpKind.LINEAR, breakpoints=bps, values=vals, arg=as_rate(arg))
 
 
 def sigmoidal(
@@ -91,7 +91,7 @@ def sigmoidal(
     if len(bps) < 2:
         raise ValueError("sigmoidal requires at least two breakpoints.")
     return Interp(
-        kind="sigmoidal",
+        kind=InterpKind.SIGMOIDAL,
         breakpoints=bps,
         values=vals,
         arg=as_rate(arg),
@@ -120,7 +120,7 @@ def step(
             f"step requires len(values) == len(breakpoints) + 1; "
             f"got {len(vals)} vs {len(bps)} + 1."
         )
-    return Interp(kind="step", breakpoints=bps, values=vals, arg=as_rate(arg))
+    return Interp(kind=InterpKind.STEP, breakpoints=bps, values=vals, arg=as_rate(arg))
 
 
 def piecewise(

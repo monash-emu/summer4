@@ -1,4 +1,4 @@
-"""Generalised force of infection (kind=FoiKind.GENERALISED + exponent)."""
+"""Generalised force of infection (kind=FOIKind.GENERALISED + exponent)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 from summer4 import FlowModel, Param, Property, PropertyMap, TransitionFlow
-from summer4.epi import FoiKind, ForceOfInfection, MixingMatrix
+from summer4.epi import FOIKind, ForceOfInfection, MixingMatrix
 
 
 class _GenParams(NamedTuple):
@@ -51,29 +51,36 @@ def _compile_foi(
 
 def test_generalised_requires_exponent() -> None:
     state, age, pmap = _sir_age()
-    with pytest.raises(ValueError, match="kind=FoiKind.GENERALISED requires exponent"):
+    with pytest.raises(ValueError, match="kind=FOIKind.GENERALISED requires exponent"):
         ForceOfInfection(
             "infection",
             infectious=state["I"],
             group_by=age,
-            kind=FoiKind.GENERALISED,
+            kind=FOIKind.GENERALISED,
         )
 
 
-def test_string_kind_rejected() -> None:
+def test_string_kind_coerces_to_enum() -> None:
     state, age, _pmap = _sir_age()
-    with pytest.raises(TypeError, match="FoiKind or callable"):
+    foi = ForceOfInfection(
+        "infection",
+        infectious=state["I"],
+        group_by=age,
+        kind="frequency",
+    )
+    assert foi.kind is FOIKind.FREQUENCY
+    with pytest.raises(ValueError, match="Unknown ForceOfInfection kind"):
         ForceOfInfection(
             "infection",
             infectious=state["I"],
             group_by=age,
-            kind="frequency",  # type: ignore[arg-type]
+            kind="not-a-kind",
         )
 
 
 def test_exponent_rejected_for_other_kinds() -> None:
     state, age, _pmap = _sir_age()
-    for kind in (FoiKind.FREQUENCY, FoiKind.DENSITY):
+    for kind in (FOIKind.FREQUENCY, FOIKind.DENSITY):
         with pytest.raises(ValueError, match="only valid with"):
             ForceOfInfection(
                 "infection",
@@ -102,13 +109,13 @@ def test_frequency_bit_identical_to_generalised_exponent_one() -> None:
     y = np.array([100.0, 200.0, 50.0, 10.0, 20.0, 5.0, 0.0, 0.0, 0.0])
     params = {"contact_rate": 0.4}
     freq = _compile_foi(
-        pmap, state, age, kind=FoiKind.FREQUENCY, contact_rate=Param("contact_rate")
+        pmap, state, age, kind=FOIKind.FREQUENCY, contact_rate=Param("contact_rate")
     )
     gen = _compile_foi(
         pmap,
         state,
         age,
-        kind=FoiKind.GENERALISED,
+        kind=FOIKind.GENERALISED,
         exponent=1.0,
         contact_rate=Param("contact_rate"),
     )
@@ -122,12 +129,12 @@ def test_density_bit_identical_to_generalised_exponent_zero() -> None:
     state, age, pmap = _sir_age()
     y = np.array([100.0, 200.0, 50.0, 10.0, 20.0, 5.0, 0.0, 0.0, 0.0])
     params = {"contact_rate": 0.4}
-    dens = _compile_foi(pmap, state, age, kind=FoiKind.DENSITY, contact_rate=Param("contact_rate"))
+    dens = _compile_foi(pmap, state, age, kind=FOIKind.DENSITY, contact_rate=Param("contact_rate"))
     gen = _compile_foi(
         pmap,
         state,
         age,
-        kind=FoiKind.GENERALISED,
+        kind=FOIKind.GENERALISED,
         exponent=0.0,
         contact_rate=Param("contact_rate"),
     )
@@ -161,7 +168,7 @@ def test_generalised_matches_hand_formula_with_mixing() -> None:
         pmap,
         state,
         age,
-        kind=FoiKind.GENERALISED,
+        kind=FOIKind.GENERALISED,
         exponent=Param("infection_pop_scale"),
         mixing=mixing,
         contact_rate=Param("contact_rate"),
@@ -192,7 +199,7 @@ def test_generalised_gradient_wrt_exponent() -> None:
         pmap,
         state,
         age,
-        kind=FoiKind.GENERALISED,
+        kind=FOIKind.GENERALISED,
         exponent=Param("infection_pop_scale"),
         mixing=mixing,
         contact_rate=0.4,
@@ -211,8 +218,8 @@ def test_generalised_gradient_wrt_exponent() -> None:
 
 def test_generalised_digest_covers_exponent() -> None:
     state, age, pmap = _sir_age()
-    a = _compile_foi(pmap, state, age, kind=FoiKind.GENERALISED, exponent=0.5)
-    b = _compile_foi(pmap, state, age, kind=FoiKind.GENERALISED, exponent=0.5)
-    c = _compile_foi(pmap, state, age, kind=FoiKind.GENERALISED, exponent=0.8)
+    a = _compile_foi(pmap, state, age, kind=FOIKind.GENERALISED, exponent=0.5)
+    b = _compile_foi(pmap, state, age, kind=FOIKind.GENERALISED, exponent=0.5)
+    c = _compile_foi(pmap, state, age, kind=FOIKind.GENERALISED, exponent=0.8)
     assert a._digest == b._digest
     assert a._digest != c._digest
