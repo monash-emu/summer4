@@ -19,9 +19,8 @@ repo). The summer4 number includes Diffrax call overhead. Do not read
 a winner out of the table beyond the times shown.
 
 Diffrax `run()` reuses equinox's JIT cache across equal save plans
-(see `plans/diffrax-run-jit-cache.plan.md`). Re-record
-`benchmarks/recorded-summer4.json` after that fix if the warm column
-still looks like recompile-per-call (~0.3 s for `sir` / Euler / 200).
+(see `plans/diffrax-run-jit-cache.plan.md`). The summer4 warm column
+was re-recorded after that fix landed.
 
 JSON: `summer2bench/recorded.json`, `benchmarks/recorded-summer4.json`.
 
@@ -63,40 +62,40 @@ JSON: `summer2bench/recorded.json`, `benchmarks/recorded-summer4.json`.
 | summer2 | stress | rk4 | 200 | 3840 | 1.992 s | 1.638 s | 290.89 ms | float64 | 0.4.38 |
 | summer2 | stress | rk4 | 2000 | 3840 | 2.211 s | 4.478 s | 4.800 s | float64 | 0.4.38 |
 | summer2 | stress | rk4 | 8000 | 3840 | 1.701 s | 9.563 s | 8.401 s | float64 | 0.4.38 |
-| summer4 | sir | diffrax-euler | 200 | 3 | 437.11 ms | 5.178 s | 2.025 s | float64 | 0.6.2 |
-| summer4 | sir | diffrax-euler | 2000 | 3 | 790.38 ms | 1.916 s | 1.922 s | float64 | 0.6.2 |
-| summer4 | sir | diffrax-euler | 8000 | 3 | 601.53 ms | 1.944 s | 1.421 s | float64 | 0.6.2 |
-| summer4 | sir | diffrax-rk4 | 200 | 3 | 578.91 ms | 2.385 s | 2.288 s | float64 | 0.6.2 |
-| summer4 | sir | diffrax-rk4 | 2000 | 3 | 739.59 ms | 2.828 s | 2.936 s | float64 | 0.6.2 |
-| summer4 | sir | diffrax-rk4 | 8000 | 3 | 819.79 ms | 3.675 s | 1.943 s | float64 | 0.6.2 |
-| summer4 | sir_adjust | diffrax-euler | 200 | 3 | 520.74 ms | 1.167 s | 767.46 ms | float64 | 0.6.2 |
-| summer4 | sir_adjust | diffrax-euler | 2000 | 3 | 650.11 ms | 865.78 ms | 735.24 ms | float64 | 0.6.2 |
-| summer4 | sir_adjust | diffrax-euler | 8000 | 3 | 384.63 ms | 900.94 ms | 1.058 s | float64 | 0.6.2 |
-| summer4 | sir_adjust | diffrax-rk4 | 200 | 3 | 680.72 ms | 3.576 s | 1.883 s | float64 | 0.6.2 |
-| summer4 | sir_adjust | diffrax-rk4 | 2000 | 3 | 295.25 ms | 1.001 s | 663.90 ms | float64 | 0.6.2 |
-| summer4 | sir_adjust | diffrax-rk4 | 8000 | 3 | 297.97 ms | 980.89 ms | 672.77 ms | float64 | 0.6.2 |
-| summer4 | sir_tv | diffrax-euler | 200 | 3 | 228.33 ms | 754.27 ms | 683.37 ms | float64 | 0.6.2 |
-| summer4 | sir_tv | diffrax-euler | 2000 | 3 | 244.82 ms | 792.31 ms | 510.09 ms | float64 | 0.6.2 |
-| summer4 | sir_tv | diffrax-euler | 8000 | 3 | 179.74 ms | 637.19 ms | 480.03 ms | float64 | 0.6.2 |
-| summer4 | sir_tv | diffrax-rk4 | 200 | 3 | 178.10 ms | 615.23 ms | 525.61 ms | float64 | 0.6.2 |
-| summer4 | sir_tv | diffrax-rk4 | 2000 | 3 | 170.67 ms | 574.04 ms | 528.58 ms | float64 | 0.6.2 |
-| summer4 | sir_tv | diffrax-rk4 | 8000 | 3 | 219.51 ms | 833.41 ms | 545.91 ms | float64 | 0.6.2 |
-| summer4 | age_mix | diffrax-euler | 200 | 48 | 656.10 ms | 924.68 ms | 559.81 ms | float64 | 0.6.2 |
-| summer4 | age_mix | diffrax-euler | 2000 | 48 | 457.13 ms | 581.13 ms | 462.76 ms | float64 | 0.6.2 |
-| summer4 | age_mix | diffrax-euler | 8000 | 48 | 487.03 ms | 569.17 ms | 479.45 ms | float64 | 0.6.2 |
-| summer4 | age_mix | diffrax-rk4 | 200 | 48 | 430.95 ms | 585.13 ms | 534.68 ms | float64 | 0.6.2 |
-| summer4 | age_mix | diffrax-rk4 | 2000 | 48 | 487.28 ms | 593.62 ms | 528.28 ms | float64 | 0.6.2 |
-| summer4 | age_mix | diffrax-rk4 | 8000 | 48 | 466.88 ms | 660.40 ms | 516.97 ms | float64 | 0.6.2 |
-| summer4 | age_mix_tv | diffrax-euler | 200 | 48 | 417.54 ms | 516.30 ms | 468.51 ms | float64 | 0.6.2 |
-| summer4 | age_mix_tv | diffrax-euler | 2000 | 48 | 428.61 ms | 545.53 ms | 426.82 ms | float64 | 0.6.2 |
-| summer4 | age_mix_tv | diffrax-euler | 8000 | 48 | 412.43 ms | 511.47 ms | 439.75 ms | float64 | 0.6.2 |
-| summer4 | age_mix_tv | diffrax-rk4 | 200 | 48 | 427.21 ms | 588.22 ms | 502.87 ms | float64 | 0.6.2 |
-| summer4 | age_mix_tv | diffrax-rk4 | 2000 | 48 | 433.04 ms | 589.12 ms | 516.61 ms | float64 | 0.6.2 |
-| summer4 | age_mix_tv | diffrax-rk4 | 8000 | 48 | 448.03 ms | 645.50 ms | 535.09 ms | float64 | 0.6.2 |
-| summer4 | stress | diffrax-euler | 200 | 3840 | 564.61 ms | 1.104 s | 1.094 s | float64 | 0.6.2 |
-| summer4 | stress | diffrax-euler | 2000 | 3840 | 550.57 ms | 1.357 s | 1.307 s | float64 | 0.6.2 |
-| summer4 | stress | diffrax-euler | 8000 | 3840 | 611.15 ms | 2.878 s | 2.252 s | float64 | 0.6.2 |
-| summer4 | stress | diffrax-rk4 | 200 | 3840 | 548.03 ms | 1.177 s | 1.110 s | float64 | 0.6.2 |
-| summer4 | stress | diffrax-rk4 | 2000 | 3840 | 566.36 ms | 2.195 s | 1.835 s | float64 | 0.6.2 |
-| summer4 | stress | diffrax-rk4 | 8000 | 3840 | 557.01 ms | 4.694 s | 4.362 s | float64 | 0.6.2 |
+| summer4 | sir | diffrax-euler | 200 | 3 | 180.97 ms | 443.72 ms | 1.46 ms | float64 | 0.6.2 |
+| summer4 | sir | diffrax-euler | 2000 | 3 | 179.90 ms | 463.19 ms | 3.13 ms | float64 | 0.6.2 |
+| summer4 | sir | diffrax-euler | 8000 | 3 | 166.87 ms | 446.11 ms | 11.09 ms | float64 | 0.6.2 |
+| summer4 | sir | diffrax-rk4 | 200 | 3 | 163.72 ms | 503.32 ms | 1.33 ms | float64 | 0.6.2 |
+| summer4 | sir | diffrax-rk4 | 2000 | 3 | 168.82 ms | 500.16 ms | 4.64 ms | float64 | 0.6.2 |
+| summer4 | sir | diffrax-rk4 | 8000 | 3 | 170.34 ms | 554.92 ms | 15.76 ms | float64 | 0.6.2 |
+| summer4 | sir_adjust | diffrax-euler | 200 | 3 | 174.72 ms | 481.52 ms | 992.4 µs | float64 | 0.6.2 |
+| summer4 | sir_adjust | diffrax-euler | 2000 | 3 | 199.01 ms | 492.36 ms | 3.13 ms | float64 | 0.6.2 |
+| summer4 | sir_adjust | diffrax-euler | 8000 | 3 | 171.00 ms | 509.25 ms | 10.44 ms | float64 | 0.6.2 |
+| summer4 | sir_adjust | diffrax-rk4 | 200 | 3 | 166.21 ms | 528.44 ms | 981.3 µs | float64 | 0.6.2 |
+| summer4 | sir_adjust | diffrax-rk4 | 2000 | 3 | 172.63 ms | 525.86 ms | 4.70 ms | float64 | 0.6.2 |
+| summer4 | sir_adjust | diffrax-rk4 | 8000 | 3 | 193.84 ms | 556.99 ms | 21.25 ms | float64 | 0.6.2 |
+| summer4 | sir_tv | diffrax-euler | 200 | 3 | 183.14 ms | 535.65 ms | 2.19 ms | float64 | 0.6.2 |
+| summer4 | sir_tv | diffrax-euler | 2000 | 3 | 173.49 ms | 582.90 ms | 7.56 ms | float64 | 0.6.2 |
+| summer4 | sir_tv | diffrax-euler | 8000 | 3 | 173.85 ms | 761.72 ms | 30.45 ms | float64 | 0.6.2 |
+| summer4 | sir_tv | diffrax-rk4 | 200 | 3 | 173.49 ms | 694.11 ms | 1.32 ms | float64 | 0.6.2 |
+| summer4 | sir_tv | diffrax-rk4 | 2000 | 3 | 178.31 ms | 574.61 ms | 5.75 ms | float64 | 0.6.2 |
+| summer4 | sir_tv | diffrax-rk4 | 8000 | 3 | 161.47 ms | 553.55 ms | 22.67 ms | float64 | 0.6.2 |
+| summer4 | age_mix | diffrax-euler | 200 | 48 | 389.26 ms | 440.34 ms | 753.8 µs | float64 | 0.6.2 |
+| summer4 | age_mix | diffrax-euler | 2000 | 48 | 420.35 ms | 820.44 ms | 3.89 ms | float64 | 0.6.2 |
+| summer4 | age_mix | diffrax-euler | 8000 | 48 | 429.86 ms | 499.74 ms | 14.45 ms | float64 | 0.6.2 |
+| summer4 | age_mix | diffrax-rk4 | 200 | 48 | 455.15 ms | 621.49 ms | 1.28 ms | float64 | 0.6.2 |
+| summer4 | age_mix | diffrax-rk4 | 2000 | 48 | 414.23 ms | 526.88 ms | 9.50 ms | float64 | 0.6.2 |
+| summer4 | age_mix | diffrax-rk4 | 8000 | 48 | 378.85 ms | 589.15 ms | 38.38 ms | float64 | 0.6.2 |
+| summer4 | age_mix_tv | diffrax-euler | 200 | 48 | 452.81 ms | 512.67 ms | 951.3 µs | float64 | 0.6.2 |
+| summer4 | age_mix_tv | diffrax-euler | 2000 | 48 | 379.54 ms | 468.92 ms | 4.23 ms | float64 | 0.6.2 |
+| summer4 | age_mix_tv | diffrax-euler | 8000 | 48 | 379.43 ms | 478.26 ms | 14.10 ms | float64 | 0.6.2 |
+| summer4 | age_mix_tv | diffrax-rk4 | 200 | 48 | 386.08 ms | 537.57 ms | 1.40 ms | float64 | 0.6.2 |
+| summer4 | age_mix_tv | diffrax-rk4 | 2000 | 48 | 409.03 ms | 545.72 ms | 10.07 ms | float64 | 0.6.2 |
+| summer4 | age_mix_tv | diffrax-rk4 | 8000 | 48 | 378.77 ms | 686.70 ms | 41.64 ms | float64 | 0.6.2 |
+| summer4 | stress | diffrax-euler | 200 | 3840 | 517.39 ms | 1.104 s | 32.15 ms | float64 | 0.6.2 |
+| summer4 | stress | diffrax-euler | 2000 | 3840 | 550.54 ms | 1.309 s | 323.20 ms | float64 | 0.6.2 |
+| summer4 | stress | diffrax-euler | 8000 | 3840 | 754.16 ms | 2.458 s | 1.303 s | float64 | 0.6.2 |
+| summer4 | stress | diffrax-rk4 | 200 | 3840 | 630.63 ms | 1.295 s | 80.96 ms | float64 | 0.6.2 |
+| summer4 | stress | diffrax-rk4 | 2000 | 3840 | 562.52 ms | 2.038 s | 868.44 ms | float64 | 0.6.2 |
+| summer4 | stress | diffrax-rk4 | 8000 | 3840 | 522.11 ms | 4.675 s | 3.283 s | float64 | 0.6.2 |
 

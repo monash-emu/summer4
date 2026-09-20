@@ -311,7 +311,8 @@ Living note for `performance-review-s2`. The contract is
   Regenerate the README table with `python benchmarks/write_readme_table.py`
   after either JSON changes.
 - Failed cells: summer2 **0 / 36**, summer4 **0 / 36**.
-- `sir` / 200 warm medians (float64, Apple M4, 2026-09-20):
+- `sir` / 200 warm medians (float64, Apple M4, 2026-09-20), **pre** Diffrax
+  JIT-cache fix (warm column was recompile-per-call):
 
   | library | solver | warm median |
   | --- | --- | --- |
@@ -322,13 +323,38 @@ Living note for `performance-review-s2`. The contract is
 
   Diffrax was confirmed to take 8000 steps on an 8000-step call
   (`SolverInfo.num_steps == 8000`, save shape `(8001, …)`). For small models
-  the warm time barely grows with step count because Diffrax call overhead
-  dominates; `stress` does scale (euler 200 → 8000: 1.09 s → 2.25 s;
-  rk4 200 → 8000: 1.11 s → 4.36 s).
+  the warm time barely grew with step count because Diffrax was recompiling
+  every call. That reading is superseded by the re-record below.
 - **Diffrax JIT cache** is fixed on `main` (`plans/diffrax-run-jit-cache.plan.md`,
-  PR #13): equinox Modules for VF / `SubSaveAt`, params via `args`. The
-  committed `recorded-summer4.json` warm column may still show pre-fix
-  recompile-per-call times (~0.3 s for `sir` / Euler / 200) until re-recorded.
+  PR #13): equinox Modules for VF / `SubSaveAt`, params via `args`.
   Roadmap still reports step 6 as next; this branch did not touch it.
   There is no step 8.
+
+## After JIT-cache re-record
+
+- Re-ran `pixi run bench-models` after deleting
+  `benchmarks/recorded-summer4.json` (the recorder skips already-ok cells).
+  summer2 JSON was left unchanged. Regenerated `benchmarks/README.md` via
+  `python benchmarks/write_readme_table.py`. Cleared the "re-record if warm
+  looks like recompile" notes in that script and in
+  `docs/dev/benchmarking.md`.
+- Failed cells: summer4 **0 / 36**. Machine string on the new records:
+  `macOS-15.7.9-arm64-arm-64bit-Mach-O; arm64; Apple M4; 24 GiB` (same host;
+  `platform.platform()` now includes `-Mach-O`).
+- `sir` / 200 warm medians (float64, Apple M4, 2026-09-20), **post** fix:
+
+  | library | solver | warm median |
+  | --- | --- | --- |
+  | summer2 | euler | 0.000170 s |
+  | summer2 | rk4 | 0.000427 s |
+  | summer4 | diffrax-euler | 0.001464 s |
+  | summer4 | diffrax-rk4 | 0.001327 s |
+
+  Warm time now scales with step count on small models (`sir` / euler:
+  200 → 1.46 ms, 2_000 → 3.13 ms, 8_000 → 11.1 ms). `stress` also drops
+  (euler 8_000: 2.25 s → 1.30 s; rk4 8_000: 4.36 s → 3.28 s) and still
+  dominates compile on the longer cells.
+- Plan steps 1–7 are closed. No further plan step; follow-ups belong in
+  `futureplans/` or a new plan if someone starts optimizing Diffrax overhead
+  relative to summer2.
 
