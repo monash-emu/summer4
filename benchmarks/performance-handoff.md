@@ -220,3 +220,49 @@ Living note for `performance-review-s2`. The contract is
   `1.3.6`, dtype `float64`. Compartment counts: `sir` / `sir_adjust` /
   `sir_tv` 3, `age_mix` / `age_mix_tv` 48, `stress` 3840.
 
+## After step 5
+
+- Classical RK4 is `ClassicalRK4` in `benchmarks/diffrax_rk4.py`. Import:
+
+  ```python
+  from benchmarks.diffrax_rk4 import ClassicalRK4  # or same-dir: from diffrax_rk4 import ClassicalRK4
+  ```
+
+  The `CompiledModel.run` kwargs that hit Diffrax `ConstantStepSize` are built by
+  `fixed_step_run_kwargs` in `benchmarks/models.py`:
+
+  ```python
+  built.compiled.run(
+      built.parameters,
+      built.y0,
+      solver=diffrax.Euler(),  # or ClassicalRK4()
+      t0=0.0,
+      dt=0.1,
+      steps=200,
+      max_steps=200,
+      save=built.plan,
+  )
+  ```
+
+  No `rtol`, no `atol`, and never the string `solver="euler"` (that string is
+  the hand-rolled backend). Smoke command, from the repo root:
+
+  ```bash
+  pixi run python benchmarks/smoke_unstratified.py
+  ```
+
+- `FlowMass(flow=..., sum_over=(pop, "source"))` reduces the unstratified
+  infection/recovery edges onto the single `pop` trait `"all"`. The saved
+  array is shape `(201, 1)`; `flow_series` takes column 0 to match summer2's
+  length-201 series. Compartments are float64 shape `(201, 3)`.
+- Contact rate: `sir` is `Param("contact_rate")`. The 24 adjustments are
+  `contact_with_adjustments` — a left-fold of `Param("adjustment_i")`
+  multiplies on that rate. The 8-knot interpolation is
+  `time_varying_contact` → `linear(Time(), times, values)` from
+  `summer4.timevarying`, with knot floats read from the spec (not NumPy
+  `interp` inside the step).
+- `jax_enable_x64` is set at import of `benchmarks/models.py`, before any
+  `jit`. Smoke confirmed compartment and flow dtypes `float64` under both
+  Diffrax solvers (JAX 0.6.2). `benchmarks/harness.py` is the three-timer
+  split for step 7. No `src/summer4` change. Stratified ports are step 6.
+
