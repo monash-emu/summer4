@@ -324,8 +324,13 @@ Living note for `performance-review-s2`. The contract is
   (`SolverInfo.num_steps == 8000`, save shape `(8001, …)`). For small models
   the warm time barely grows with step count because Diffrax call overhead
   dominates; `stress` does scale (euler 200 → 8000: 1.09 s → 2.25 s;
-  rk4 200 → 8000: 1.11 s → 4.36 s). That overhead is part of the summer4
-  number the suite is meant to show. No `futureplans/` note from step 6.
+  rk4 200 → 8000: 1.11 s → 4.36 s).
+- **The summer4 “warm” column is not a cached JIT hit.** Each
+  `CompiledModel.run` rebuilds `ODETerm` / `SubSaveAt` with new closures, so
+  Diffrax's `@eqx.filter_jit` misses every call. Probe on this machine:
+  bare `run` median ~0.32 s vs outer `filter_jit` with stable term/saveat
+  ~0.0003 s (~1000×) for `sir` / Euler / 200. Note:
+  `futureplans/diffrax-run-jit-cache.md`. summer2's warm column *is* warm.
   Roadmap still reports step 6 as next; this branch did not touch it.
   There is no step 8.
 
