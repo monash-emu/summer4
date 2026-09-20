@@ -325,12 +325,10 @@ Living note for `performance-review-s2`. The contract is
   the warm time barely grows with step count because Diffrax call overhead
   dominates; `stress` does scale (euler 200 → 8000: 1.09 s → 2.25 s;
   rk4 200 → 8000: 1.11 s → 4.36 s).
-- **The summer4 “warm” column is not a cached JIT hit.** Each
-  `CompiledModel.run` rebuilds `ODETerm` / `SubSaveAt` with new closures, so
-  Diffrax's `@eqx.filter_jit` misses every call. Probe on this machine:
-  bare `run` median ~0.32 s vs outer `filter_jit` with stable term/saveat
-  ~0.0003 s (~1000×) for `sir` / Euler / 200. Note:
-  `futureplans/diffrax-run-jit-cache.md`. summer2's warm column *is* warm.
+- **Diffrax JIT cache** is fixed on `main` (`plans/diffrax-run-jit-cache.plan.md`,
+  PR #13): equinox Modules for VF / `SubSaveAt`, params via `args`. The
+  committed `recorded-summer4.json` warm column may still show pre-fix
+  recompile-per-call times (~0.3 s for `sir` / Euler / 200) until re-recorded.
   Roadmap still reports step 6 as next; this branch did not touch it.
   There is no step 8.
 

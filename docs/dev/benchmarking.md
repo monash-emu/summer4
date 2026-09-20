@@ -50,11 +50,11 @@ Shared numeric spec: `summer2bench/spec.json`. Both libraries read that file.
   `steps`, `max_steps >= steps`, and no `rtol`/`atol` (so
   `ConstantStepSize`). Never `solver="euler"` on the summer4 side — that string
   is the hand-rolled backend. The summer4 number includes Diffrax.
-- **JIT caveat:** summer2's warm median is a true warm graph-runner call.
-  summer4's is not: each `CompiledModel.run` rebuilds Diffrax `ODETerm` /
-  `SubSaveAt` with new Python closures, so equinox misses the JIT cache every
-  time. See `futureplans/diffrax-run-jit-cache.md`. Until that is fixed, do
-  not treat the summer4 warm column as a cached Diffrax solve.
+- **JIT:** both libraries' warm medians are true warm solves after one
+  discarded compile. Diffrax `CompiledModel.run` reuses equinox's JIT cache
+  across equal save plans (`plans/diffrax-run-jit-cache.plan.md`). If a
+  committed summer4 warm cell is still ~0.3 s for `sir` / Euler / 200, the
+  JSON predates that fix — re-record.
 - **Step ladder:** 200, 2_000, 8_000 at `dt=0.1` (`t1` of 20, 200, 800).
 - **Saves:** full compartment trajectory plus one raw series for `infection`
   and `recovery` (no cumulative sums, per-capita rates, or `OutputSet`).

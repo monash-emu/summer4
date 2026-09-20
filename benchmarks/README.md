@@ -18,13 +18,10 @@ summer2 uses its graph runners with `solver="euler"` and
 repo). The summer4 number includes Diffrax call overhead. Do not read
 a winner out of the table beyond the times shown.
 
-**Caveat — summer4 “warm” is not a cached Diffrax JIT hit.** Each
-`CompiledModel.run` rebuilds `ODETerm` / `SubSaveAt` with new Python
-closures, so equinox's `@filter_jit` on `diffeqsolve` misses every
-call. A probe that builds those once and wraps `diffeqsolve` in
-`eqx.filter_jit` drops `sir` / Euler / 200 from ~0.3 s to ~0.0003 s.
-See `futureplans/diffrax-run-jit-cache.md`. summer2's warm column
-*is* a true warm runner.
+Diffrax `run()` reuses equinox's JIT cache across equal save plans
+(see `plans/diffrax-run-jit-cache.plan.md`). Re-record
+`benchmarks/recorded-summer4.json` after that fix if the warm column
+still looks like recompile-per-call (~0.3 s for `sir` / Euler / 200).
 
 JSON: `summer2bench/recorded.json`, `benchmarks/recorded-summer4.json`.
 
