@@ -52,8 +52,8 @@ def main() -> None:
     """Compile a linear SIR, run it, and check the final susceptible count."""
     _reject_editable_checkout()
     installed = version("summer4")
-    if installed != "0.2.0a1":
-        raise SystemExit(f"expected summer4 0.2.0a1, installed {installed}")
+    if installed != "0.2.0a2":
+        raise SystemExit(f"expected summer4 0.2.0a2, installed {installed}")
 
     state = Property("state", ("S", "I", "R"))
     model = FlowModel(PropertyMap.from_property(state))

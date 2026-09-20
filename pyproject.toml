@@ -1,6 +1,6 @@
 [project]
 name = "summer4"
-version = "0.2.0a1"
+version = "0.2.0a2"
 description = "JAX-native compartmental modelling platform"
 readme = "README.md"
 requires-python = ">=3.13"

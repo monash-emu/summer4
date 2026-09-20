@@ -72,7 +72,7 @@ original analyses re-run on numpyro.
 | KI20 | Kiribati | MAP fit (replacing nevergrad) | `partial` | Hand-written optax loop, as in the case study | WP10 |
 | KI21 | Kiribati | Posterior full runs × scenarios, quantiles, averted differences | `none` | — | WP10 |
 | KI22 | Kiribati | Verified compile time, step cost and solver safety at TB scale | `none` | — | WP16 |
-| KI23 | Kiribati | summer4 installable from a tagged GitHub release | `full` | Pin `tag = "v0.2.0a1"` | — |
+| KI23 | Kiribati | summer4 installable from a tagged GitHub release | `full` | Pin `tag = "v0.2.0a2"` | — |
 | TM1 | tb_macro | Ragged map: clinical × infectious only on `active` | `full` | `stratify(prop, where=state["active"])` | — |
 | TM2 | tb_macro | Partial destination (even split), collapse, expand | `full` | `identity_join` equal split; source-only properties dropped | — |
 | TM3 | tb_macro | Ageing 0 → 5 → 15 | `partial` | Hand-written `TraitChain` | WP13 |
@@ -81,7 +81,7 @@ original analyses re-run on numpyro.
 | TM6 | tb_macro | Initial population with even split over ragged strata | `full` | `InitialPopulation` | — |
 | TM7 | tb_macro | Rolling-sum flow target queried at times | `full` | `FlowMass` → `rolling(7, how="sum")` → `at_times` (unrolled jaxpr, fixed in WP15) | — |
 | TM8 | tb_macro | Poisson likelihood, uniform prior, NUTS | `partial` | Hand-written numpyro model over `run` | WP10 |
-| TM9 | tb_macro | summer4 installable from a tagged GitHub release | `full` | Pin `tag = "v0.2.0a1"` | — |
+| TM9 | tb_macro | summer4 installable from a tagged GitHub release | `full` | Pin `tag = "v0.2.0a2"` | — |
 <!-- /ledger:ports -->
 
 ## Port order
