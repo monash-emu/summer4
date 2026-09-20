@@ -302,3 +302,30 @@ Living note for `performance-review-s2`. The contract is
   sums match (`203532235.19050047`) because every step is still in mixing bin
   0. No `futureplans/` note. No `src/summer4` change.
 
+## After step 7
+
+- JSON paths: `summer2bench/recorded.json` (summer2) and
+  `benchmarks/recorded-summer4.json` (summer4). Comparison table:
+  `benchmarks/README.md`. Protocol write-up: `docs/dev/benchmarking.md`.
+  Recorder: `pixi run bench-models` → `benchmarks/record_models.py`.
+  Regenerate the README table with `python benchmarks/write_readme_table.py`
+  after either JSON changes.
+- Failed cells: summer2 **0 / 36**, summer4 **0 / 36**.
+- `sir` / 200 warm medians (float64, Apple M4, 2026-09-20):
+
+  | library | solver | warm median |
+  | --- | --- | --- |
+  | summer2 | euler | 0.000170 s |
+  | summer2 | rk4 | 0.000427 s |
+  | summer4 | diffrax-euler | 2.025 s |
+  | summer4 | diffrax-rk4 | 2.288 s |
+
+  Diffrax was confirmed to take 8000 steps on an 8000-step call
+  (`SolverInfo.num_steps == 8000`, save shape `(8001, …)`). For small models
+  the warm time barely grows with step count because Diffrax call overhead
+  dominates; `stress` does scale (euler 200 → 8000: 1.09 s → 2.25 s;
+  rk4 200 → 8000: 1.11 s → 4.36 s). That overhead is part of the summer4
+  number the suite is meant to show. No `futureplans/` note from step 6.
+  Roadmap still reports step 6 as next; this branch did not touch it.
+  There is no step 8.
+

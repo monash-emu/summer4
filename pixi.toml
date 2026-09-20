@@ -93,6 +93,7 @@ format = { cmd = "black src tests benchmarks scripts", description = "Format Pyt
 format-check = { cmd = "black --check src tests benchmarks scripts", description = "Check Black formatting" }
 check-notebooks = { cmd = "python scripts/check_cleared_notebooks.py", description = "Require committed notebooks to have cleared outputs" }
 bench = { cmd = "pytest benchmarks/ --benchmark-only -v --benchmark-columns=min,max,median,ops", description = "Run taxonomy benchmarks in the current env" }
+bench-models = { cmd = "python benchmarks/record_models.py", description = "Record the summer4 model timing matrix into benchmarks/recorded-summer4.json" }
 bench-json = { cmd = "python scripts/bench_json.py", description = "Write benchmark JSON keyed by JAX version" }
 coverage = { cmd = "python scripts/coverage_report.py --check", description = "Report feature coverage from docs/evaluation/coverage-ledger.md" }
 coverage-write = { cmd = "python scripts/coverage_report.py --write", description = "Regenerate the computed progression block in the coverage ledger" }
