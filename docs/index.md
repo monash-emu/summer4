@@ -1,13 +1,13 @@
 # summer4 documentation
 
 **summer4** is a JAX-native compartmental modelling platform under active
-development. The current tag (`0.2.0a2`) ships the **compartment taxonomy**, a
+development. The current tag (`0.2.0a3`) ships the **compartment taxonomy**, a
 **flows** layer, a **results** layer, **epidemiology** (`summer4.epi`), and
 **time-varying** rates (`summer4.timevarying` / `summer4.data`): declare
 compartments, attach named flows (including infection and mixing), compile to
 a vector field, and `run()` to a queryable `Result`. Repeated `run()` calls
-with the same save plan reuse the Diffrax / equinox JIT cache — see
-{doc}`releases/v0.2.0a2`.
+with the same save plan reuse the Diffrax / equinox JIT cache — including with
+plain `{str: float}` params; see {doc}`releases/v0.2.0a3`.
 
 ```{admonition} Read this first — scope of the current release
 :class: important

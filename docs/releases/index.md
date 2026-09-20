@@ -11,11 +11,13 @@ each release.
 ```{toctree}
 :maxdepth: 1
 
+v0.2.0a3
 v0.2.0a2
 v0.2.0a1
 ```
 
 | Tag | Date | One-line summary |
 | --- | --- | --- |
+| [`v0.2.0a3`](v0.2.0a3.md) | 2026-09-21 | `prepare()` boxes float params for Diffrax JIT cache |
 | [`v0.2.0a2`](v0.2.0a2.md) | 2026-09-20 | Diffrax `run()` JIT cache; rate math; table interp |
 | [`v0.2.0a1`](v0.2.0a1.md) | 2026-09-18 | First pinnable flows stack on `main` |
