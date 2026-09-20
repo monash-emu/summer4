@@ -26,7 +26,7 @@ from summer4 import (
     maximum,
 )
 from summer4.data import Data
-from summer4.epi import ForceOfInfection, MixingMatrix
+from summer4.epi import FoiKind, ForceOfInfection, MixingMatrix
 from summer4.flows.compiled import _eval_interp
 from summer4.flows.rates import Lookup, _field_paths, _flow_refs, _rate_bytes
 
@@ -205,7 +205,7 @@ def _foi_model(matrix: Any, *, derived_fn: Any | None = None) -> Any:
         "infection",
         infectious=state["I"],
         group_by=age,
-        kind="frequency",
+        kind=FoiKind.FREQUENCY,
         contact_rate=0.4,
         mixing=MixingMatrix(age, matrix, normalize="none", check_reciprocal=False),
     )

@@ -61,8 +61,8 @@ reach, and it is the denominator for every percentage on this site.
 | F4 | `add_crude_birth_flow` | flows | `full` | `EntryFlow` | Absolute rate from a derived total |
 | F5 | `add_replacement_birth_flow` | flows | `full` | `EntryFlow(dest, death.sum_over(...))` |  |
 | F6 | `add_importation_flow` | flows | `full` | `EntryFlow` | Absolute rate |
-| F7 | `add_infection_frequency_flow` | flows | `full` | `ForceOfInfection(kind="frequency")` | Same object as F8; kind selects frequency vs density |
-| F8 | `add_infection_density_flow` | flows | `full` | `ForceOfInfection(kind="density")` | Same object as F7; kind selects frequency vs density |
+| F7 | `add_infection_frequency_flow` | flows | `full` | `ForceOfInfection(kind=FoiKind.FREQUENCY)` | Same object as F8; kind selects frequency vs density |
+| F8 | `add_infection_density_flow` | flows | `full` | `ForceOfInfection(kind=FoiKind.DENSITY)` | Same object as F7; kind selects frequency vs density |
 | A1 | `Stratification.set_flow_adjustments` | adjustments | `full` | `adjust= with where=` | Flow-owned, deliberately not on Stratification; `adjust_flow` after `stratify`; `Source`/`Dest` where |
 | A2 | `Multiply` | adjustments | `full` | `Multiply` | Default for a bare value in adjust= |
 | A3 | `Overwrite` | adjustments | `full` | `Overwrite` | Supports where=Selector; precedence levels (summer2 applies in stratification order) |
@@ -202,7 +202,7 @@ package closes is recorded, by row ID, in {doc}`tb-ports`.
 | WP10 | Calibration | `plans/tb-ports-feature-completeness.plan.md` | Settled there: priors, likelihoods on `Target`, numpyro samplers (NUTS and gradient-free ensemble), MAP, posterior runs; lives in `summer4.epi` |
 | WP12 | Pinnable release | `plans/wp12-release.plan.md` | **Applied.** First tag `v0.2.0a1`; current tag `v0.2.0a3`. JAX is a core dependency; `frames` declares polars and pyarrow. Downstream smoke CI is step 3 of {doc}`../dev/roadmap` |
 | WP13 | Rate-tree math and tabular time series | `plans/tb-ports-feature-completeness.plan.md` | Math nodes, vector-valued table interpolation, `Lookup`, ageing sugar |
-| WP14 | Generalised force of infection | `plans/tb-ports-feature-completeness.plan.md` | `kind="generalised"` with an exponent; compartment-level infectiousness |
+| WP14 | Generalised force of infection | `plans/tb-ports-feature-completeness.plan.md` | `FoiKind.GENERALISED` with an exponent; compartment-level infectiousness |
 | WP15 | Output algebra | `plans/tb-ports-feature-completeness.plan.md` | `Trace` operators, windowed cumulative, multi-flow outputs, `OutputSet`, frames |
 | WP16 | Scale and solver safety | `plans/tb-ports-feature-completeness.plan.md` | TB-scale benchmark, surfaced `max_steps` failure, vmap-safe reciprocity check |
 | WP17 | FOI susceptibility surface | `plans/wp17-foi-susceptibility.plan.md` | Settled there: `ForceOfInfection(susceptibility=...)`; raises textbook 15 to `full` |

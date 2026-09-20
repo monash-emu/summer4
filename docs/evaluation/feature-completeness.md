@@ -66,7 +66,7 @@ absence. Flow-edge queries use the same algebra, polarity-wrapped.
 
 `TransitionFlow`, `ExitFlow` and `EntryFlow` cover transition, death, universal
 death, crude birth, replacement birth and importation. Infection frequency and
-density are `ForceOfInfection(kind="frequency"|"density")` (F7, F8 `full`).
+density are `ForceOfInfection(kind=FoiKind.FREQUENCY|DENSITY)` (F7, F8 `full`).
 
 ### Flow adjustments — 4 of 4
 

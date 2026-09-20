@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any, Literal
 
 from summer4.epi.mixing import MixingMatrix
@@ -16,7 +17,20 @@ from summer4.flows.rates import (
 from summer4.properties import Property, Trait
 from summer4.selectors import Selector
 
-type FoiKind = Literal["frequency", "density", "generalised"] | Callable[..., Any]
+
+class FoiKind(StrEnum):
+    """Built-in force-of-infection shapes.
+
+    Custom shapes use a callable ``kind(infectious, denominator) -> GroupedRate``
+    instead of a member of this enum.
+    """
+
+    FREQUENCY = "frequency"
+    DENSITY = "density"
+    GENERALISED = "generalised"
+
+
+type FoiKindArg = FoiKind | Callable[..., Any]
 type InfectiousnessMap = Mapping[Trait | str, object]
 type NormalizeWeights = Literal["population", "mean"] | None
 
@@ -28,13 +42,13 @@ class ForceOfInfection(RateOps):
     Evaluates to a :class:`~summer4.flows.compiled.GroupedRate` over
     ``group_by``, so no ``broadcast_over`` round trip is required.
 
-    ``kind="frequency"`` divides by the per-group denominator;
-    ``kind="density"`` does not. ``kind="generalised"`` evaluates
+    :attr:`FoiKind.FREQUENCY` divides by the per-group denominator;
+    :attr:`FoiKind.DENSITY` does not. :attr:`FoiKind.GENERALISED` evaluates
     ``infectious / denominator ** exponent`` (requires ``exponent``). Frequency
     is bit-identical to generalised with ``exponent=1``; density to
     ``exponent=0``. A callable ``kind(infectious, denominator) -> GroupedRate``
     is the custom path — it receives no parameters; parameterised shapes use
-    ``"generalised"`` or rate-tree arithmetic on ``Reduce``.
+    :attr:`FoiKind.GENERALISED` or rate-tree arithmetic on ``Reduce``.
 
     ``where`` polarity on the infectious selector is KEEP (via :class:`Reduce`).
     """
@@ -43,7 +57,7 @@ class ForceOfInfection(RateOps):
     infectious: Selector
     group_by: Property
     mixing: MixingMatrix | None = None
-    kind: FoiKind = "frequency"
+    kind: FoiKindArg = FoiKind.FREQUENCY
     contact_rate: RateOps = None  # type: ignore[assignment]
     denominator: Selector | None = None
     infectiousness: InfectiousnessMap | None = None
@@ -57,23 +71,25 @@ class ForceOfInfection(RateOps):
         infectious: Selector,
         group_by: Property,
         mixing: MixingMatrix | None = None,
-        kind: FoiKind = "frequency",
+        kind: FoiKindArg = FoiKind.FREQUENCY,
         contact_rate: object = 1.0,
         denominator: Selector | None = None,
         infectiousness: InfectiousnessMap | None = None,
         normalize_infectiousness: NormalizeWeights = None,
         exponent: object | None = None,
     ) -> None:
-        if kind == "generalised":
+        if not callable(kind) and not isinstance(kind, FoiKind):
+            raise TypeError(f"ForceOfInfection kind must be a FoiKind or callable, got {kind!r}.")
+        if kind is FoiKind.GENERALISED:
             if exponent is None:
                 raise ValueError(
-                    'ForceOfInfection kind="generalised" requires exponent= '
+                    "ForceOfInfection kind=FoiKind.GENERALISED requires exponent= "
                     "(a float, Param, or other rate expression)."
                 )
         elif exponent is not None:
             raise ValueError(
-                f"ForceOfInfection exponent= is only valid with "
-                f'kind="generalised", not kind={kind!r}.'
+                "ForceOfInfection exponent= is only valid with "
+                f"kind=FoiKind.GENERALISED, not kind={kind!r}."
             )
         object.__setattr__(self, "name", name)
         object.__setattr__(self, "infectious", infectious)
@@ -123,7 +139,10 @@ class ForceOfInfection(RateOps):
         body = b"foi" + self.name.encode() + self.group_by.name.encode()
         body += _selector_bytes(self.infectious)
         body += _rate_bytes(self.contact_rate)
-        body += repr(self.kind if isinstance(self.kind, str) else id(self.kind)).encode()
+        if isinstance(self.kind, FoiKind):
+            body += repr(self.kind.value).encode()
+        else:
+            body += repr(id(self.kind)).encode()
         body += repr(self.normalize_infectiousness).encode()
         if self.exponent is not None:
             body += b"exp" + _rate_bytes(self.exponent)
@@ -241,13 +260,13 @@ def _eval_force_of_infection(
                 f"ForceOfInfection kind callable must return GroupedRate, "
                 f"got {type(shedding).__name__}."
             )
-    elif kind == "frequency":
+    elif kind is FoiKind.FREQUENCY:
         shedding = i_grp / n_grp
-    elif kind == "density":
+    elif kind is FoiKind.DENSITY:
         shedding = i_grp
-    elif kind == "generalised":
+    elif kind is FoiKind.GENERALISED:
         if expr.exponent is None:  # pragma: no cover - validated in __init__
-            raise ValueError('kind="generalised" requires exponent=.')
+            raise ValueError("kind=FoiKind.GENERALISED requires exponent=.")
         shedding = i_grp / (n_grp ** eval_child(expr.exponent))
     else:
         raise ValueError(f"Unknown ForceOfInfection kind {kind!r}.")
