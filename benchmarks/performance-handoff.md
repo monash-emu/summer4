@@ -375,4 +375,25 @@ Living note for `performance-review-s2`. The contract is
   time in this sweep; small-model warm times are slightly worse than 0.6.2.
 - `jax04` uses `[feature.jax04.pypi-options.dependency-overrides]` because
   `pyproject.toml` requires `jax>=0.6`. That pin is for measurement only.
+- Versus summer2 (`summer2bench/recorded.json`, JAX 0.4.38 graph runner; ratio
+  = summer4 / summer2):
+
+  | cell | summer2 | s4@0.4.38 | s4@0.6.2 | s4@0.11.1 |
+  | --- | ---: | ---: | ---: | ---: |
+  | `sir` / euler / 200 | 170 µs | 5.6× | 7.1× | 11× |
+  | `sir` / euler / 8000 | 4.80 ms | 2.6× | 2.7× | 5.8× |
+  | `age_mix` / rk4 / 8000 | 104 ms | 2.0× | 0.55× | 0.32× |
+  | `stress` / euler / 8000 | 2.80 s | 6.9× | 0.57× | 0.39× |
+  | `stress` / rk4 / 8000 | 8.40 s | 10× | 0.60× | 0.48× |
+
+  Matching JAX with Diffrax loses to summer2. On the repo default and on
+  bleeding-edge JAX, summer4 is faster on large models and still slower on
+  tiny SIR. Full table: `benchmarks/jax-sweep.md` § Versus summer2.
+
+## Review complete
+
+- Plan steps 1–7 are done. Post-plan extras (JIT-cache re-record, JAX
+  sweep, summer2 comparison) are written up above. No further step on this
+  branch. Follow-ups (Diffrax overhead on small models; whether to move the
+  default pin toward 0.11.x) need a new plan if pursued.
 

@@ -29,6 +29,25 @@ warm median of 5 calls after one discarded compile,
 | stress | diffrax-rk4 | 200 | 1.236 s | 151.61 ms | 82.00 ms |
 | stress | diffrax-rk4 | 8000 | 87.509 s | 5.075 s | 4.061 s |
 
+## Versus summer2 (warm median)
+
+summer2 is its graph runner on JAX 0.4.38 (`summer2bench/recorded.json`),
+not Diffrax. Multiplier is summer4 / summer2 (below 1 means summer4 is faster).
+
+| model | solver | steps | summer2 | JAX 0.4.38 | × vs s2 | JAX 0.6.2 | × vs s2 | JAX 0.11.1 | × vs s2 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| sir | euler | 200 | 170.1 µs | 944.6 µs | 5.55× | 1.21 ms | 7.13× | 1.92 ms | 11.28× |
+| sir | euler | 8000 | 4.80 ms | 12.66 ms | 2.64× | 12.77 ms | 2.66× | 27.95 ms | 5.82× |
+| sir | rk4 | 8000 | 13.89 ms | 22.70 ms | 1.63× | 24.11 ms | 1.74× | 49.17 ms | 3.54× |
+| age_mix | rk4 | 8000 | 104.24 ms | 213.57 ms | 2.05× | 57.12 ms | 0.55× | 32.99 ms | 0.32× |
+| stress | euler | 8000 | 2.800 s | 19.437 s | 6.94× | 1.597 s | 0.57× | 1.103 s | 0.39× |
+| stress | rk4 | 8000 | 8.401 s | 87.509 s | 10.42× | 5.075 s | 0.60× | 4.061 s | 0.48× |
+
+On the matching JAX 0.4.38 pin, summer4 loses everywhere (Diffrax
+overhead on small models; much worse on `stress`). On JAX 0.6.2 and
+0.11.1, summer4 beats summer2 on `age_mix` / `stress` while summer2
+still wins the tiny `sir` cells.
+
 ## Full matrix
 
 | JAX | Diffrax | model | solver | steps | build | compile | warm median |

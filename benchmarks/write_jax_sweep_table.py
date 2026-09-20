@@ -9,6 +9,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parent
 OUT = ROOT / "jax-sweep.md"
 GLOB = "recorded-summer4-jax-*.json"
+SUMMER2 = ROOT.parent / "summer2bench" / "recorded.json"
 
 # Representative cells: small + large, both solvers, short + long horizon.
 FOCUS = (
@@ -22,6 +23,16 @@ FOCUS = (
     ("stress", "diffrax-rk4", 8000),
 )
 
+# Same cells against summer2 (euler/rk4) for the cross-library note.
+VS_SUMMER2 = (
+    ("sir", "euler", 200),
+    ("sir", "euler", 8000),
+    ("sir", "rk4", 8000),
+    ("age_mix", "rk4", 8000),
+    ("stress", "euler", 8000),
+    ("stress", "rk4", 8000),
+)
+
 
 def _fmt_time(value: Any) -> str:
     if value is None:
@@ -32,6 +43,12 @@ def _fmt_time(value: Any) -> str:
     if number < 1.0:
         return f"{number * 1e3:.2f} ms"
     return f"{number:.3f} s"
+
+
+def _fmt_ratio(summer4: float | None, summer2: float | None) -> str:
+    if summer4 is None or summer2 is None or summer2 <= 0.0:
+        return "—"
+    return f"{summer4 / summer2:.2f}×"
 
 
 def _load_matrices() -> list[tuple[str, list[dict[str, Any]]]]:
@@ -50,6 +67,19 @@ def _load_matrices() -> list[tuple[str, list[dict[str, Any]]]]:
 
 def _index(records: list[dict[str, Any]]) -> dict[tuple[str, str, int], dict[str, Any]]:
     return {(r["model"], r["solver"], int(r["steps"])): r for r in records}
+
+
+def _warm(
+    by_key: dict[tuple[str, str, int], dict[str, Any]],
+    model: str,
+    solver: str,
+    steps: int,
+) -> float | None:
+    record = by_key.get((model, solver, steps))
+    if record is None or record.get("status") != "ok":
+        return None
+    value = record.get("warm_median_s")
+    return float(value) if value is not None else None
 
 
 def main() -> None:
@@ -113,16 +143,50 @@ def main() -> None:
     for model, solver, steps in FOCUS:
         row = f"| {model} | {solver} | {steps} |"
         for _, by_key in indices:
-            record = by_key.get((model, solver, steps))
-            if record is None or record.get("status") != "ok":
-                row += " — |"
-            else:
-                row += f" {_fmt_time(record['warm_median_s'])} |"
+            warm = _warm(by_key, model, solver, steps)
+            row += f" {_fmt_time(warm)} |"
         lines.append(row)
+
+    if SUMMER2.is_file():
+        summer2 = _index(json.loads(SUMMER2.read_text(encoding="utf-8")))
+        lines.extend(
+            [
+                "",
+                "## Versus summer2 (warm median)",
+                "",
+                "summer2 is its graph runner on JAX 0.4.38 (`summer2bench/recorded.json`),",
+                "not Diffrax. Multiplier is summer4 / summer2 (below 1 means summer4 is faster).",
+                "",
+            ]
+        )
+        vs_header = "| model | solver | steps | summer2 |"
+        vs_sep = "| --- | --- | ---: | ---: |"
+        for jax_version, _ in matrices:
+            vs_header += f" JAX {jax_version} |"
+            vs_sep += " ---: |"
+            vs_header += " × vs s2 |"
+            vs_sep += " ---: |"
+        lines.extend([vs_header, vs_sep])
+        for model, solver, steps in VS_SUMMER2:
+            w2 = _warm(summer2, model, solver, steps)
+            row = f"| {model} | {solver} | {steps} | {_fmt_time(w2)} |"
+            for _, by_key in indices:
+                w4 = _warm(by_key, model, f"diffrax-{solver}", steps)
+                row += f" {_fmt_time(w4)} | {_fmt_ratio(w4, w2)} |"
+            lines.append(row)
+        lines.extend(
+            [
+                "",
+                "On the matching JAX 0.4.38 pin, summer4 loses everywhere (Diffrax",
+                "overhead on small models; much worse on `stress`). On JAX 0.6.2 and",
+                "0.11.1, summer4 beats summer2 on `age_mix` / `stress` while summer2",
+                "still wins the tiny `sir` cells.",
+                "",
+            ]
+        )
 
     lines.extend(
         [
-            "",
             "## Full matrix",
             "",
             "| JAX | Diffrax | model | solver | steps | build | compile | warm median |",
