@@ -11,9 +11,14 @@ from tests.helpers.loss import analytic_sir_model, infected_loss
 
 from summer4 import (
     Compartments,
+    FlowModel,
+    Param,
+    Property,
     PropertyData,
+    PropertyMap,
     SavePlan,
     SaveRequest,
+    TransitionFlow,
 )
 from summer4.results.groups import group_requests
 
@@ -222,6 +227,98 @@ def test_diffrax_solver_instance_accepted() -> None:
     )
     assert res.solver is not None
     assert res.solver.solver == "tsit5"
+
+
+def test_diffrax_eqx_modules_are_structurally_equal() -> None:
+    """Fresh Module instances with the same model must share a filter_jit key."""
+    import equinox as eqx
+    from equinox._compile_utils import hashable_partition
+
+    from summer4.results.plan import Compartments as CompQty
+    from summer4.solvers.diffrax_backend import _ensure_eqx_modules
+
+    pytest.importorskip("diffrax")
+    cm, _y0 = _simple_sir()
+    vf_cls, save_cls = _ensure_eqx_modules()
+    requests = (("compartments", CompQty()),)
+    keep: frozenset[str] = frozenset()
+    vf_a, vf_b = vf_cls(cm), vf_cls(cm)
+    save_a = save_cls(cm, requests, keep)
+    save_b = save_cls(cm, requests, keep)
+    assert vf_a == vf_b
+    assert save_a == save_b
+    _, vf_static_a = hashable_partition(vf_a, eqx.is_array)
+    _, vf_static_b = hashable_partition(vf_b, eqx.is_array)
+    _, save_static_a = hashable_partition(save_a, eqx.is_array)
+    _, save_static_b = hashable_partition(save_b, eqx.is_array)
+    assert vf_static_a == vf_static_b
+    assert save_static_a == save_static_b
+
+
+def test_diffrax_repeated_run_stays_warm() -> None:
+    """After one compile, repeated ``run()`` calls must stay at warm Diffrax cost.
+
+    The pre-fix path retraced every call (~0.3 s on this SIR). A warm median
+    under 50 ms is far below that and above a no-op, without needing a cold
+    first sample (other tests may already have warmed Diffrax).
+    """
+    import statistics
+    import time
+
+    import jax
+
+    diffrax = pytest.importorskip("diffrax")
+    cm, y0 = _simple_sir()
+    ts = np.linspace(0.0, 20.0, 201, dtype=np.float64)
+    plan = SavePlan(requests={"compartments": SaveRequest(Compartments(), ts=ts)})
+
+    def _once() -> None:
+        res = cm.run(
+            {},
+            y0,
+            t0=0.0,
+            t1=20.0,
+            dt=0.1,
+            save=plan,
+            solver=diffrax.Euler(),
+            max_steps=4096,
+        )
+        jax.block_until_ready(res["compartments"].values.data)
+
+    _once()  # discard compile
+    times = []
+    for _ in range(5):
+        t0 = time.perf_counter()
+        _once()
+        times.append(time.perf_counter() - t0)
+    assert statistics.median(times) < 0.05
+
+
+def test_diffrax_save_uses_args_not_closed_params() -> None:
+    """Changing prepared params between ``run()`` calls must change the trajectory."""
+    diffrax = pytest.importorskip("diffrax")
+    state = Property("state", ("S", "I", "R"))
+    pmap = PropertyMap.from_property(state)
+    model = FlowModel(pmap)
+    model.add_flow(TransitionFlow("infection", state["S"], state["I"], Param("beta")))
+    model.add_flow(TransitionFlow("recovery", state["I"], state["R"], 0.1))
+    cm = model.compile()
+    y0 = PropertyData.wrap(pmap, np.array([999.0, 1.0, 0.0]))
+    plan = SavePlan(requests={"compartments": SaveRequest(Compartments())})
+    kwargs: dict[str, Any] = {
+        "y0": y0,
+        "t0": 0.0,
+        "t1": 5.0,
+        "dt": 0.1,
+        "save": plan,
+        "solver": diffrax.Euler(),
+        "max_steps": 4096,
+    }
+    slow = cm.run({"beta": 0.05}, **kwargs)
+    fast = cm.run({"beta": 0.5}, **kwargs)
+    s_slow = float(np.asarray(slow["compartments"].values.data)[-1, 0])
+    s_fast = float(np.asarray(fast["compartments"].values.data)[-1, 0])
+    assert s_fast < s_slow - 10.0
 
 
 def test_describe_sizes_mixed_ts() -> None:

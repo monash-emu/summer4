@@ -16,6 +16,11 @@ _NAMED_SOLVERS: dict[str, str] = {
 
 KNOWN_SOLVER_NAMES: tuple[str, ...] = ("euler", "heun", "tsit5", "dopri5")
 
+# Equinox Module classes are created once so Diffrax's filter_jit keys by
+# structure (CompiledModel digest + request tree), not by Python id.
+_DiffraxVectorField: Any | None = None
+_DiffraxSaveFn: Any | None = None
+
 
 def _import_diffrax() -> Any:
     try:
@@ -62,36 +67,65 @@ def _filtered_plan(plan: Any, keys: tuple[str, ...]) -> Any:
     )
 
 
-def _group_fn(
-    model: Any,
-    params: object,
-    rebox: Any,
-    group: SaveGroup,
-    plan: Any,
-) -> Any:
+def _dy_array(dy: Any) -> Any:
+    from summer4.jax.propertydata import PropertyData
+    from summer4.jax.state import State
+
+    if isinstance(dy, State):
+        return dy.compartments.data
+    if isinstance(dy, PropertyData):
+        return dy.data
+    return dy
+
+
+def _ensure_eqx_modules() -> tuple[Any, Any]:
+    """Build the Diffrax VF / save Module classes once per process."""
+    global _DiffraxVectorField, _DiffraxSaveFn
+    if _DiffraxVectorField is not None and _DiffraxSaveFn is not None:
+        return _DiffraxVectorField, _DiffraxSaveFn
+
+    import equinox as eqx
     import jax.numpy as jnp
 
     from summer4.jax.propertydata import PropertyData
-    from summer4.results.eval import build_save_fn
+    from summer4.results.eval import eval_quantity
 
-    group_plan = _filtered_plan(plan, group.keys)
-    save_fn = build_save_fn(
-        group_plan,
-        pmap=model.pmap,
-        edge_maps=dict(model.edge_maps),
-    )
-    keep = group_plan.flow_reads()
+    class DiffraxVectorField(eqx.Module):
+        """Structurally equal across ``run()`` when ``model`` digests match."""
 
-    def fn(t: Any, y: Any, args: Any) -> dict[str, Any]:
-        del args  # params closed over; diffeqsolve still passes args
-        ctx = model.observe(t, rebox(y), params, keep=keep)
-        raw = save_fn(ctx)
-        out: dict[str, Any] = {}
-        for k, v in raw.items():
-            out[k] = v.data if isinstance(v, PropertyData) else jnp.asarray(v)
-        return out
+        model: Any
 
-    return fn
+        def __call__(self, t: Any, y: Any, args: Any) -> Any:
+            return _dy_array(self.model.vector_field(t, PropertyData(self.model.pmap, y), args))
+
+    class DiffraxSaveFn(eqx.Module):
+        """Save callback; prepared params come from Diffrax ``args``, not a closure."""
+
+        model: Any
+        requests: tuple[tuple[str, Any], ...]
+        keep: frozenset[str]
+
+        def __call__(self, t: Any, y: Any, args: Any) -> dict[str, Any]:
+            ctx = self.model.observe(
+                t,
+                PropertyData(self.model.pmap, y),
+                args,
+                keep=self.keep,
+            )
+            out: dict[str, Any] = {}
+            for key, what in self.requests:
+                value = eval_quantity(
+                    what,
+                    ctx,
+                    pmap=self.model.pmap,
+                    edge_maps=dict(self.model.edge_maps),
+                )
+                out[key] = value.data if isinstance(value, PropertyData) else jnp.asarray(value)
+            return out
+
+    _DiffraxVectorField = DiffraxVectorField
+    _DiffraxSaveFn = DiffraxSaveFn
+    return DiffraxVectorField, DiffraxSaveFn
 
 
 def _result_code(result: Any) -> Any:
@@ -114,30 +148,25 @@ def diffrax_solve(
     import jax.numpy as jnp
 
     from summer4.flows.stages import Prepared
-    from summer4.jax.propertydata import PropertyData
-    from summer4.jax.state import State, unpack_state
+    from summer4.jax.state import unpack_state
 
     diffrax = _import_diffrax()
     solver_inst, solver_name = resolve_diffrax_solver(solver)
+    vf_cls, save_cls = _ensure_eqx_modules()
 
     prepared = params if isinstance(params, Prepared) else model.prepare(params)
-    y_arr, rebox = unpack_state(y0, model.pmap)
+    y_arr, _rebox = unpack_state(y0, model.pmap)
 
-    def vf(t: Any, y: Any, args: Any) -> Any:
-        dy = model.vector_field(t, rebox(y), args)
-        if isinstance(dy, State):
-            return dy.compartments.data
-        if isinstance(dy, PropertyData):
-            return dy.data
-        return dy
-
-    term = diffrax.ODETerm(vf)
-    subs = {
-        g.name: diffrax.SubSaveAt(
-            ts=jnp.asarray(g.ts), fn=_group_fn(model, prepared, rebox, g, plan)
+    term = diffrax.ODETerm(vf_cls(model))
+    subs: dict[str, Any] = {}
+    for group in groups:
+        group_plan = _filtered_plan(plan, group.keys)
+        requests = tuple((key, group_plan.requests[key].what) for key in group.keys)
+        keep = group_plan.flow_reads()
+        subs[group.name] = diffrax.SubSaveAt(
+            ts=jnp.asarray(group.ts),
+            fn=save_cls(model, requests, keep),
         )
-        for g in groups
-    }
     saveat = diffrax.SaveAt(subs=subs, dense=bool(spec.dense))
 
     if spec.rtol is not None or spec.atol is not None:
@@ -159,9 +188,9 @@ def diffrax_solve(
         raise ValueError("diffrax backend requires t1 or steps.")
 
     # Include every requested save time in the integration window.
-    for g in groups:
-        if g.ts.size:
-            t1 = max(t1, float(g.ts[-1]))
+    for group in groups:
+        if group.ts.size:
+            t1 = max(t1, float(group.ts[-1]))
 
     max_steps = 4096 if spec.max_steps is None else int(spec.max_steps)
     if spec.dense and spec.max_steps is None:
@@ -183,9 +212,9 @@ def diffrax_solve(
     )
 
     saved: dict[str, Any] = {}
-    for g in groups:
-        group_ys = sol.ys[g.name]
-        for key in g.keys:
+    for group in groups:
+        group_ys = sol.ys[group.name]
+        for key in group.keys:
             saved[key] = group_ys[key]
 
     stats: SolverInfo | None = None

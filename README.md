@@ -92,4 +92,5 @@ and choose the **Python (summer4)** kernel.
 
 Environments: `default` (JAX 0.6.x + notebook kernel), `latest` (current JAX), `nb` (JupyterLab).
 The package is also pip-installable via hatchling (`pip install .`).
-Example notebooks in `examples/notebooks/` are executed as smoke tests.
+Example notebooks in `examples/notebooks/` are the manual user gate and a
+smoke test: each one explains the claim, plots it, and asserts it.

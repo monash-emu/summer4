@@ -42,10 +42,22 @@ neither.
 
 ### Notebook rules
 
+Example notebooks are the user gate. Someone runs `pixi run notebook` and
+signs the feature off by reading the page, so write it in the summer2
+documentation style (`docs/summer2/`): an explanation, a titled plot of the
+claim, and an assertion of that same claim. A notebook that only asserts is
+not a gate.
+
 - One notebook per feature, or a clearly named extension of an existing one.
 - Plain Python only: no IPython magics, no hidden manual steps.
-- Tell a short story — what the feature is, one realistic example — and
-  **assert** the outcomes it claims.
+- Open with what the page is for. Before each code section, say what the next
+  cells do and what the figure should show.
+- Plot every series, comparison, or size the reader is asked to judge, with
+  the pandas Plotly backend
+  (`pd.options.plotting.backend = "plotly"`,
+  `pio.renderers.default = "notebook_connected"`), a title, and axis labels.
+  Structural pages (taxonomy, jaxpr size) plot that comparison too.
+- Assert the outcomes the prose and the figure claim.
 - Prefer `from summer4 import ...` over re-implementing library code inline.
 
 ## Plans

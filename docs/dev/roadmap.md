@@ -43,7 +43,10 @@ Follow this exactly. It assumes you know nothing about the project.
 7. Open a PR into the branch named in *Merges into*. Put the user-gate checklist
    in the body: every notebook the step ships or unblocks, and the claim to
    check in each. **The notebooks are a blocking manual sign-off** — the branch
-   is not merged until the user has run them (`pixi run notebook`).
+   is not merged until the user has run them (`pixi run notebook`). Each gate
+   notebook is summer2 documentation style: an explanation of the claim, a
+   titled plot of it, and an assertion of the same claim. A notebook that only
+   asserts is not a user gate.
 8. Make the *Handoff* commit last, on this branch, before the merge. It is one
    commit, `Hand off after step N: <slug>.`, and it does four things:
 

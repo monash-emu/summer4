@@ -45,6 +45,11 @@ escapes, because a notebook that needs a magic is not a reproducible example.
 Notebooks are expected to `assert` the outcomes they claim. A notebook that only
 prints is not a test — it is a screenshot that happens to run.
 
+They are also the manual user gate (`pixi run notebook`). Write them in the
+summer2 documentation style: prose before each section, a titled Plotly figure
+of the claim (including structural comparisons such as compartment counts or
+loop-body size), and an assertion of that same claim. See {doc}`contributing`.
+
 The same is true of the documentation: `nb_execution_raise_on_error = True` in
 `docs/conf.py` means a broken claim on this site fails the docs build. See
 {doc}`documentation`.
