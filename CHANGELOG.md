@@ -9,6 +9,14 @@ Install from the matching git tag (see
 [Installation](docs/getting-started/installation.md)). Narrative release notes
 for the Sphinx site live under [docs/releases/](docs/releases/).
 
+## [Unreleased]
+
+### Fixed
+
+- `CompiledModel.prepare` promotes Python `float` parameter leaves to float64
+  JAX arrays so Diffrax's equinox `filter_jit` cache hits across draws with
+  plain `{str: float}` dicts (`fix/prepare-box-float-params`).
+
 ## [0.2.0a2] — 2026-09-20
 
 Tag: [`v0.2.0a2`](https://github.com/monash-emu/summer4/releases/tag/v0.2.0a2)

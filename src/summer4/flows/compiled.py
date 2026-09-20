@@ -45,7 +45,7 @@ from summer4.flows.rates import (
     derived_return_schema,
     validate_computed_path,
 )
-from summer4.flows.stages import HoistTable, Prepared, PrepareFn
+from summer4.flows.stages import HoistTable, Prepared, PrepareFn, box_float_leaves
 from summer4.flows.types import FlowLike
 from summer4.properties import Property
 from summer4.propertymap import PropertyMap
@@ -795,10 +795,15 @@ class CompiledModel:
         )
 
     def prepare(self, params: object) -> Prepared:
-        """Run-start stage: apply ``prepare_fn`` and evaluate hoisted rate slots."""
+        """Run-start stage: apply ``prepare_fn`` and evaluate hoisted rate slots.
+
+        Python ``float`` leaves are promoted to floating JAX arrays so Diffrax's
+        equinox ``filter_jit`` treats them as dynamic across parameter draws.
+        """
         if isinstance(params, Prepared):
-            return params
+            return Prepared(box_float_leaves(params.params), params.hoisted)
         p = params if self.prepare_fn is None else self.prepare_fn(params)
+        p = box_float_leaves(p)
         table = self.hoist_table
         if table is None or not table.entries:
             return Prepared(p, ())
