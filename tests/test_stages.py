@@ -95,6 +95,33 @@ def test_raw_params_still_work() -> None:
     assert isinstance(prepared, Prepared)
 
 
+def test_prepare_boxes_python_floats() -> None:
+    """Plain float leaves become floating arrays; ints stay Python ints."""
+    import equinox as eqx
+
+    model, _pmap, _y0 = _entry_model()
+    cm = model.compile()
+    prepared = cm.prepare({"beta": 0.1, "n_steps": 3})
+    beta = prepared.params["beta"]
+    assert eqx.is_array(beta)
+    assert jnp.issubdtype(beta.dtype, jnp.floating)
+    np.testing.assert_allclose(np.asarray(beta), 0.1)
+    assert prepared.params["n_steps"] == 3
+    assert isinstance(prepared.params["n_steps"], int)
+
+
+def test_prepare_boxes_prepared_input() -> None:
+    """Manually built Prepared with floats is re-boxed on prepare()."""
+    import equinox as eqx
+
+    model, _pmap, _y0 = _entry_model()
+    cm = model.compile()
+    raw = Prepared({"beta": 0.25}, ())
+    prepared = cm.prepare(raw)
+    assert eqx.is_array(prepared.params["beta"])
+    assert jnp.issubdtype(prepared.params["beta"].dtype, jnp.floating)
+
+
 def test_digest_differs_with_prepare_fn() -> None:
     model, _pmap, _y0 = _entry_model()
     cm0 = model.compile()

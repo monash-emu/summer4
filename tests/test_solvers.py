@@ -294,6 +294,47 @@ def test_diffrax_repeated_run_stays_warm() -> None:
     assert statistics.median(times) < 0.05
 
 
+def test_diffrax_repeated_run_with_float_params_stays_warm() -> None:
+    """Varying Python-float params must not recompile Diffrax (prepare boxes them)."""
+    import statistics
+    import time
+
+    import jax
+
+    diffrax = pytest.importorskip("diffrax")
+    state = Property("state", ("S", "I", "R"))
+    pmap = PropertyMap.from_property(state)
+    model = FlowModel(pmap)
+    model.add_flow(TransitionFlow("infection", state["S"], state["I"], Param("beta")))
+    model.add_flow(TransitionFlow("recovery", state["I"], state["R"], 0.1))
+    cm = model.compile()
+    y0 = PropertyData.wrap(pmap, np.array([999.0, 1.0, 0.0]))
+    ts = np.linspace(0.0, 20.0, 201, dtype=np.float64)
+    plan = SavePlan(requests={"compartments": SaveRequest(Compartments(), ts=ts)})
+    betas = [0.05, 0.1, 0.15, 0.2, 0.25, 0.3]
+
+    def _once(beta: float) -> None:
+        res = cm.run(
+            {"beta": beta},
+            y0,
+            t0=0.0,
+            t1=20.0,
+            dt=0.1,
+            save=plan,
+            solver=diffrax.Euler(),
+            max_steps=4096,
+        )
+        jax.block_until_ready(res["compartments"].values.data)
+
+    _once(betas[0])  # discard compile
+    times = []
+    for beta in betas[1:]:
+        t0 = time.perf_counter()
+        _once(beta)
+        times.append(time.perf_counter() - t0)
+    assert statistics.median(times) < 0.05
+
+
 def test_diffrax_save_uses_args_not_closed_params() -> None:
     """Changing prepared params between ``run()`` calls must change the trajectory."""
     diffrax = pytest.importorskip("diffrax")
