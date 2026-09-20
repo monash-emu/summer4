@@ -98,9 +98,12 @@ Honest accounting, because the cost is real:
   a **silent miscompile**: two custom nodes of the same class with different
   fields digest identically and share a jit cache entry. See
   [`futureplans/custom-rate-node-digest-collision.md`](https://github.com/monash-emu/summer4/blob/main/futureplans/custom-rate-node-digest-collision.md).
-- **A closed operator set.** `UnaryOp` allows seven operations and `BinOp`
-  seven. Anything else needs a node, an evaluator, and the dunders — or an
-  escape hatch.
+- **A closed operator set behind hand-written wrappers.** `UnaryOp` allows
+  seven operations and `BinOp` seven, exposed as the named functions `exp`,
+  `log`, `tanh`, `sqrt`, `floor`, `maximum`, `minimum`, `clip`. Anything else —
+  `sin` for seasonality, `sigmoid`, `erf` — needs a node, an evaluator and the
+  dunders, or an escape hatch. See
+  [the operator surface](#the-operator-surface-a-fixable-mistake).
 
 The trade is deliberate: summer4 pays authoring cost at the framework boundary
 to keep the compiled program small, cacheable and statically analysable. But
@@ -167,6 +170,97 @@ The package-author path, documented in
 {doc}`../cookbook/01-custom-rates`. Worth it when the same named process
 appears in many models; overkill for one hazard. If you take it, **implement
 `__rate_bytes__`** — the default is unsafe.
+
+## The operator surface: a fixable mistake
+
+The named arithmetic helpers (`exp`, `log`, `tanh`, `sqrt`, `floor`, `maximum`,
+`minimum`, `clip`) attract the obvious objection: *why not just write the `jnp`
+functions?* The objection is right about the design and wrong about the
+mechanism, and the difference matters.
+
+**You cannot just write `jnp`.** Every one of these raises `TypeError` today:
+
+```python
+jnp.exp(Param("beta"))          # Error interpreting argument … as an abstract array
+jnp.clip(Param("beta"), 0, 1)
+jnp.maximum(Param("beta"), 0.0)
+jnp.exp(some_trace)             # also fails on Trace, GroupedRate, PropertyData
+```
+
+Operators work (`Param("b") * 2` builds a `BinOp`) because Python routes them
+through `__mul__`. Functions do not, because `jnp.exp` is a `PjitFunction`, not
+a `numpy.ufunc`, and JAX implements **neither** `__array_ufunc__` nor
+`__array_function__`. There is no protocol for a third-party object to
+intercept a `jnp` call. So the wrappers are not duplicating `jnp` — they are
+the only way to get a non-operator op into a rate tree at all.
+
+**This is exactly what computegraph got right.** `GraphObject` implements
+`__array_ufunc__` and `__array_function__`, so `np.exp(graph_obj)` auto-builds
+`Function(jnp.exp, [obj])` and summer2 never needed a wrapper list. That worked
+because summer2 was **NumPy-first at the API boundary** — `jaxify.get_modules()`
+swapped `jnp` in underneath. The user always wrote `np.*`.
+
+**The wrappers do earn something `jnp` cannot give.** They dual-dispatch. One
+symbol works on an unevaluated rate tree *and* on each of the four evaluated
+wrapper types, preserving the wrapper:
+
+| call | `summer4` helper | `jnp` equivalent |
+|---|---|---|
+| on `RateOps` | builds `UnaryOp` | `TypeError` |
+| on `Trace` | returns `Trace` | `TypeError` |
+| on `GroupedRate` | returns `GroupedRate` | `TypeError` |
+| on `PropertyData` | returns `PropertyData` | `TypeError` |
+
+Writing `jnp` by hand means unwrapping `.data` / `.values`, losing the `pmap`,
+`properties` or `dims` that make the result queryable, and rewrapping. That is
+the actual gain — not the arithmetic.
+
+**But the shape is wrong.** The gain is a *dispatch* concern, and it is being
+paid for with a hand-maintained allowlist: adding `sin` means editing
+`UNARY_OPS`, the `Literal[...]` annotation on `UnaryOp.op`, a new exported
+wrapper, and the docs. `clip` is pure sugar over `maximum` + `minimum` and
+carries no node of its own. The set is arbitrary — `tanh` is in, `sin` is not,
+and seasonal forcing is a first-order epidemiological need.
+
+### The fix, prototyped
+
+Implement `__array_ufunc__` / `__array_function__` on `RateOps`, `Trace`,
+`GroupedRate` and `PropertyData`, and key the op by **name** rather than by
+callable — computegraph's `getattr(fnp, func_str)` trick. A working prototype
+against `c4d3534`:
+
+```python
+def __array_ufunc__(self, ufunc, method, *inputs, out=None, **kw):
+    if method != "__call__" or out is not None:
+        return NotImplemented
+    name = ufunc.__name__
+    if len(inputs) == 1 and name in _UNARY:
+        return UnaryOp(name, as_rate(inputs[0]))
+    if len(inputs) == 2 and name in _BINARY:
+        return BinOp(name, as_rate(inputs[0]), as_rate(inputs[1]))
+    return NotImplemented
+```
+
+with `UNARY_OPS` populated as `{n: getattr(jnp, n) for n in _UNARY}`. Verified:
+
+- `np.sin(Param("phase"))` builds `UnaryOp(op='sin', arg=FieldRef(('phase',)))`.
+- `rate_stage` classifies it `run` with no change — staging reads the argument,
+  not the op.
+- `0.1 * (1.0 + 0.5 * np.sin(Param("phase")))` compiles and evaluates to the
+  expected vector field.
+- **Value-keyed digests survive**, which is the property that matters most:
+  the op is a *string*, not a callable id, so `_rate_bytes` already encodes it
+  (`b"unary:" + op.encode()`). Two separately-built `np.sin` models compare
+  equal and share a jit cache entry; `np.sin` and `np.cos` compare distinct.
+
+So the whole numpy API opens up, the hand-maintained list disappears, and
+nothing the typed-node design exists for is lost. The named exports stay as
+thin aliases for discoverability and for users who prefer them.
+
+One caveat to state plainly in the user docs if this lands: `np.sin(expr)`
+would work and `jnp.sin(expr)` still would not, because JAX offers no dispatch
+hook. That is summer2's bargain — write `np.*`, get `jnp` execution — and it is
+a genuine wart, not a design we would choose if JAX gave us the option.
 
 ## Could we have a better compute graph?
 
@@ -235,11 +329,17 @@ defaults, in this order:
 
 1. Make `_rate_bytes` **total** — raise, do not fall back. It is a correctness
    bug today, not a papercut.
-2. Add `__children__()` to `RateOps` and refold the four child-walking passes
+2. Replace the hand-written arithmetic wrappers with `__array_ufunc__` /
+   `__array_function__` on the four wrapper types, keying ops by name.
+   Prototyped above; opens the numpy API, deletes the allowlist, keeps
+   value-keyed digests and staging intact.
+3. Add `__children__()` to `RateOps` and refold the four child-walking passes
    onto it.
-3. Consider a grouping marker on the node type so `mypy` catches alignment
+4. Consider a grouping marker on the node type so `mypy` catches alignment
    errors that currently surface at trace time.
 
-Steps 1 and 2 remove most of the reason the question gets asked: the design
-would then be "typed nodes, two dunders, one traversal", which is a smaller
-surface than the compute graph it is being compared to.
+Steps 1–3 remove most of the reason the question gets asked. The design would
+then be "typed nodes, two dunders, one traversal, open operators" — a smaller
+surface than the compute graph it is being compared to, and with the one thing
+computegraph genuinely did better (protocol dispatch) adopted rather than
+reinvented.
