@@ -1,4 +1,4 @@
-"""Phase 4 — flow outputs, polarity queries, incidence, computed values."""
+"""Phase 4 — flow outputs, polarity queries, interval integrals, computed values."""
 
 from __future__ import annotations
 
@@ -136,7 +136,7 @@ def test_select_source_dest_present() -> None:
     assert selected.values.pmap.size == res["ageing"].values.pmap.size
 
 
-def test_incidence_trapezoid_second_order() -> None:
+def test_integrate_trapezoid_second_order() -> None:
     """Halving dt should roughly quarter the trapezoid error vs analytic integral."""
     times_coarse = np.linspace(0.0, 1.0, 5)
     times_fine = np.linspace(0.0, 1.0, 9)
@@ -262,7 +262,7 @@ def test_jit_grad_sum_over_dest_at_times() -> None:
     assert np.isfinite(float(g))
 
 
-def test_incidence_jaxpr_independent_of_t() -> None:
+def test_integrate_intervals_jaxpr_independent_of_t() -> None:
     def _op_count(n: int) -> int:
         ts = np.linspace(0.0, 1.0, n)
         vals = jnp.asarray(ts)
@@ -273,7 +273,7 @@ def test_incidence_jaxpr_independent_of_t() -> None:
                 values=v,
                 dims=("time",),
             )
-            return trace.incidence(method="trapezoid").values
+            return trace.integrate_intervals(method="trapezoid").values
 
         jaxpr = jax.make_jaxpr(run)(vals)
         return len(jaxpr.jaxpr.eqns)

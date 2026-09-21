@@ -46,7 +46,7 @@ class FlowMass:
 
     A 200k-edge flow over 3650 days is ~5.8 GB dense and ~470 kB when summed
     over age. Post-hoc edge queries use ``Output.sum_over(..., side=)``,
-    ``integrate``, and ``incidence``.
+    ``integrate_intervals``, and ``integrate``.
     """
 
     flow: str | tuple[str, ...]

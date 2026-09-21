@@ -10,8 +10,8 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
 
 ## Conventions
 
-- One concern per file; prefer a stable slug (`state-ledgers-incidence.md`).
-- Link to concrete symbols or paths (`Output.incidence`,
+- One concern per file; prefer a stable slug (`state-ledgers-flow-integral.md`).
+- Link to concrete symbols or paths (`Output.integrate_intervals`,
   `src/summer4/results/output.py`).
 - Say what is wrong today, why it hurts (e.g. jaxpr size ∝ T), and what a fix
   should look like.
@@ -20,8 +20,9 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
 
 ## Notes
 
-- [`state-ledgers-incidence.md`](state-ledgers-incidence.md) — opt-in exact
-  incidence via `State.ledgers` (post-hoc trapezoid is biased for calibration).
+- [`state-ledgers-flow-integral.md`](state-ledgers-flow-integral.md) — opt-in
+  exact flow accumulation via `State.ledgers` (post-hoc trapezoid is not the
+  solver's own integral).
 - [`targetset-residual-reduction.md`](targetset-residual-reduction.md) —
   `TargetSet.residuals` cannot reduce a stratified save onto an aggregate
   series.

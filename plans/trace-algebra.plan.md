@@ -35,11 +35,12 @@ Step 4 already shipped scalar and array arithmetic, unary ops, and
   total). Two different maps raise.
 - `FlowMass(flow=("a",))` stores the same value as `FlowMass(flow="a")`, so
   existing save-plan digests do not move.
-- `midpoint()` is summer2's `raw_results=False` convention, not exact incidence.
+- `midpoint()` is summer2's `raw_results=False` convention, not the solver's
+  accumulated flow.
 - `OutputSet` and the `D5` ledger note stay on step 10.
 
 ## Not in this branch
 
 - `OutputSet`, `Result.to_frame` wide/long, target residual reduction (§15c,
   the other half of §15d).
-- An opt-in incidence ledger (`futureplans/state-ledgers-incidence.md`).
+- An opt-in flow accumulator (`futureplans/state-ledgers-flow-integral.md`).

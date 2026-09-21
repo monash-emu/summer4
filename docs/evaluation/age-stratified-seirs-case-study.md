@@ -138,9 +138,9 @@ Each is recorded as a note in
 | `Output.plot` hardcodes matplotlib | `results/output.py:582` | `plot(legend=False)` raises under the Plotly backend. |
 
 Two further notes already in `futureplans/` bear directly on calibrating
-against case counts: `state-ledgers-incidence.md` (quadrature incidence is not
-the solver's accumulated flow mass). `Output.rolling` used to unroll under
-`jit`; that window is now a host-side index plus one gather.
+against counts over time: `state-ledgers-flow-integral.md` (post-hoc quadrature
+of saved rates is not the solver's accumulated flow). `Output.rolling` used to
+unroll under `jit`; that window is now a host-side index plus one gather.
 
 ## Consequences for the roadmap
 

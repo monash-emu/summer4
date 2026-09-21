@@ -127,7 +127,7 @@ class PropertyData:
         """Keep matching compartments; replace the rest with ``other``.
 
         Equivalent to ``where(~sel, other)``. Prefer this spelling when summing
-        a subset (e.g. infectious prevalence) so the polarity matches
+        a subset of compartments so the polarity matches
         ``select`` / ``sum_over`` / :class:`~summer4.flows.rates.Reduce`.
         """
         return self.where(~sel, other)

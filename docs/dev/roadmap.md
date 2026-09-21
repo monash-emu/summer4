@@ -619,7 +619,7 @@ window currently builds a Python loop whose jaxpr grows with trajectory length.
 2. `plans/tb-ports-feature-completeness.plan.md` §15a, §15b, §15d
 3. `src/summer4/results/output.py`, `src/summer4/results/result.py`
 4. `futureplans/trace-rolling-jaxpr.md`,
-   `futureplans/state-ledgers-incidence.md`
+   `futureplans/state-ledgers-flow-integral.md`
 
 ### Do
 
@@ -627,7 +627,7 @@ Follow §15a, §15b and the `trace-rolling-jaxpr` half of §15d. Every operation
 must work inside `jit`: index alignment at trace time, gathers and arithmetic
 traced. Delete `futureplans/trace-rolling-jaxpr.md` and its bullet in
 `futureplans/README.md` once it is folded in. Document `midpoint()` as a parity
-convention, not exact incidence.
+convention, not the solver's accumulated flow.
 
 Cut from: `main`. Merges into: `main`.
 
@@ -672,8 +672,8 @@ the analyses expect, folds in the deferred target-residual reduction, and closes
   `cumulative()` is still `cumsum`.
 - `midpoint()` is summer2 `raw_results=False`: `out[0] = f[0]`, then the
   average with the previous sample. The docstring says it is a parity
-  convention, not exact incidence. `futureplans/state-ledgers-incidence.md`
-  stays.
+  convention, not the solver's accumulated flow.
+  `futureplans/state-ledgers-flow-integral.md` stays.
 - `FlowMass(flow=("a", "b"), where=..., sum_over=...)` sums after that one
   filter. Selected maps must be equal or evaluation raises and names the
   flows. `FlowMass(flow=("a",))` stores `flow="a"`, so existing save-plan
@@ -685,8 +685,8 @@ the analyses expect, folds in the deferred target-residual reduction, and closes
 - `KI13`–`KI17` stay `partial`. Route-today text for `KI13`–`KI16` and `TM7`
   names what landed. Clear the `D5` note in this step; it still says `Output`
   has no operators.
-- Plan pointer: `plans/trace-algebra.plan.md`. User gate, still open on PR
-  #25: `examples/notebooks/06-flow-outputs.ipynb` (per-capita by age,
+- Plan pointer: `plans/trace-algebra.plan.md`. User gate signed off:
+  `examples/notebooks/06-flow-outputs.ipynb` (per-capita by age,
   cumulative from day 14, midpoint, multi-flow mass). This step extends that
   same notebook with `OutputSet` and `to_frame`.
 - No new `futureplans/` note. Readiness today is still **13 / 23** and

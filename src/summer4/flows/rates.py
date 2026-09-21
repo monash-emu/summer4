@@ -277,9 +277,9 @@ class Reduce(RateOps):
 class Capture(RateOps):
     """Evaluate ``inner`` (typically a :class:`GroupedRate`) and stash it by name.
 
-    Saved via :class:`~summer4.results.plan.GroupedOutput` so a force of
-    infection (or any other grouped quantity) is inspectable as a
-    properly-dimensioned output without re-slicing a broadcast array.
+    Saved via :class:`~summer4.results.plan.GroupedOutput` so a grouped
+    quantity is inspectable as a properly-dimensioned output without
+    re-slicing a broadcast array.
     """
 
     name: str
