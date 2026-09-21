@@ -1213,12 +1213,13 @@ only one current step, and compartment infectiousness has not landed.
   a hook that accepts the keyword (or `**kwargs`) receives the flag.
 - `futureplans/no-defer-equivalent.md` is deleted. `P2` stays `full`; its
   route now names `defer` first.
-- `pixi run -e docs docs-strict` still fails on
-  `docs/summer2/10-derived-outputs-stratified.ipynb`, the pre-existing
-  source-side `adjust=` bug in `futureplans/split-adjust-selector-side.md`.
-- User gates still open: `examples/notebooks/15-array-dispatch.ipynb` on
-  PR #21, and `examples/notebooks/16-deferred-functions.ipynb` on PR #22.
-  `pixi run notebook` is the sign-off; the suite only proves they execute.
+- The source-side `adjust=` bug is fixed on `fix/split-adjust-selector-side`:
+  a bare trait of a property that flow's `split=` introduces selects the
+  destination. `futureplans/split-adjust-selector-side.md` is deleted, and
+  `pixi run -e docs docs-strict` passes.
+- User gates: `examples/notebooks/15-array-dispatch.ipynb` and
+  `examples/notebooks/16-deferred-functions.ipynb`. `pixi run notebook` is
+  the sign-off; the suite only proves they execute.
 
 ### Read first
 

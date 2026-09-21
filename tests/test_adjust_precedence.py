@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import pytest
 from hypothesis import given, settings
@@ -16,6 +18,7 @@ from summer4 import (
     Property,
     PropertyMap,
     Source,
+    TraitMatrix,
     Transform,
     TransitionFlow,
 )
@@ -285,3 +288,108 @@ def test_absent_selector_is_not_dead() -> None:
     mask = cm.flows["inf"].adjust_masks[0]
     assert mask is not None
     assert bool(mask.all())
+
+
+def test_bare_split_trait_matches_dest() -> None:
+    """A property introduced by split= is read on the destination."""
+    state, severity, pm = _sir_severity()
+    split = {severity: {"mild": 0.25, "severe": 0.75}}
+
+    def compiled(where: object) -> tuple[Any, Any]:
+        model = FlowModel(pm)
+        model.add_flow(
+            TransitionFlow(
+                "inf",
+                state["S"],
+                state["I"],
+                1.0,
+                split=split,
+                adjust=[Multiply(3.0, where=where)],
+            )
+        )
+        cm = model.compile()
+        return cm, np.asarray(cm.vector_field(0.0, np.ones(pm.size), {}))
+
+    bare_cm, bare_dy = compiled(severity["severe"])
+    dest_cm, dest_dy = compiled(Dest(severity["severe"]))
+    bare_mask = bare_cm.flows["inf"].adjust_masks[0]
+    dest_mask = dest_cm.flows["inf"].adjust_masks[0]
+    assert bare_mask is not None and dest_mask is not None
+    np.testing.assert_array_equal(bare_mask, dest_mask)
+    np.testing.assert_allclose(bare_dy, dest_dy)
+    severe = set(pm.select(state["I"] & severity["severe"]).tolist())
+    mild = set(pm.select(state["I"] & severity["mild"]).tolist())
+    for dest_i, weight in zip(
+        bare_cm.flows["inf"].dest_idx, bare_cm.flows["inf"].weight, strict=True
+    ):
+        d = int(dest_i)
+        if d in severe:
+            assert bare_dy[d] == pytest.approx(3.0 * float(weight))
+        elif d in mild:
+            assert bare_dy[d] == pytest.approx(float(weight))
+
+
+def test_bare_split_trait_keeps_other_properties_on_the_source() -> None:
+    """``age & clinical`` uses source age when pairing moves age across the edge."""
+    state = Property("state", ("S", "I"))
+    loc = Property("loc", ("north", "south"))
+    clinical = Property("clinical", ("mild", "severe"))
+    pm = PropertyMap.from_property(state).stratify(loc).stratify(clinical, where=state["I"])
+    # dest × source: north sources land in the south, and the reverse.
+    matrix = np.array([[0.0, 1.0], [1.0, 0.0]])
+    where = loc["north"] & clinical["severe"]
+    model = FlowModel(pm)
+    model.add_flow(
+        TransitionFlow(
+            "inf",
+            state["S"],
+            state["I"],
+            1.0,
+            pairing=TraitMatrix(loc, matrix),
+            split={clinical: {"mild": 0.25, "severe": 0.75}},
+            adjust=[Multiply(3.0, where=where)],
+        )
+    )
+    explicit = FlowModel(pm)
+    explicit.add_flow(
+        TransitionFlow(
+            "inf",
+            state["S"],
+            state["I"],
+            1.0,
+            pairing=TraitMatrix(loc, matrix),
+            split={clinical: {"mild": 0.25, "severe": 0.75}},
+            adjust=[Multiply(3.0, where=Source(loc["north"]) & Dest(clinical["severe"]))],
+        )
+    )
+    cm = model.compile()
+    other = explicit.compile()
+    bare_mask = cm.flows["inf"].adjust_masks[0]
+    explicit_mask = other.flows["inf"].adjust_masks[0]
+    assert bare_mask is not None and explicit_mask is not None
+    np.testing.assert_array_equal(bare_mask, explicit_mask)
+    assert bool(bare_mask.any())
+    y = np.zeros(pm.size)
+    y[pm.select(state["S"] & loc["north"])] = 1.0
+    dy = np.asarray(cm.vector_field(0.0, y, {}))
+    south_severe = int(pm.select(state["I"] & loc["south"] & clinical["severe"])[0])
+    north_severe = int(pm.select(state["I"] & loc["north"] & clinical["severe"])[0])
+    assert dy[south_severe] == pytest.approx(3.0 * 0.75)
+    assert dy[north_severe] == pytest.approx(0.0)
+
+
+def test_explicit_source_of_split_property_still_raises() -> None:
+    state, severity, pm = _sir_severity()
+    model = FlowModel(pm)
+    model.add_flow(
+        TransitionFlow(
+            "inf",
+            state["S"],
+            state["I"],
+            1.0,
+            split={severity: {"mild": 0.5, "severe": 0.5}},
+            adjust=[Multiply(2.0, where=Source(severity["severe"]))],
+        )
+    )
+    with pytest.raises(ValueError, match="absent on the source"):
+        model.compile()
