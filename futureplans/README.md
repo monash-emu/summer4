@@ -10,8 +10,8 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
 
 ## Conventions
 
-- One concern per file; prefer a stable slug (`trace-rolling-jaxpr.md`).
-- Link to concrete symbols or paths (`Output._apply_rolling`,
+- One concern per file; prefer a stable slug (`state-ledgers-flow-integral.md`).
+- Link to concrete symbols or paths (`Output.integrate_intervals`,
   `src/summer4/results/output.py`).
 - Say what is wrong today, why it hurts (e.g. jaxpr size ∝ T), and what a fix
   should look like.
@@ -20,8 +20,6 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
 
 ## Notes
 
-- [`trace-rolling-jaxpr.md`](trace-rolling-jaxpr.md) — Python loop in
-  `Output._apply_rolling` grows the jaxpr with trajectory length.
 - [`state-ledgers-flow-integral.md`](state-ledgers-flow-integral.md) — opt-in
   exact flow accumulation via `State.ledgers` (post-hoc trapezoid is not the
   solver's own integral).

@@ -74,11 +74,11 @@ Two conventions that are easy to get wrong:
 <!-- roadmap:current -->
 | Field | Value |
 | --- | --- |
-| Step | 9 |
+| Step | 10 |
 | Status | next |
-| Branch | `feat/trace-algebra` |
+| Branch | `feat/output-sets` |
 | Cut from | `main` |
-| Last landed | `feat/epi-compartment-infectiousness` |
+| Last landed | `feat/trace-algebra` |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -100,8 +100,8 @@ run at any time from `main`.
 | 6 | B | WP13 | `feat/ageing-sugar` | `plans/tb-ports-feature-completeness.plan.md` | 13.3 | done | KI2 TM3 |
 | 7 | C | WP14 | `feat/epi-generalised-foi` | `plans/tb-ports-feature-completeness.plan.md` | 14a | done | — |
 | 8 | C | WP14 | `feat/epi-compartment-infectiousness` | `plans/tb-ports-feature-completeness.plan.md` | 14b | done | KI4 KI5 TM5 |
-| 9 | D | WP15 | `feat/trace-algebra` | `plans/tb-ports-feature-completeness.plan.md` | 15a | next | — |
-| 10 | D | WP15 | `feat/output-sets` | `plans/tb-ports-feature-completeness.plan.md` | 15c | planned | KI13 KI14 KI15 KI16 KI17 |
+| 9 | D | WP15 | `feat/trace-algebra` | `plans/tb-ports-feature-completeness.plan.md` | 15a | done | — |
+| 10 | D | WP15 | `feat/output-sets` | `plans/tb-ports-feature-completeness.plan.md` | 15c | next | KI13 KI14 KI15 KI16 KI17 |
 | 11 | E | WP16 | `feat/tb-scale-bench` | `plans/tb-ports-feature-completeness.plan.md` | 16a | planned | — |
 | 12 | E | WP16 | `feat/solver-safety` | `plans/tb-ports-feature-completeness.plan.md` | 16b | planned | KI22 |
 | 13 | F | WP10 | `feat/epi-priors-likelihoods` | `plans/tb-ports-feature-completeness.plan.md` | 10.1 | planned | — |
@@ -573,6 +573,8 @@ came out reusable for step 16's `susceptibility=`, since
 
 ## Step 9 — `feat/trace-algebra`
 
+**Landed:** feat/trace-algebra, PR #25, 2026-09-21.
+
 ### Summary
 
 An `Output` cannot be divided by another `Output`, so every per-capita rate, every
@@ -652,6 +654,43 @@ outputs it does not need. It adds `Result.to_frame` for the wide and long frames
 the analyses expect, folds in the deferred target-residual reduction, and closes
 `KI13` through `KI17` — the single biggest jump in Kiribati readiness, 13/23 to
 18/23.
+
+### What the previous worker left you
+
+- Name-aligned `Output` ∘ `Output` is in. Time axes must match (concrete
+  values, or shape and epoch when the times are traced). Dim names broadcast
+  when they are equal or one side is a subset; anything else raises and names
+  both dim tuples. The result dim order is the richer side, or the left side
+  when the names match.
+- `PropertyData` is kept when both operands share one map, and also when
+  exactly one has a map and the other has no aligned axis, so per-age ÷ total
+  stays selectable. Two different maps raise. The plan's "otherwise a raw
+  array" is the case where the maps disagree or the other side has its own
+  aligned axis and no map.
+- `cumulative(start=, end=)` zeros outside the window. Both bounds must be
+  save times. `end` is the last included save, not a frozen total. No-argument
+  `cumulative()` is still `cumsum`.
+- `midpoint()` is summer2 `raw_results=False`: `out[0] = f[0]`, then the
+  average with the previous sample. The docstring says it is a parity
+  convention, not the solver's accumulated flow.
+  `futureplans/state-ledgers-flow-integral.md` stays.
+- `FlowMass(flow=("a", "b"), where=..., sum_over=...)` sums after that one
+  filter. Selected maps must be equal or evaluation raises and names the
+  flows. `FlowMass(flow=("a",))` stores `flow="a"`, so existing save-plan
+  digests do not move. `flow_reads` includes every name.
+- Rolling sum/mean is a host-side index plus one gather. `ReduceHow` is still
+  only sum and mean (no min/max). Jaxpr equation count is 19 at T=8 and at
+  T=32 for `rolling(5, how="sum")`. `futureplans/trace-rolling-jaxpr.md` is
+  deleted.
+- `KI13`–`KI17` stay `partial`. Route-today text for `KI13`–`KI16` and `TM7`
+  names what landed. Clear the `D5` note in this step; it still says `Output`
+  has no operators.
+- Plan pointer: `plans/trace-algebra.plan.md`. User gate signed off:
+  `examples/notebooks/06-flow-outputs.ipynb` (per-capita by age,
+  cumulative from day 14, midpoint, multi-flow mass). This step extends that
+  same notebook with `OutputSet` and `to_frame`.
+- No new `futureplans/` note. Readiness today is still **13 / 23** and
+  **8 / 9**. No API-ledger row moved (still 47 / 52).
 
 ### Read first
 

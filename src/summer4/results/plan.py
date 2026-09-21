@@ -25,18 +25,38 @@ class Compartments:
     sum_over: Property | None = None
 
 
+def flow_names(flow: str | tuple[str, ...]) -> tuple[str, ...]:
+    """Return the flow names a :class:`FlowMass` reads, in declaration order."""
+    names = (flow,) if isinstance(flow, str) else tuple(flow)
+    if not names or any(not isinstance(name, str) or not name for name in names):
+        raise ValueError(f"FlowMass.flow must name at least one flow, got {flow!r}.")
+    if len(names) != len(set(names)):
+        raise ValueError(f"FlowMass.flow repeats a name: {names}.")
+    return names
+
+
 @dataclass(frozen=True, slots=True)
 class FlowMass:
     """Per-edge mass. Reduce *here* so the buffer is ``(n_saves, n_kept)``.
+
+    ``flow`` is one name or several. Several flows are summed at each save
+    after the same ``where`` / ``sum_over``. They must share those selected
+    dims (the same :class:`~summer4.propertymap.PropertyMap`); otherwise
+    evaluation raises and names the flows.
 
     A 200k-edge flow over 3650 days is ~5.8 GB dense and ~470 kB when summed
     over age. Post-hoc edge queries use ``Output.sum_over(..., side=)``,
     ``integrate_intervals``, and ``integrate``.
     """
 
-    flow: str
+    flow: str | tuple[str, ...]
     where: Selector | NDArray[np.bool_] | None = None
     sum_over: tuple[Property, Side] | None = None
+
+    def __post_init__(self) -> None:
+        names = flow_names(self.flow)
+        stored: str | tuple[str, ...] = names[0] if len(names) == 1 else names
+        object.__setattr__(self, "flow", stored)
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,7 +103,8 @@ def _quantity_bytes(what: Quantity) -> bytes:
         case Compartments(where=where, sum_over=sum_over):
             return b"comp" + repr(where).encode() + repr(sum_over).encode()
         case FlowMass(flow=flow, where=where, sum_over=sum_over):
-            return b"flow" + flow.encode() + repr(where).encode() + repr(sum_over).encode()
+            names = b"\0".join(name.encode() for name in flow_names(flow))
+            return b"flow" + names + repr(where).encode() + repr(sum_over).encode()
         case ComputedValue(path=path):
             return b"cv" + repr(path).encode()
         case GroupedOutput(name=name):
@@ -154,7 +175,7 @@ class SavePlan:
         for req in self.requests.values():
             match req.what:
                 case FlowMass(flow=flow):
-                    names.add(flow)
+                    names.update(flow_names(flow))
                 case SaveFn(reads=reads):
                     names |= set(reads)
                 case _:

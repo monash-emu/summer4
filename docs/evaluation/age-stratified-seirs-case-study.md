@@ -139,8 +139,8 @@ Each is recorded as a note in
 
 Two further notes already in `futureplans/` bear directly on calibrating
 against counts over time: `state-ledgers-flow-integral.md` (post-hoc quadrature
-of saved rates is not the solver's accumulated flow) and `trace-rolling-jaxpr.md`
-(`Output.rolling` unrolls under `jit`).
+of saved rates is not the solver's accumulated flow). `Output.rolling` used to
+unroll under `jit`; that window is now a host-side index plus one gather.
 
 ## Consequences for the roadmap
 

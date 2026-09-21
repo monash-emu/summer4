@@ -17,6 +17,7 @@ from summer4.results.plan import (
     GroupedOutput,
     SaveFn,
     SavePlan,
+    flow_names,
 )
 from summer4.selectors import Selector
 
@@ -49,6 +50,52 @@ def _apply_where(
     return data[..., idx]
 
 
+def _flow_piece(
+    name: str,
+    ctx: Any,
+    edge_maps: dict[str, EdgeMap],
+    where: Selector | np.ndarray | None,
+    sum_over: tuple[Any, Any] | None,
+) -> Any:
+    """One flow's mass after ``where`` / ``sum_over``."""
+    if name not in ctx.flows:
+        raise KeyError(f"Flow {name!r} not in SaveContext.flows.")
+    mass = ctx.flows[name]
+    table = edge_maps[name].table
+    if where is not None:
+        idx = _select_idx(table, where, edge=True)
+        table = table.take(idx)
+        mass = mass[..., idx]
+    if sum_over is None:
+        return PropertyData(table, mass)
+    prop, side = sum_over
+    return sum_over_edge(mass, table, prop, side)
+
+
+def _sum_named_flows(
+    names: tuple[str, ...],
+    ctx: Any,
+    edge_maps: dict[str, EdgeMap],
+    where: Selector | np.ndarray | None,
+    sum_over: tuple[Any, Any] | None,
+) -> Any:
+    """Sum flows after the same filter. Selected maps must be equal."""
+    acc = _flow_piece(names[0], ctx, edge_maps, where, sum_over)
+    for name in names[1:]:
+        piece = _flow_piece(name, ctx, edge_maps, where, sum_over)
+        if (
+            isinstance(acc, PropertyData)
+            and isinstance(piece, PropertyData)
+            and acc.pmap != piece.pmap
+        ):
+            raise ValueError(
+                f"FlowMass flows {names[0]!r} and {name!r} do not share selected "
+                "dims after where/sum_over."
+            )
+        acc = acc + piece
+    return acc
+
+
 def eval_quantity(
     what: Compartments | FlowMass | ComputedValue | SaveFn | GroupedOutput,
     ctx: Any,
@@ -75,19 +122,7 @@ def eval_quantity(
             pd = PropertyData(active, data)
             return pd.sum_over(sum_over) if sum_over is not None else pd
         case FlowMass(flow=flow, where=where, sum_over=sum_over):
-            if flow not in ctx.flows:
-                raise KeyError(f"Flow {flow!r} not in SaveContext.flows.")
-            mass = ctx.flows[flow]
-            emap = edge_maps[flow]
-            table = emap.table
-            if where is not None:
-                idx = _select_idx(table, where, edge=True)
-                table = table.take(idx)
-                mass = mass[..., idx]
-            if sum_over is None:
-                return PropertyData(table, mass)
-            prop, side = sum_over
-            return sum_over_edge(mass, table, prop, side)
+            return _sum_named_flows(flow_names(flow), ctx, edge_maps, where, sum_over)
         case ComputedValue(path=path):
             return _lookup_path(ctx.derived, path)
         case GroupedOutput(name=name):
@@ -120,7 +155,9 @@ def values_for(req: Any, raw: Any, model: Any) -> Any:
             idx = _select_idx(model.pmap, where, edge=False)
             return PropertyData(model.pmap.take(idx), raw)
         case FlowMass(flow=flow, where=where, sum_over=sum_over):
-            emap = model.edge_maps[flow]
+            # Every named flow shares this layout; evaluation already rejected
+            # a mismatch, so the first flow's map is the saved array's map.
+            emap = model.edge_maps[flow_names(flow)[0]]
             table = emap.table
             if where is not None:
                 idx = _select_idx(table, where, edge=True)

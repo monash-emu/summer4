@@ -31,6 +31,7 @@ from summer4.time import (
     TimeAxisKind,
     TimeGrouping,
     When,
+    _is_tracer,
 )
 
 type QuadMethod = Literal["trapezoid", "simpson"]
@@ -94,6 +95,143 @@ def _require_uniform_odd(times: np.ndarray, *, op: str) -> float:
     return dt0
 
 
+_ALIGNED_DIMS = frozenset({"compartment", "edge", "group"})
+
+
+def _describe_times(axis: TimeAxis) -> str:
+    """Short host-side description of a time axis for error messages."""
+    if _is_tracer(axis.values):
+        return f"traced shape {getattr(axis.values, 'shape', None)} epoch={axis.epoch!r}"
+    vals = np.asarray(axis.values, dtype=np.float64)
+    if vals.size <= 6:
+        shown: list[float | str] = vals.tolist()
+    else:
+        shown = vals[:3].tolist() + ["…"] + vals[-1:].tolist()
+    return f"{shown} epoch={axis.epoch!r}"
+
+
+def _require_same_times(left: TimeAxis, right: TimeAxis) -> None:
+    """Raise when two outputs are not on the same save times.
+
+    Concrete axes must match value-for-value. Traced axes (a ``Result`` passed
+    into ``jit``) are compared by shape: the values are not a Python object
+    the check can read.
+    """
+    if left.epoch != right.epoch:
+        raise ValueError(
+            "Output time axes differ: " f"{_describe_times(left)} vs {_describe_times(right)}."
+        )
+    lv, rv = left.values, right.values
+    if not _is_tracer(lv) and not _is_tracer(rv):
+        la = np.asarray(lv, dtype=np.float64)
+        ra = np.asarray(rv, dtype=np.float64)
+        if la.shape != ra.shape or not np.array_equal(la, ra):
+            raise ValueError(
+                "Output time axes differ: " f"{_describe_times(left)} vs {_describe_times(right)}."
+            )
+        return
+    if getattr(lv, "shape", None) != getattr(rv, "shape", None):
+        raise ValueError(
+            "Output time axes differ: " f"{_describe_times(left)} vs {_describe_times(right)}."
+        )
+
+
+def _dim_names(dims: tuple[str, ...]) -> set[str]:
+    if len(set(dims)) != len(dims):
+        raise ValueError(f"Output dims {dims} repeat a name.")
+    return set(dims)
+
+
+def _broadcast_dim_order(left: tuple[str, ...], right: tuple[str, ...]) -> tuple[str, ...]:
+    """Dim order of an Output ∘ Output: the richer side, or the left if equal."""
+    left_names = _dim_names(left)
+    right_names = _dim_names(right)
+    if left_names == right_names:
+        return left
+    if left_names < right_names:
+        return right
+    if right_names < left_names:
+        return left
+    raise ValueError(
+        f"Output dims {left} and {right} are not broadcastable. "
+        "One side's names must equal the other's, or be a subset "
+        "(for example a per-age output divided by a total)."
+    )
+
+
+def _broadcast_named(arr: Any, src: tuple[str, ...], dst: tuple[str, ...]) -> Any:
+    """Move ``arr`` onto ``dst`` dim order, inserting size-1 axes for missing names."""
+    if arr.ndim != len(src):
+        raise ValueError(f"Output values have ndim {arr.ndim} but dims {src} name {len(src)} axes.")
+    if src == dst:
+        return arr
+    xp = _xp()
+    missing = [name for name in dst if name not in src]
+    expanded = arr
+    for _ in missing:
+        expanded = xp.expand_dims(expanded, axis=-1)
+    order = list(src) + missing
+    perm = tuple(order.index(name) for name in dst)
+    if perm == tuple(range(len(dst))):
+        return expanded
+    return xp.transpose(expanded, perm)
+
+
+def _window_bounds(n: int, window: int, center: bool) -> tuple[np.ndarray, np.ndarray]:
+    """Host-side ``[lo, hi)`` indexes for each time of a rolling window."""
+    idx = np.arange(n, dtype=np.int32)
+    left = idx - (window // 2) if center else idx - window + 1
+    right = left + window
+    lo = np.clip(left, 0, n).astype(np.int32, copy=False)
+    hi = np.clip(right, 0, n).astype(np.int32, copy=False)
+    return lo, hi
+
+
+def _shared_pmap(left: Output, right: Output) -> PropertyMap | None:
+    """Map to keep on a combined output, or None when the values stay raw.
+
+    Both maps must be equal. A single map is kept when the other output has
+    no aligned axis, so a per-age series divided by a total stays selectable.
+    """
+    left_map = left.values.pmap if isinstance(left.values, PropertyData) else None
+    right_map = right.values.pmap if isinstance(right.values, PropertyData) else None
+    if left_map is None and right_map is None:
+        return None
+    if left_map is not None and right_map is not None:
+        if left_map != right_map:
+            raise ValueError(
+                "Output operands do not share a PropertyMap "
+                f"(dims {left.dims} and {right.dims})."
+            )
+        return left_map
+    other = right if left_map is not None else left
+    if _ALIGNED_DIMS.intersection(other.dims):
+        return None
+    return left_map if left_map is not None else right_map
+
+
+def _exact_save_index(times: np.ndarray, when: When, epoch: Any, *, bound: str) -> int:
+    """Index of ``when`` on ``times``. ``when`` must be a save time."""
+    if isinstance(when, (int, float, np.floating)):
+        t = float(when)
+    else:
+        if epoch is None:
+            raise TypeError(
+                f"cumulative {bound}={when!r} needs TimeAxis.epoch to become a model time."
+            )
+        t = float(np.asarray(epoch.to_model(when)).reshape(-1)[0])
+    hits = np.flatnonzero(np.isclose(times, t, rtol=0.0, atol=0.0))
+    if hits.size != 1:
+        hits = np.flatnonzero(np.isclose(times, t, rtol=0.0, atol=1e-8))
+    if hits.size != 1:
+        raise ValueError(
+            f"cumulative {bound}={when!r} (model time {t}) is not a save time. "
+            f"Save times run from {float(times[0])} to {float(times[-1])} "
+            f"({times.size} points)."
+        )
+    return int(hits[0])
+
+
 @dataclass(frozen=True, slots=True)
 class Output:
     """One named quantity from a solve — the unit the query surface operates on."""
@@ -141,24 +279,27 @@ class Output:
 
     @staticmethod
     def _combine(left: object, right: object, op: str) -> Output:
-        """Binary op of an Output with a scalar or array.
+        """Binary op of an Output with a scalar, an array, or another Output.
 
-        The numeric kernel is :func:`summer4.flows.algebra.apply_binary`, shared with
-        rate evaluation. An unevaluated rate expression (a parameter transform
-        such as ``tanh(Param("s"))``) is rejected: evaluate it with
+        Output ∘ Output requires the same time axis. Dim names broadcast when
+        they are equal or one side's names are a subset of the other's (a
+        per-age series divided by a total). Alignment is host-side; the
+        arithmetic is traced through :func:`summer4.flows.algebra.apply_binary`.
+
+        The result stays :class:`~summer4.jax.propertydata.PropertyData` when
+        the operands share one map, or exactly one operand has a map and the
+        other has no aligned axis (per-age ÷ total). Otherwise the values are
+        a raw array.
+
+        An unevaluated rate expression (a parameter transform such as
+        ``tanh(Param("s"))``) is rejected: evaluate it with
         :func:`summer4.flows.compiled.eval_closed` and combine with the array.
-        Output-to-Output name alignment is not done here.
         """
         from summer4.flows.algebra import apply_binary
         from summer4.flows.rates import RateOps
 
         left_is_output = isinstance(left, Output)
         right_is_output = isinstance(right, Output)
-        if left_is_output and right_is_output:
-            raise TypeError(
-                "Output-to-Output arithmetic needs name-aligned broadcasting, "
-                "which is not implemented yet."
-            )
         if not left_is_output and not right_is_output:
             raise TypeError("Output._combine expects one Output.")
         if isinstance(left, RateOps) or isinstance(right, RateOps):
@@ -167,6 +308,9 @@ class Output:
                 "Evaluate parameter-only expressions with eval_closed(expr, params) "
                 "and combine the Output with that array."
             )
+        if left_is_output and right_is_output:
+            assert isinstance(left, Output) and isinstance(right, Output)
+            return Output._combine_outputs(left, right, op)
         owner = left if left_is_output else right
         if not isinstance(owner, Output):
             raise TypeError("Output._combine expects one Output.")
@@ -176,6 +320,25 @@ class Output:
             right.values if isinstance(right, Output) else right,
         )
         return owner._with(values=values)
+
+    @staticmethod
+    def _combine_outputs(left: Output, right: Output, op: str) -> Output:
+        from summer4.flows.algebra import apply_binary
+
+        _require_same_times(left.times, right.times)
+        dims = _broadcast_dim_order(left.dims, right.dims)
+        left_arr = _broadcast_named(_as_array(left.values), left.dims, dims)
+        right_arr = _broadcast_named(_as_array(right.values), right.dims, dims)
+        values = apply_binary(op, left_arr, right_arr)
+        pmap = _shared_pmap(left, right)
+        if (
+            pmap is not None
+            and dims
+            and dims[-1] in _ALIGNED_DIMS
+            and values.shape[-1] == pmap.size
+        ):
+            values = PropertyData(pmap, values)
+        return Output(times=left.times, values=values, dims=dims)
 
     def __neg__(self) -> Output:
         return self._map_unary("neg")
@@ -404,7 +567,13 @@ class Output:
         center: bool = False,
         min_periods: int | None = None,
     ) -> Output:
-        """Rolling window via cumsum difference (O(n)); see :class:`RollingSpec`."""
+        """Rolling window along time.
+
+        Sum and mean are a cumulative-sum difference. The window indexes are
+        built on the host from the concrete time axis, so the traced program
+        is one gather and does not grow with trajectory length. A window that
+        has fewer than ``min_periods`` points is NaN.
+        """
         spec = self.times.rolling(window, how=how, center=center, min_periods=min_periods)
         return self._apply_rolling(spec)
 
@@ -412,41 +581,81 @@ class Output:
         xp = _xp()
         t_ax = _time_axis_index(self.dims)
         data = _as_array(self.values)
+        n = int(self.times._concrete(op="rolling").size)
         data_t = xp.moveaxis(data, t_ax, 0)
-        n = data_t.shape[0]
-        zeros = xp.zeros((1,) + data_t.shape[1:], dtype=data_t.dtype)
+        if int(data_t.shape[0]) != n:
+            raise ValueError(f"Time axis length {data_t.shape[0]} does not match {n} save times.")
+        lo, hi = _window_bounds(n, spec.window, bool(spec.center))
+        zeros = xp.zeros((1,) + tuple(data_t.shape[1:]), dtype=data_t.dtype)
         csum = xp.concatenate([zeros, xp.cumsum(data_t, axis=0)], axis=0)
-        out_rows: list[Any] = []
-        for i in range(n):
-            if spec.center:
-                left = i - (spec.window // 2)
-                right = left + spec.window
-            else:
-                left = i - spec.window + 1
-                right = i + 1
-            lo = max(0, left)
-            hi = min(n, right)
-            count = hi - lo
-            if count < spec.min_periods:
-                out_rows.append(xp.full(data_t.shape[1:], xp.nan, dtype=data_t.dtype))
-            else:
-                total = csum[hi] - csum[lo]
-                out_rows.append(total / count if spec.how is ReduceHow.MEAN else total)
-        out = xp.stack(out_rows, axis=0)
+        # Concrete index vectors: one gather, not one op per time.
+        totals = csum[hi] - csum[lo]
+        counts_np = (hi - lo).astype(np.int32, copy=False)
+        trailing = (1,) * (data_t.ndim - 1)
+        counts = xp.asarray(counts_np).reshape((n,) + trailing)
+        if spec.how is ReduceHow.MEAN:
+            filled = totals / xp.maximum(counts, 1)
+        elif spec.how is ReduceHow.SUM:
+            filled = totals
+        else:
+            raise ValueError(f"Unknown rolling reduction {spec.how!r}.")
+        valid = xp.asarray(counts_np >= int(spec.min_periods)).reshape((n,) + trailing)
+        out = xp.where(valid, filled, xp.nan)
         out = xp.moveaxis(out, 0, t_ax)
         if isinstance(self.values, PropertyData):
             out = PropertyData(self.values.pmap, out)
         return self._with(values=out)
 
-    def cumulative(self) -> Output:
-        """Cumulative sum along the time axis."""
+    def cumulative(self, *, start: When | None = None, end: When | None = None) -> Output:
+        """Cumulative sum along time.
+
+        With no bounds this is ``cumsum``. ``start`` and ``end`` must be save
+        times on this output (summer2 ``request_cumulative_output(start_time=)``
+        requires the same). Points before ``start`` and after ``end`` are zero.
+        The running sum includes only that window, so the value at ``start`` is
+        that point itself.
+        """
         xp = _xp()
         t_ax = _time_axis_index(self.dims)
         data = _as_array(self.values)
-        out = xp.cumsum(data, axis=t_ax)
-        if isinstance(self.values, PropertyData):
-            out = PropertyData(self.values.pmap, out)
-        return self._with(values=out)
+        if start is None and end is None:
+            out = xp.cumsum(data, axis=t_ax)
+            return self._with(values=_wrap_like(self.values, out))
+        times = self.times._concrete(op="cumulative")
+        n = int(times.size)
+        i0 = (
+            0 if start is None else _exact_save_index(times, start, self.times.epoch, bound="start")
+        )
+        i1 = n - 1 if end is None else _exact_save_index(times, end, self.times.epoch, bound="end")
+        if i1 < i0:
+            raise ValueError(f"cumulative end is before start (save indexes {i0} and {i1}).")
+        data_t = xp.moveaxis(data, t_ax, 0)
+        if int(data_t.shape[0]) != n:
+            raise ValueError(f"Time axis length {data_t.shape[0]} does not match {n} save times.")
+        csum = xp.cumsum(data_t, axis=0)
+        window = csum if i0 == 0 else csum - csum[i0 - 1]
+        idx = xp.arange(n)
+        mask = (idx >= i0) & (idx <= i1)
+        mask = mask.reshape((n,) + (1,) * (data_t.ndim - 1))
+        out = xp.where(mask, window, xp.zeros_like(window))
+        out = xp.moveaxis(out, 0, t_ax)
+        return self._with(values=_wrap_like(self.values, out))
+
+    def midpoint(self) -> Output:
+        """Summer2's default flow-output convention (``raw_results=False``).
+
+        ``out[0]`` equals the first sample and later points are the average of
+        the sample and the one before it: ``out[i] = (f[i] + f[i - 1]) / 2``.
+        Use this when a number has to match summer2. It is a parity convention,
+        not the solver's accumulated flow — see :meth:`integrate_intervals`.
+        """
+        xp = _xp()
+        t_ax = _time_axis_index(self.dims)
+        data = _as_array(self.values)
+        data_t = xp.moveaxis(data, t_ax, 0)
+        prev = xp.concatenate([data_t[:1], data_t[:-1]], axis=0)
+        out = xp.moveaxis((data_t + prev) / 2, 0, t_ax)
+        return self._with(values=_wrap_like(self.values, out))
 
     def integrate_intervals(self, method: QuadMethod = "trapezoid") -> Output:
         """Integrate along time, one panel per save interval.

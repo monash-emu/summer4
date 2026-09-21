@@ -111,8 +111,8 @@ def test_ports_reject_bad_status(ports_text: str, text: str) -> None:
     from scripts.coverage_report import read_ports
 
     broken = ports_text.replace(
-        "| `partial` | One `FlowMass` per flow added by hand, or `SaveFn`",
-        "| `mostly` | One `FlowMass` per flow added by hand, or `SaveFn`",
+        "| `partial` | `FlowMass(flow=(...), where=..., sum_over=...)`",
+        "| `mostly` | `FlowMass(flow=(...), where=..., sum_over=...)`",
         1,
     )
     with pytest.raises(ValueError, match="Unknown status"):
@@ -122,11 +122,8 @@ def test_ports_reject_bad_status(ports_text: str, text: str) -> None:
 def test_ports_reject_undeclared_package(ports_text: str, text: str) -> None:
     from scripts.coverage_report import read_ports
 
-    broken = ports_text.replace(
-        "| One `FlowMass` per flow added by hand, or `SaveFn` | WP15 |",
-        "| One `FlowMass` per flow added by hand, or `SaveFn` | WP99 |",
-        1,
-    )
+    needle = "a named output DAG is still hand-written | WP15 |"
+    broken = ports_text.replace(needle, needle.replace("WP15", "WP99"), 1)
     with pytest.raises(ValueError, match="undeclared package"):
         read_ports(broken, text)
 
