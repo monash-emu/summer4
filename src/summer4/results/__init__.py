@@ -2,6 +2,7 @@
 
 from summer4.results.groups import SaveGroup, group_requests
 from summer4.results.output import Output
+from summer4.results.outputset import OutputSet
 from summer4.results.plan import (
     EVERYTHING,
     Compartments,
@@ -24,6 +25,7 @@ __all__ = [
     "FlowMass",
     "GroupedOutput",
     "Output",
+    "OutputSet",
     "OutputShape",
     "PlanDescription",
     "Result",

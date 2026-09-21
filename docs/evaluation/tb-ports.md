@@ -39,10 +39,9 @@ original analyses re-run on numpyro.
 ## Verdict
 
 - **tb_macro** — tb_macro rows complete today: **8 of 9**, and every other row is `partial`. The force of infection is `ForceOfInfection(kind=FOIKind.GENERALISED)`; calibration is still a hand-written numpyro model (the original hand-writes that too).
-- **Kiribati** — Kiribati rows complete today: **13 of 23**. Every capability except calibration and scale has *some* route, but a faithful, calibratable port would re-implement several layers by hand. Remaining blockers:
-  1. **Output algebra** at summer2 scale — `KI13`–`KI17`. Name-aligned `Output` arithmetic, `cumulative(start=)`, `midpoint()`, and multi-flow `FlowMass` exist; a named output set and `Result` → frame do not (`KI17`).
-  2. **Calibration workflow** — `KI18`–`KI21`. No priors, likelihoods, gradient-free sampler or posterior-run tooling exist.
-  3. **Scale** — `KI22`. Nothing measures a 160-compartment, 185-year model, and a solver that exceeds its step ceiling fails silently.
+- **Kiribati** — Kiribati rows complete today: **18 of 23**. Remaining blockers:
+  1. **Calibration workflow** — `KI18`–`KI21`. No priors, likelihoods, gradient-free sampler or posterior-run tooling. A MAP fit is still a hand-written optax loop (`KI20`).
+  2. **Scale** — `KI22`. Nothing measures a 160-compartment, 185-year model, and a solver that exceeds its step ceiling fails silently.
 
 ## Ports ledger
 
@@ -61,11 +60,11 @@ original analyses re-run on numpyro.
 | KI10 | Kiribati | Per-age time series from UN tables (death rates, treatment outcomes) | `full` | `Data.table(times, values, over=age).interp()` — one `TableInterp`, a `GroupedRate` over age | — |
 | KI11 | Kiribati | Interpolation knots derived with log / max (screening rate, outcome floors) | `full` | `log` / `maximum` on a `TableInterp` or on scalar `Interp` knots | — |
 | KI12 | Kiribati | Computed values (detection rates, matrix distance) | `full` | `ComputedValue` over `derived_fn` | — |
-| KI13 | Kiribati | Outputs summed over several flows and filtered by strata | `partial` | `FlowMass(flow=(...), where=..., sum_over=...)` sums those flows after one filter; a named output DAG is still hand-written | WP15 |
-| KI14 | Kiribati | Output arithmetic: per-capita, percentages, × parameter | `partial` | Name-aligned `Output` ∘ `Output`, plus scalar/array and `eval_closed` for a parameter expression such as `tanh(Param(...))`; the named output DAG is still hand-written | WP15 |
-| KI15 | Kiribati | Cumulative output from a start year | `partial` | `Output.cumulative(start=)` zeros before a save time and sums from there | WP15 |
-| KI16 | Kiribati | summer2 midpoint flow-output convention (parity) | `partial` | `Output.midpoint()` (`out[0] = f[0]`, then the average with the previous sample) | WP15 |
-| KI17 | Kiribati | Named output set to a frame / parquet | `partial` | Per-output `to_pandas` concatenated by hand | WP15 |
+| KI13 | Kiribati | Outputs summed over several flows and filtered by strata | `full` | `OutputSet` leaf `FlowMass(flow=(...), where=..., sum_over=...)`; derived names are not saved | — |
+| KI14 | Kiribati | Output arithmetic: per-capita, percentages, × parameter | `full` | `outputs.ref(a) / outputs.ref(b)` and `outputs.ref(a) * Param(...)` inside an `OutputSet` | — |
+| KI15 | Kiribati | Cumulative output from a start year | `full` | `outputs.ref(name).cumulative(start=)` in an `OutputSet`; `start` must be a save time | — |
+| KI16 | Kiribati | summer2 midpoint flow-output convention (parity) | `full` | `FlowMass(...).midpoint()` as an `OutputSet` post-op (`out[0] = f[0]`, then the average with the previous sample) | — |
+| KI17 | Kiribati | Named output set to a frame / parquet | `full` | `OutputSet.evaluate` then `Result.to_frame(shape="wide" or "long")`; a polars frame writes parquet | — |
 | KI18 | Kiribati | Priors and Normal targets, including a prior-distributed sd | `none` | — | WP10 |
 | KI19 | Kiribati | Gradient-free posterior sampling (replacing `DEMetropolisZ`) | `none` | — | WP10 |
 | KI20 | Kiribati | MAP fit (replacing nevergrad) | `partial` | Hand-written optax loop, as in the case study | WP10 |
@@ -107,11 +106,11 @@ Computed by `scripts/coverage_report.py`; do not edit by hand.
 <!-- ledger:port-readiness -->
 | After | Kiribati | tb_macro |
 | --- | --- | --- |
-| today | 13 / 23 | 8 / 9 |
-| WP12 | 13 / 23 | 8 / 9 |
-| WP13 | 13 / 23 | 8 / 9 |
-| WP3 | 13 / 23 | 8 / 9 |
-| WP14 | 13 / 23 | 8 / 9 |
+| today | 18 / 23 | 8 / 9 |
+| WP12 | 18 / 23 | 8 / 9 |
+| WP13 | 18 / 23 | 8 / 9 |
+| WP3 | 18 / 23 | 8 / 9 |
+| WP14 | 18 / 23 | 8 / 9 |
 | WP15 | 18 / 23 | 8 / 9 |
 | WP16 | 19 / 23 | 8 / 9 |
 | WP10 | 23 / 23 | 9 / 9 |

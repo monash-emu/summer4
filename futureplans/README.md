@@ -23,9 +23,6 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
 - [`state-ledgers-flow-integral.md`](state-ledgers-flow-integral.md) — opt-in
   exact flow accumulation via `State.ledgers` (post-hoc trapezoid is not the
   solver's own integral).
-- [`targetset-residual-reduction.md`](targetset-residual-reduction.md) —
-  `TargetSet.residuals` cannot reduce a stratified save onto an aggregate
-  series.
 - [`trace-plot-backend-coupling.md`](trace-plot-backend-coupling.md) —
   `Output.plot` hardcodes matplotlib and forwards backend-specific kwargs.
 - [`foi-unstratified-dummy-pop.md`](foi-unstratified-dummy-pop.md) —
