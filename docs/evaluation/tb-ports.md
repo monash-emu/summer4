@@ -38,12 +38,11 @@ original analyses re-run on numpyro.
 
 ## Verdict
 
-- **tb_macro** — tb_macro rows complete today: **7 of 9**, and every other row is `partial`. It is **implementable today** with hand-written glue: a `derived_fn` force of infection and a hand-written numpyro model (the original hand-writes that too).
-- **Kiribati** — Kiribati rows complete today: **11 of 23**. Every capability except calibration and scale has *some* route, but a faithful, calibratable port would re-implement several layers by hand. Remaining blockers:
-  1. **Generalised force of infection** with compartment × age infectiousness — `KI4` `KI5`. `ForceOfInfection`'s custom `kind` receives no parameters, there is no power node, and `infectiousness=` keys only on the grouping property.
-  2. **Output algebra** at summer2 scale — `KI13`–`KI17`. `Trace` has no operators, `cumulative()` has no start, `FlowMass` names one flow, there is no summer2 midpoint convention and no `Result` → frame.
-  3. **Calibration workflow** — `KI18`–`KI21`. No priors, likelihoods, gradient-free sampler or posterior-run tooling exist.
-  4. **Scale** — `KI22`. Nothing measures a 160-compartment, 185-year model, and a solver that exceeds its step ceiling fails silently.
+- **tb_macro** — tb_macro rows complete today: **8 of 9**, and every other row is `partial`. The force of infection is `ForceOfInfection(kind=FOIKind.GENERALISED)`; calibration is still a hand-written numpyro model (the original hand-writes that too).
+- **Kiribati** — Kiribati rows complete today: **13 of 23**. Every capability except calibration and scale has *some* route, but a faithful, calibratable port would re-implement several layers by hand. Remaining blockers:
+  1. **Output algebra** at summer2 scale — `KI13`–`KI17`. `Trace` has no operators, `cumulative()` has no start, `FlowMass` names one flow, there is no summer2 midpoint convention and no `Result` → frame.
+  2. **Calibration workflow** — `KI18`–`KI21`. No priors, likelihoods, gradient-free sampler or posterior-run tooling exist.
+  3. **Scale** — `KI22`. Nothing measures a 160-compartment, 185-year model, and a solver that exceeds its step ceiling fails silently.
 
 ## Ports ledger
 
@@ -53,8 +52,8 @@ original analyses re-run on numpyro.
 | KI1 | Kiribati | State × 8 uneven age bands × reachability map | `full` | `PropertyMap.from_property(state).stratify(age).stratify(reach)` | — |
 | KI2 | Kiribati | Ageing between uneven bands at rate 1/width | `full` | `TraitChain.from_breakpoints(age)` | — |
 | KI3 | Kiribati | Initial population: seed in `clin_inf`, reachability split by `Param` | `full` | `InitialPopulation` | — |
-| KI4 | Kiribati | Generalised FOI `M @ (I_g / N_g**exp)` with a calibrated exponent | `partial` | `**` exists on the rate tree; the custom `kind` callable still receives no parameters, so the FOI stays in `derived_fn` | WP14 |
-| KI5 | Kiribati | Infectiousness weights by compartment × age | `partial` | One `ForceOfInfection` per compartment summed, or `derived_fn` | WP14 |
+| KI4 | Kiribati | Generalised FOI `M @ (I_g / N_g**exp)` with a calibrated exponent | `full` | `ForceOfInfection(kind=FOIKind.GENERALISED, exponent=Param(...), mixing=...)` | — |
+| KI5 | Kiribati | Infectiousness weights by compartment × age | `full` | `infectiousness=[(selector, weight), ...]` multiplied per compartment before the group sum; a `group_by` trait map is sugar for the same pairs | — |
 | KI6 | Kiribati | Time-varying, parameterised mixing matrix (UN weights, fertility age gaps, spectral normalisation) | `full` | `Lookup(Param("mixing"), floor(Time() - year0))` inside `MixingMatrix`; the yearly stack is a parameter | — |
 | KI7 | Kiribati | Flow adjustments by age and reachability with params and time functions | `full` | Stacked `Multiply(..., where=)` and `Transform` | — |
 | KI8 | Kiribati | Deaths recycled to (`mtb_naive`, age 0) preserving reachability | `full` | `TransitionFlow(state[x] & age[a], state["mtb_naive"] & age["0"], ...)` | — |
@@ -77,7 +76,7 @@ original analyses re-run on numpyro.
 | TM2 | tb_macro | Partial destination (even split), collapse, expand | `full` | `identity_join` equal split; source-only properties dropped | — |
 | TM3 | tb_macro | Ageing 0 → 5 → 15 | `full` | `TraitChain.from_breakpoints(age)` | — |
 | TM4 | tb_macro | Rates as functions of `t` and params (triangular seed, tanh scale-up) | `full` | `clip(h * (1 - abs(Time() - peak) / w), 0)` and a `tanh` scale-up rate tree | — |
-| TM5 | tb_macro | Per-age FOI `I / N**exp` with rel_sus per source compartment | `partial` | `derived_fn` FOI, `Multiply(Param, where=)` for rel_sus | WP14 |
+| TM5 | tb_macro | Per-age FOI `I / N**exp` with rel_sus per source compartment | `full` | `kind=FOIKind.GENERALISED` plus `adjust=(Multiply(Param("rel_sus"), where=source),)` on the infection flow | — |
 | TM6 | tb_macro | Initial population with even split over ragged strata | `full` | `InitialPopulation` | — |
 | TM7 | tb_macro | Rolling-sum flow target queried at times | `full` | `FlowMass` → `rolling(7, how="sum")` → `at_times` (unrolled jaxpr, fixed in WP15) | — |
 | TM8 | tb_macro | Poisson likelihood, uniform prior, NUTS | `partial` | Hand-written numpyro model over `run` | WP10 |
@@ -108,10 +107,10 @@ Computed by `scripts/coverage_report.py`; do not edit by hand.
 <!-- ledger:port-readiness -->
 | After | Kiribati | tb_macro |
 | --- | --- | --- |
-| today | 11 / 23 | 7 / 9 |
-| WP12 | 11 / 23 | 7 / 9 |
-| WP13 | 11 / 23 | 7 / 9 |
-| WP3 | 11 / 23 | 7 / 9 |
+| today | 13 / 23 | 8 / 9 |
+| WP12 | 13 / 23 | 8 / 9 |
+| WP13 | 13 / 23 | 8 / 9 |
+| WP3 | 13 / 23 | 8 / 9 |
 | WP14 | 13 / 23 | 8 / 9 |
 | WP15 | 18 / 23 | 8 / 9 |
 | WP16 | 19 / 23 | 8 / 9 |
