@@ -766,7 +766,7 @@ the baseline that later regressions are measured against.
 - Textbook chapter 8 and summer2 `03` and `10` were already ported at `full`.
   `OutputSet` makes a Kiribati-scale rewrite of those pages cheaper; they were
   not re-ported here.
-- Plan pointer: `plans/output-sets.plan.md`. User gate, still open on PR #26:
+- Plan pointer: `plans/output-sets.plan.md`. User gate signed off:
   `examples/notebooks/06-flow-outputs.ipynb` (prevalence and per-capita
   incidence, a parameter scale, cumulative from day 14, infected people by
   age from the long frame).

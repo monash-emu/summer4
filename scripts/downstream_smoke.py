@@ -22,9 +22,9 @@ from summer4 import (
     Result,
     SavePlan,
     SaveRequest,
+    Trace,
     TransitionFlow,
 )
-from summer4.results.output import Output
 
 # Hand-computed: dS/dt = -0.3 S with S(0) = 999, so S(1) = 999 * exp(-0.3).
 BETA = 0.3
@@ -76,7 +76,7 @@ def main() -> None:
     if not isinstance(result, Result):
         raise SystemExit(f"run() returned {type(result).__name__}, expected Result")
     trace = result["compartments"]
-    if not isinstance(trace, Output):
+    if not isinstance(trace, Trace):
         raise SystemExit(f"compartments trace has type {type(trace).__name__}")
     final = np.asarray(trace.values.data)[-1]
     if final.shape != (3,):
