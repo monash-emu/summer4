@@ -26,7 +26,9 @@ Synthetic Kiribati *shape*, no real data:
 - **160** compartments — 10 states × 8 age bands (`0 3 5 10 15 18 40 65`) × 2 reachability
 - **~35** named flows — generalised FOI with `Lookup` mixing, per-age `Data.table` deaths, recycled births, `TraitChain.from_breakpoints` ageing, four reinfection paths
 - **~180** `OutputSet` names — yearly saves **1850–2035**
-- Solvers: fixed-step `euler` (`dt=1`) and adaptive `dopri5` (`max_steps=100000`; the library default of 4096 is too low for this horizon — step 12)
+- Solvers: fixed-step `euler` (`dt=1`) and adaptive `dopri5` (`max_steps=100000`;
+  the span-derived default is still short of this stiff horizon — pass an explicit
+  ceiling, and check `SolverInfo.ok`)
 
 Wall times are best-of-2 after one warm-up on the machine that wrote the table.
 `vmap×64` varies `contact_rate` over 64 draws. `OutputSet evaluate` is the host/JIT

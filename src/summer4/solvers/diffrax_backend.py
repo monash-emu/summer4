@@ -6,7 +6,7 @@ from typing import Any
 
 from summer4.results.groups import SaveGroup
 from summer4.results.result import SolverInfo
-from summer4.solvers.base import SolveOutput, SolveSpec
+from summer4.solvers.base import SolveOutput, SolveSpec, default_max_steps
 
 _NAMED_SOLVERS: dict[str, str] = {
     "heun": "Heun",
@@ -192,10 +192,13 @@ def diffrax_solve(
         if group.ts.size:
             t1 = max(t1, float(group.ts[-1]))
 
-    max_steps = 4096 if spec.max_steps is None else int(spec.max_steps)
-    if spec.dense and spec.max_steps is None:
-        # Dense output allocates max_steps worth of coefficients.
-        max_steps = max(max_steps, 4096)
+    if spec.max_steps is None:
+        max_steps = default_max_steps(t0, t1, float(spec.dt))
+    else:
+        max_steps = int(spec.max_steps)
+
+    # None → False so failure surfaces as SolverInfo.ok / result_code.
+    throw = False if spec.throw is None else bool(spec.throw)
 
     sol = diffrax.diffeqsolve(
         term,
@@ -208,7 +211,7 @@ def diffrax_solve(
         saveat=saveat,
         stepsize_controller=controller,
         max_steps=max_steps,
-        throw=False,
+        throw=throw,
     )
 
     saved: dict[str, Any] = {}

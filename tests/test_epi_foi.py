@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 import numpy as np
 import pytest
@@ -189,6 +189,39 @@ def test_reciprocal_check() -> None:
     mix_bad = MixingMatrix(age, K_bad, normalize="none", check_reciprocal=True)
     with pytest.raises(ValueError, match="reciprocal"):
         mix_bad.check_reciprocity(K_bad, n)
+
+    MixingMatrix.validate(K_ok, n, name=age.name)
+    with pytest.raises(ValueError, match="reciprocal"):
+        MixingMatrix.validate(K_bad, n, name=age.name)
+
+
+def test_reciprocal_check_default_off() -> None:
+    age = Property("age", ("young", "old"))
+    mix = MixingMatrix(age, np.eye(2), normalize="none")
+    assert mix.check_reciprocal is False
+
+
+def test_reciprocal_check_under_vmap() -> None:
+    """Batched residuals must not call float() on a multi-element array."""
+    jax = pytest.importorskip("jax")
+    import jax.numpy as jnp
+
+    age = Property("age", ("young", "old"))
+    n = np.array([100.0, 100.0])
+    mix = MixingMatrix(age, np.eye(2), normalize="none", check_reciprocal=True)
+    Ks = jnp.stack(
+        [
+            jnp.asarray([[0.5, 0.5], [0.5, 0.5]]),
+            jnp.asarray([[0.5, 0.5], [0.5, 0.5]]),
+        ]
+    )
+
+    def _one(K: Any) -> Any:
+        mix.check_reciprocity(K, n)
+        return jnp.sum(K)
+
+    # Must not raise TypeError from float(batch_array).
+    jax.vmap(_one)(Ks)
 
 
 def test_foi_matches_hand_derived_fn() -> None:
