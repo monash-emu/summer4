@@ -11,6 +11,7 @@ reductions, lerps and arithmetic are traced.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -115,6 +116,22 @@ class Trace:
         )
 
     __array_priority__ = 1000
+
+    def __array_ufunc__(self, ufunc: Any, method: str, *inputs: Any, **kwargs: Any) -> Any:
+        from summer4.flows.algebra import dispatch_ufunc
+
+        return dispatch_ufunc(ufunc, method, inputs, kwargs, mode="trace")
+
+    def __array_function__(
+        self,
+        func: Any,
+        types: Any,
+        args: tuple[Any, ...],
+        kwargs: Mapping[str, Any],
+    ) -> Any:
+        from summer4.flows.algebra import dispatch_array_function
+
+        return dispatch_array_function(func, types, args, kwargs, mode="trace")
 
     def _map_unary(self, op: str) -> Trace:
         """Pointwise unary op, same kernel as a rate-tree :class:`UnaryOp`."""

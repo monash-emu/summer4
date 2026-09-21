@@ -85,7 +85,9 @@ Two conventions that are easy to get wrong:
 
 Phases A–F are sequential. Track G is independent of them and may run at any
 time after step 1. Phase H is downstream work in other repositories and needs
-only step 2's tag.
+only step 2's tag. **Phase I** (steps 22–23) is rate-expression ergonomics: it
+is independent of every other phase and of its own two steps' ordering, and may
+run at any time from `main`.
 
 <!-- roadmap:steps -->
 | Step | Phase | WP | Branch | Plan | Section | Status | Closes |
@@ -111,6 +113,8 @@ only step 2's tag.
 | 19 | G | WP9 | `docs/textbook-16-19` | `plans/wp9-contact-surveys.plan.md` | Step 19 | planned | — |
 | 20 | H | — | *(new repo)* | `plans/tb-macro-summer4-port.plan.md` | Whole | planned | — |
 | 21 | H | — | *(new repo)* | `plans/kiribati-tb-summer4-port.plan.md` | Whole | planned | — |
+| 22 | I | WP18 | `feat/rate-array-dispatch` | `plans/rate-dispatch-and-defer.plan.md` | Step 22 | done | — |
+| 23 | I | WP18 | `feat/rate-defer` | `plans/rate-dispatch-and-defer.plan.md` | Step 23 | planned | — |
 <!-- /roadmap:steps -->
 
 `Closes` lists row IDs of {doc}`../evaluation/tb-ports` (and, where a step moves
@@ -131,6 +135,7 @@ changed about them is recorded here instead, and overrides them.
 | `tb-ports-feature-completeness` | §13.3, §14e, §15e | Notebook numbers are stale: `examples/notebooks/` already reaches `12-model-stratification.ipynb`. Use the numbers in the step sections below |
 | `tb-ports-feature-completeness` | §15a | Step 4 landed scalar/array `Trace` arithmetic, unary ops on a `Trace` (`tanh(trace)`), and `eval_closed` so a parameter transform can scale a `Trace`. Name-aligned `Trace` ∘ `Trace`, `cumulative(start=)`, `midpoint` and multi-flow `FlowMass` remain step 9. Clear the `D5` note in step 10 |
 | `wp12-release` | Step 2b | JAX has native Windows x86_64 CPU support; the Windows `jaxlib` wheel is experimental. Native Windows GPU is unsupported. WSL2 is the Windows GPU route, and that support is experimental. This repository's pixi platforms stay `osx-arm64` and `linux-64` |
+| `rate-dispatch-and-defer` | §22.8, §23.8 | Notebook `14` is taken by `14-custom-rate-nodes.ipynb`. Step 22 uses `examples/notebooks/15-array-dispatch.ipynb`. Step 23 uses `examples/notebooks/16-deferred-functions.ipynb` |
 
 ---
 
@@ -1081,9 +1086,188 @@ original analyses reproduced.
 
 ### Handoff
 
-Set step 21 `done`. There is no step 22: write the handoff as a short statement
-of what the next tranche of work should be, and open a new planning session
-rather than inventing steps here.
+Set step 21 `done`. Steps 22–23 (phase I) are independent of this one and may
+already have landed. If every step is `done`, write the handoff as a short
+statement of what the next tranche of work should be, and open a new planning
+session rather than inventing steps here.
+
+---
+
+## Step 22 — `feat/rate-array-dispatch`
+
+**Landed:** feat/rate-array-dispatch, PR #21, 2026-09-21.
+
+### Summary
+
+This step makes NumPy's dispatch protocols work on rate expressions, so
+`np.sin(Param("phase"))` builds a node instead of raising. Today the only
+non-operator arithmetic available on a rate is a hand-maintained allowlist of
+eight exported helpers (`exp`, `log`, `tanh`, `sqrt`, `floor`, `maximum`,
+`minimum`, `clip`) — `tanh` is in, `sin` is not, and seasonal forcing needs
+`sin`. You cannot reach for `jnp` instead, because `jnp.exp` is a
+`PjitFunction` rather than a NumPy ufunc and JAX implements no dispatch hook at
+all. The step adds `__array_ufunc__` / `__array_function__` to the four wrapper
+types, carries the op as a canonical **string** so value-keyed jit digests
+survive, and keeps every existing export as an alias. It lands on
+`feat/rate-array-dispatch`, closes no ledger row, and is independent of every
+other step.
+
+**One open question to raise before starting:** the step deliberately changes
+what `np.array([1.0, 2.0]) * Param("x")` does — today it returns an
+object-dtype array of `BinOp`s, after the step it builds one node. Confirm the
+user is happy with that before implementing (plan §22.5).
+
+### Read first
+
+1. `AGENTS.md`
+2. `plans/rate-dispatch-and-defer.plan.md` — *Context*, *Ordering*,
+   *Read first*, then all of *Step 22*
+3. `docs/dev/rate-expressions.md` — the whole page, especially *The operator
+   surface: a fixable mistake*
+4. `docs/dev/run-stages.md`
+5. `src/summer4/flows/rates.py` and `src/summer4/flows/algebra.py`
+6. `src/summer4/results/trace.py` and `src/summer4/jax/propertydata.py`
+
+### Do
+
+Follow `plans/rate-dispatch-and-defer.plan.md`, *Step 22*, in section order —
+§22.2 (the canonical-name table) genuinely comes first, because the alias map
+and the golden digests are what stop the change from silently doubling the jit
+cache. Record the three golden `_rate_bytes` hex strings as test literals
+before touching any source.
+
+Then §22.3 (`resolve_op` with its deny-set), §22.4 (the shared dunder body on
+all four types), §22.5 (the interop table, pinned as tests), §22.6 (widen
+`UnaryOp.op` / `BinOp.op` to `str` with construction-time validation), §22.7
+(tests), §22.8 (docs and the notebook).
+
+Cut from: `main`. Merges into: `main`.
+
+### Exit checks
+
+The [standard checks](#exit-checks-every-step), plus:
+
+```bash
+pixi run python -c "import numpy as np; from summer4 import Param; from summer4.flows.rates import _rate_bytes; \
+  assert _rate_bytes(Param('x') * 2).hex() == '62696e6f703a6d756c6669656c64282778272c29636f6e73740000000000000040'; \
+  assert np.multiply(Param('x'), 2) == Param('x') * 2; print('digests stable')"
+```
+
+### Handoff
+
+Set step 22 `done` with its *Landed* line; set the next `planned` step `next`
+and rewrite the *Current position* block. Record under step 23: whether the
+`np.ndarray * RateOps` change caused any fallout, any ufunc you had to add to
+`DENY_OPS` beyond the planned list, and whether `as_rate` widening to accept
+arrays disturbed anything. If `__array_function__` turned out to need more than
+the five allowlisted functions, say which and why.
+
+---
+
+## Step 23 — `feat/rate-defer`
+
+### Summary
+
+This step gives arbitrary user code a first-class door into the rate slot.
+summer2's `computegraph.defer(f)(param("y"), 5.1)` was two lines of library
+code and the main entry point for modellers who are not software developers;
+summer4 has the capability three times over and no comparable door. `Transform`
+**cannot** be a rate (`rate=Transform(...)` raises `TypeError`), is documented
+only as an adjustment precedence level, and carries a surprising `prev` first
+argument; `derived_fn` needs a `NamedTuple` schema and disables parameter
+hoisting model-wide. The step adds a `Defer` node and a `defer(fn)` curry.
+Because a `Defer`'s dependencies arrive as explicit arguments it stages
+*exactly* — a param-only `Defer` is run-stage and hoists — so the generic node
+costs nothing the typed nodes were protecting. It lands on `feat/rate-defer`,
+closes no ledger row, and is independent of step 22.
+
+**Check one thing before starting** (plan *Ordering*): whether the
+`_rate_bytes` totality fix has landed, with
+`grep -n "return type(expr).__name__.encode()" src/summer4/flows/rates.py`.
+Either answer is fine; the plan says what each means.
+
+### What the previous worker left you
+
+- Step 8 is still the single `next` step. Phase I does not take the current
+  position: the checker allows only one current step, and compartment
+  infectiousness has not landed. This step stays `planned` until its own
+  handoff marks it `done`.
+- The `_rate_bytes` totality fix **has landed** (`fix/custom-rate-node-digest`,
+  on `main` before this branch). There is no
+  `return type(expr).__name__.encode()` fallback. `register_rate_eval` rejects
+  a class without `__rate_bytes__`. `Defer` must implement it; registration
+  should succeed. Do not re-implement the totality fix.
+- `np.ndarray * RateOps` is one `BinOp` with an `ArrayConst`. The suite did not
+  break. `as_rate` also accepts arrays; a 0-d array becomes `Const`. Dataclass
+  equality of `ArrayConst` is still unusable (NumPy's ambiguous truth value);
+  compare `.value` with `assert_allclose`.
+- `DENY_OPS` is exactly the planned list. Nothing extra was added. `matmul` on
+  a rate node raises `ValueError`. `GroupedRate` does **not** refuse it:
+  defining `__array_ufunc__` turns `@` into a matmul ufunc, so `GroupedRate`
+  delegates `matmul` to `__matmul__` / `__rmatmul__`. `M @ grouped` still
+  matches the hand computation.
+- `__array_function__` is still only `np.clip`, `np.maximum`, `np.minimum`,
+  `np.power` and `np.absolute`. The last four normally arrive as ufuncs;
+  `np.clip` is the one that needed the allowlist. No further functions were
+  required.
+- Notebook numbering: `14` is taken by `14-custom-rate-nodes.ipynb`. This step
+  shipped `examples/notebooks/15-array-dispatch.ipynb`. Use
+  `examples/notebooks/16-deferred-functions.ipynb` (the correction is in the
+  table above).
+- `pixi run -e docs docs-strict` still fails on
+  `docs/summer2/10-derived-outputs-stratified.ipynb`, the pre-existing
+  source-side `adjust=` bug in `futureplans/split-adjust-selector-side.md`.
+  Not this step.
+- User gate for this step is still open on PR #21:
+  `examples/notebooks/15-array-dispatch.ipynb`.
+
+### Read first
+
+1. `AGENTS.md`
+2. `plans/rate-dispatch-and-defer.plan.md` — *Context*, *Ordering*,
+   *Read first*, then all of *Step 23*
+3. `docs/dev/rate-expressions.md` — especially *There is no good on-ramp* and
+   *What identity keying actually costs*
+4. `futureplans/no-defer-equivalent.md`
+5. `docs/dev/run-stages.md`
+6. `src/summer4/flows/stages.py` (all of it), and `_eval_rate` plus
+   `_collect_capture_meta` in `src/summer4/flows/compiled.py`
+7. `docs/cookbook/01-custom-rates.ipynb` — the rung structure you are inserting
+   into
+
+### Do
+
+Follow `plans/rate-dispatch-and-defer.plan.md`, *Step 23*. In short: the node
+and curry (§23.2), the registered evaluator (§23.3), `__rate_stage__` plus the
+one change `build_hoist_table` needs so a param-only argument inside a
+step-stage `Defer` still hoists (§23.4), the `id()`-keyed digest with optional
+`name=` (§23.5), and the descent rules that keep `FlowRef` ordering and
+`Capture` saving working (§23.6).
+
+Two things are easy to get wrong and are called out in the plan: **never**
+derive the digest key from `fn.__qualname__` — every lambda is `<lambda>`, they
+collide, and the failure is silently wrong numbers — and **do** test that a
+`FlowRef` inside a `Defer` argument still forces the right topological order.
+
+Cut from: `main`. Merges into: `main`.
+
+### Exit checks
+
+The [standard checks](#exit-checks-every-step), plus the trace-counting test
+from plan §23.7 item 6 must show 1 trace for fifty parameter draws against one
+model and 50 for fifty rebuilds with an inline callable.
+
+### Handoff
+
+Set step 23 `done` with its *Landed* line; set the next `planned` step `next`
+and rewrite the *Current position* block. Delete
+`futureplans/no-defer-equivalent.md` and its `futureplans/README.md` entry in
+the same commit. Record: whether `kwargs` support caused trouble in any
+traversal, whether the initial-population R2 check found `Defer` arguments
+without a new rule (plan §23.6 predicts it will), and whether the
+`__rate_children__` hook should be generalised into the `__children__`
+refactor that `docs/dev/rate-expressions.md` recommends as item 3.
+
 
 ---
 

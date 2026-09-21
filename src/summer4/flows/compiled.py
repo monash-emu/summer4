@@ -72,7 +72,36 @@ class GroupedRate:
     data: object
     properties: tuple[Property, ...]
     __array_priority__ = 1000
-    __array_ufunc__ = None  # force ``__rmatmul__`` / arithmetic over NumPy coercion
+
+    def __array_ufunc__(self, ufunc: Any, method: str, *inputs: Any, **kwargs: Any) -> Any:
+        from summer4.flows.algebra import dispatch_ufunc
+
+        # ``@`` is a matmul ufunc once ``__array_ufunc__`` exists. GroupedRate
+        # already owns that operator; refusing it here would break ``M @ grouped``.
+        if (
+            getattr(ufunc, "__name__", None) == "matmul"
+            and method == "__call__"
+            and not kwargs
+            and len(inputs) == 2
+        ):
+            left, right = inputs
+            if left is self:
+                return self.__matmul__(right)
+            if right is self:
+                return self.__rmatmul__(left)
+            return NotImplemented
+        return dispatch_ufunc(ufunc, method, inputs, kwargs, mode="value")
+
+    def __array_function__(
+        self,
+        func: Any,
+        types: Any,
+        args: tuple[Any, ...],
+        kwargs: Mapping[str, Any],
+    ) -> Any:
+        from summer4.flows.algebra import dispatch_array_function
+
+        return dispatch_array_function(func, types, args, kwargs, mode="value")
 
     def _require_same_grouping(self, other: GroupedRate) -> None:
         if self.properties != other.properties:

@@ -43,8 +43,8 @@ question you cannot answer about an opaque callable.
 | Pass | Where | Question it answers | Impossible over an opaque `Function` because… |
 |---|---|---|---|
 | `_eval_rate` | `flows/compiled.py` | what is the value? | (this one is possible — it is the only one) |
-| `rate_stage` | `flows/stages.py` | does this depend on `t`, `y`, or another flow? | a callable's free variables are not introspectable |
-| `build_hoist_table` | `flows/stages.py` | which subtrees can move from per-step to run-start? | you cannot hoist what you cannot classify |
+| `rate_stage` | `flows/stages.py` | does this depend on `t`, `y`, or another flow? | **partly possible** — see the correction below |
+| `build_hoist_table` | `flows/stages.py` | which subtrees can move from per-step to run-start? | sub-node hoisting (an `Interp` knot stack) needs the node's internal structure |
 | `_rate_bytes` | `flows/rates.py` | are two models structurally identical? | callables have no value identity, only `id()` |
 | `_flow_refs` | `flows/rates.py` | which flows must be evaluated first? | `topo_sort` needs the edge before the call runs |
 | `_field_paths` | `flows/rates.py` | which parameter paths does the model read? | needed to validate `derived_fn` output |
@@ -52,16 +52,40 @@ question you cannot answer about an opaque callable.
 
 Three of those are load-bearing in a way worth spelling out.
 
+(staging-pass)=
 ### Staging (`rate_stage` → `build_hoist_table`)
 
 A rate that depends only on parameters is evaluated **once per `run`**, not once
 per solver step. With a 4000-step solve, an `Interp` knot stack built from
 calibrated `FieldRef`s is the difference between one `jnp.stack` and four
-thousand. That optimisation needs a compile-time predicate over the expression
-— "does this subtree read `t` or `y`?" — and that predicate is a structural walk
-of typed nodes. Over a `Function(some_closure, …)` the answer is always
-"assume yes", because the closure might read anything. computegraph has no
-staging distinction for exactly this reason: every node runs every step.
+thousand. That optimisation needs a compile-time predicate over the expression:
+"does this subtree read `t` or `y`?"
+
+**Correction to an earlier version of this page**, which claimed the predicate
+is impossible over a `Function`-style node because a callable's free variables
+are not introspectable. That is too strong, and the distinction it misses is
+the one that matters for the rest of this page.
+
+A `Function(func, args)` — computegraph's, or a `Defer(fn, *args)` in summer4 —
+takes its dependencies as **explicit arguments**. Nothing is hidden, so the
+node's stage is exactly the join of its arguments' stages. Verified with a
+~35-line `Defer` prototype: `defer(f)(Param("x"), Param("y"))` classifies as
+`run` and hoists; `defer(f)(Time(), Param("amp"))` classifies as `step`. The
+predicate is only defeated by a callable that *closes over* model state rather
+than receiving it, which is a property of how the callable is written, not of
+the node being generic.
+
+computegraph therefore *could* have staged; it simply never did — every node
+runs every step. That is a missing feature in summer2, not a consequence of its
+design.
+
+What typed nodes uniquely buy here is finer: **sub-node** hoisting. `Interp` is
+hoisted in three independent pieces — the breakpoint stack, the value stack and
+the argument — so knots built from calibrated `FieldRef`s stack once per run
+even though the argument is `Time()` and the node as a whole is step-stage. A
+generic node is all-or-nothing: wrap that same interpolation in a `Defer` whose
+argument is `Time()` and the knot stack rebuilds on every one of the 4000 steps.
+That is a real benefit, and a narrower one than originally claimed.
 
 ### Digest and jit cache (`_rate_bytes`)
 
@@ -103,9 +127,11 @@ Honest accounting, because the cost is real:
   `TypeError` instead of wrong numbers. The remaining five fail conservatively
   (a redundant recompile, a step-stage node that could have hoisted), not
   silently wrong.
-- **A closed operator set.** `UnaryOp` allows seven operations and `BinOp`
-  seven. Anything else needs a node, an evaluator, and the dunders — or an
-  escape hatch.
+- **An open operator set.** NumPy ufuncs on a rate expression build a node
+  (`np.sin(Param("phase"))`). The named helpers (`exp`, `log`, `tanh`, `sqrt`,
+  `floor`, `maximum`, `minimum`, `clip`) remain as aliases. `jnp.sin` still
+  raises: JAX has no dispatch hook. See
+  [the operator surface](#the-operator-surface-a-fixable-mistake).
 
 The trade is deliberate: summer4 pays authoring cost at the framework boundary
 to keep the compiled program small, cacheable and statically analysable. But
@@ -142,6 +168,47 @@ no dunders.
 *inside a builder function* is a new object per call, and every rebuild misses.
 If you reach for `Transform`, define the callable at module level.
 
+(identity-keying-cost)=
+### What identity keying actually costs
+
+The caveat is narrower than "inline functions recompile". It bites on model
+**rebuild**, never on `run`. Measured by counting traces — a jitted function's
+Python body executes once per trace, so a cache hit counts zero — with
+`jax.jit(..., static_argnums=0)` over a `CompiledModel`:
+
+| Pattern | Traces |
+|---|---|
+| One model, 50 parameter draws | **1** |
+| 50 rebuilds, callable defined at module level | **0** (hits the entry an identical earlier model compiled) |
+| 50 rebuilds, callable defined inside the builder | **50** |
+| One closure-built model, 50 runs | **1** |
+| Two closures capturing `scale=1.0` and `scale=2.0` | **2**, and the results differ |
+
+Three things follow.
+
+**Calibration is unaffected.** Parameters are dynamic — `prepare` promotes
+Python `float` leaves to arrays precisely so equinox does not key on their
+values — so thousands of draws against one model object compile once. The only
+way to pay is to construct a new `CompiledModel` per iteration, which a
+calibration loop does not do.
+
+**Closures are not ruled out**, and identity keying is the *correct* choice for
+them rather than a concession. The last row is the reason: two closures with
+identical source but different captured values are different programs and
+**must not** share a cache entry. `id()` separates them for free. Keying on
+`fn.__qualname__` would give both the same key
+(`build_closure.<locals>.cl`) and silently return the first closure's numbers
+for the second — the unsafe direction, and the same trap as
+[`custom-rate-node-digest-collision.md`](https://github.com/monash-emu/summer4/blob/main/futureplans/custom-rate-node-digest-collision.md).
+
+**What it does cost** is re-*building* with a freshly created callable: a
+notebook cell re-executed after editing the function, or a scenario sweep that
+rebuilds the model per variant. Both recompile, and neither is wrong — just
+slower. Note also that summer4 does not jit `run` itself; the model is
+documented as a static argument for callers who jit, and diffrax's `filter_jit`
+caches internally. A bare `cm.run(...)` in a script pays no summer4-level
+cache miss at all.
+
 ### 2. `derived_fn` — arbitrary code, once per step, named outputs
 
 `compile(derived_fn=...)` runs `derived_fn(params, y=, t=)` before the rates
@@ -172,6 +239,131 @@ The package-author path, documented in
 {doc}`../cookbook/01-custom-rates`. Worth it when the same named process
 appears in many models; overkill for one hazard. If you take it you **must
 implement `__rate_bytes__`**; `register_rate_eval` raises without it.
+
+### There is no good on-ramp, and that is a gap
+
+summer2 had one: `computegraph.defer(f)(param("y"), 5.1)`. Two lines of
+library code, no class, no registration, no protocol. A modeller writes an
+ordinary Python function, wraps it, calls it with a mix of parameters and
+literals, and gets a node. That is the standard summer4's easy entry should be
+measured against, and today it does not meet it:
+
+- **`Transform` cannot be a rate.** `TransitionFlow(..., rate=Transform(f, ...))`
+  raises `TypeError: Cannot use Transform as a flow rate`. It is an adjustment
+  only. The workaround is to set the rate to a dummy `1.0` and write a
+  `Transform` whose callable ignores its first argument —
+  `Transform(lambda prev, t, amp: f(t, amp), Time(), Param("amp"))`. That is
+  not an on-ramp a non-programmer will find.
+- **`Transform` is undocumented as an escape hatch.** It appears in
+  {doc}`../user/08-flows` and {doc}`../user/07-from-summer2` *only* as an
+  adjustment precedence level (`Overwrite` → `Multiply` → `Transform`). Nothing
+  in the docs says "this is where you put arbitrary code".
+- **The `prev` first parameter is a surprise.** `defer` had no such thing.
+- **`derived_fn` is heavier than the job.** A `NamedTuple` schema plus a
+  `(params, *, y, t)` hook, and per [R3](run-stages.md) it disables parameter
+  hoisting model-wide.
+- **The cookbook's ladder skips the rung.** {doc}`../cookbook/01-custom-rates`
+  goes from `Reduce` arithmetic, to an FOI-specific `kind=` callable, to
+  subclassing `RateOps`. There is no general "wrap my function" step between
+  rungs 1 and 3.
+
+A `Defer` rate node closes this, and is cheap. The prototype is ~35 lines
+including all four dunders, and because its arguments are explicit it stages
+*exactly* (see the correction under [Staging](#staging-pass)):
+
+```python
+model.add_flow(
+    TransitionFlow("infection", state["S"], state["I"],
+                   defer(my_own_function)(Time(), Param("amp")))
+)
+```
+
+Verified against `721ad04`: evaluates identically to the `Transform`
+workaround, `defer(f)(Param("x"), Param("y"))` classifies `run` and hoists,
+`defer(f)(Time(), Param("amp"))` classifies `step`. The one cost is that the
+digest must key on `id(fn)` — see
+[What identity keying actually costs](#identity-keying-cost).
+It is paid on model rebuild, not per `run`, it leaves calibration untouched, and
+it is the *safe* choice for closures. An optional `name=` is worth offering for
+users who rebuild in a sweep, but it is a convenience, not a correctness fix.
+
+Written up as
+[`futureplans/no-defer-equivalent.md`](https://github.com/monash-emu/summer4/blob/main/futureplans/no-defer-equivalent.md).
+
+## The operator surface: a fixable mistake
+
+The named arithmetic helpers (`exp`, `log`, `tanh`, `sqrt`, `floor`, `maximum`,
+`minimum`, `clip`) attract the obvious objection: *why not just write the `jnp`
+functions?* The objection is right about the design and wrong about the
+mechanism, and the difference matters.
+
+**You cannot just write `jnp`.** Every one of these raises `TypeError`:
+
+```python
+jnp.exp(Param("beta"))          # Error interpreting argument … as an abstract array
+jnp.clip(Param("beta"), 0, 1)
+jnp.maximum(Param("beta"), 0.0)
+jnp.exp(some_trace)             # also fails on Trace, GroupedRate, PropertyData
+```
+
+Operators work (`Param("b") * 2` builds a `BinOp`) because Python routes them
+through `__mul__`. Functions do not, because `jnp.exp` is a `PjitFunction`, not
+a `numpy.ufunc`, and JAX implements **neither** `__array_ufunc__` nor
+`__array_function__`. There is no protocol for a third-party object to
+intercept a `jnp` call.
+
+**This is exactly what computegraph got right.** `GraphObject` implements
+`__array_ufunc__` and `__array_function__`, so `np.exp(graph_obj)` auto-builds
+a node and summer2 never needed a wrapper list. That worked because summer2 was
+**NumPy-first at the API boundary** — `jaxify.get_modules()` swapped `jnp` in
+underneath. The user always wrote `np.*`. summer4 now does the same:
+`np.sin(Param("phase"))` builds a `UnaryOp`. The named helpers stay as aliases.
+
+**The wrappers still earn something `jnp` cannot give.** They dual-dispatch, and
+so does `np.*`. One symbol works on an unevaluated rate tree *and* on each of
+the evaluated wrapper types, preserving the wrapper:
+
+| call | `np.*` or a `summer4` helper | `jnp` equivalent |
+|---|---|---|
+| on `RateOps` | builds `UnaryOp` / `BinOp` | `TypeError` |
+| on `Trace` | returns `Trace` | `TypeError` |
+| on `GroupedRate` | returns `GroupedRate` | `TypeError` |
+| on `PropertyData` | returns `PropertyData` | `TypeError` |
+
+Writing `jnp` by hand means unwrapping `.data` / `.values`, losing the `pmap`,
+`properties` or `dims` that make the result queryable, and rewrapping. That is
+the actual gain — not the arithmetic.
+
+The old shape was a hand-maintained allowlist: adding `sin` meant editing
+`UNARY_OPS`, the `Literal[...]` annotation on `UnaryOp.op`, a new exported
+wrapper, and the docs. `tanh` was in, `sin` was not, and seasonal forcing is a
+first-order epidemiological need. `clip` is still sugar over `maximum` +
+`minimum` and owns no node.
+
+### The fix, applied
+
+`__array_ufunc__` and `__array_function__` are on `RateOps`, `Trace`,
+`GroupedRate` and `PropertyData`. The op is a **canonical string**, resolved to
+a `jax.numpy` callable at evaluation — computegraph's `getattr(fnp, func_str)`
+trick. Six of summer4's existing spellings are not NumPy's (`mul` vs
+`multiply`, `sub` vs `subtract`, and the same for divide, power, negative and
+absolute). An alias map canonicalises those, so `np.multiply(a, b)` and `a * b`
+digest identically and share a jit cache entry. New ops keep the NumPy name:
+`np.sin(x)` is `UnaryOp("sin", x)`.
+
+`__array_function__` allows `np.clip`, `np.maximum`, `np.minimum`, `np.power`
+and `np.absolute` only. Comparisons and other masks are refused: they belong
+to `Selector`. `matmul` is refused on a rate node because `GroupedRate @`
+already owns that operator.
+
+One deliberate behaviour change: `np.array([1.0, 2.0]) * Param("x")` used to
+return an object-dtype array of `BinOp`s. It now builds one
+`BinOp("mul", ArrayConst(...), ...)`.
+
+The wart to state in user docs: `np.sin(expr)` works and `jnp.sin(expr)` does
+not, because JAX offers no dispatch hook. That is summer2's bargain — write
+`np.*`, get `jnp` execution — and it is a genuine wart, not a design we would
+choose if JAX gave us the option.
 
 ## Could we have a better compute graph?
 
@@ -236,16 +428,18 @@ jaxpr tells you which arrays were touched, not which flow depends on which.
 Keep typed nodes. They are why staging, value-keyed jit caching, and grouping
 alignment exist at all, and none of those survive a generic `Function`.
 
-Attack the actual cost, which is traversal duplication and unsafe extension
-defaults, in this order:
-
-1. Make `_rate_bytes` **total** — raise, do not fall back. It is a correctness
-   bug today, not a papercut.
-2. Add `__children__()` to `RateOps` and refold the four child-walking passes
+1. **Done.** `_rate_bytes` is total: `register_rate_eval` rejects a class
+   without `__rate_bytes__`, and the walk raises rather than digesting by class
+   name.
+2. **Done.** `__array_ufunc__` / `__array_function__` on the four wrapper
+   types, ops keyed by canonical name. `np.sin` works; the named helpers are
+   aliases; value-keyed digests and staging are unchanged.
+3. Add `__children__()` to `RateOps` and refold the four child-walking passes
    onto it.
-3. Consider a grouping marker on the node type so `mypy` catches alignment
+4. Consider a grouping marker on the node type so `mypy` catches alignment
    errors that currently surface at trace time.
 
-Steps 1 and 2 remove most of the reason the question gets asked: the design
-would then be "typed nodes, two dunders, one traversal", which is a smaller
-surface than the compute graph it is being compared to.
+Items 1 and 2 have landed. Items 3 and 4 are what is left: one traversal, and
+a grouping marker so `mypy` can catch alignment errors. The operator set is
+open, which is the thing computegraph did better, adopted rather than
+reinvented.

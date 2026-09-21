@@ -53,3 +53,6 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
 - [`split-adjust-selector-side.md`](split-adjust-selector-side.md) — a bare
   trait in an `adjust=` on a `split=` flow binds to the source and raises, so
   `docs-strict` is red on `main`.
+- [`no-defer-equivalent.md`](no-defer-equivalent.md) — no easy on-ramp for
+  arbitrary user code as a rate; `Transform` cannot occupy the rate slot and is
+  documented only as a precedence level. A `Defer` node is prototyped.

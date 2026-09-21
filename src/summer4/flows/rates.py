@@ -118,6 +118,22 @@ class RateOps:
     def __abs__(self) -> UnaryOp:
         return UnaryOp("abs", as_rate(self))
 
+    def __array_ufunc__(self, ufunc: Any, method: str, *inputs: Any, **kwargs: Any) -> Any:
+        from summer4.flows.algebra import dispatch_ufunc
+
+        return dispatch_ufunc(ufunc, method, inputs, kwargs, mode="symbolic")
+
+    def __array_function__(
+        self,
+        func: Any,
+        types: Any,
+        args: tuple[Any, ...],
+        kwargs: Mapping[str, Any],
+    ) -> Any:
+        from summer4.flows.algebra import dispatch_array_function
+
+        return dispatch_array_function(func, types, args, kwargs, mode="symbolic")
+
 
 @dataclass(frozen=True, slots=True)
 class Const(RateOps):
@@ -214,17 +230,33 @@ class FlowRef(RateOps):
 class UnaryOp(RateOps):
     """Pointwise unary operation on one rate expression."""
 
-    op: Literal["neg", "exp", "log", "abs", "tanh", "sqrt", "floor"]
+    op: str
     arg: RateOps
+
+    def __post_init__(self) -> None:
+        from summer4.flows.algebra import canonical_op, resolve_op
+
+        canonical = canonical_op(self.op)
+        resolve_op(canonical)
+        if canonical != self.op:
+            object.__setattr__(self, "op", canonical)
 
 
 @dataclass(frozen=True, slots=True)
 class BinOp(RateOps):
     """Binary arithmetic on two rate expressions."""
 
-    op: Literal["add", "sub", "mul", "div", "pow", "maximum", "minimum"]
+    op: str
     left: RateOps
     right: RateOps
+
+    def __post_init__(self) -> None:
+        from summer4.flows.algebra import canonical_op, resolve_op
+
+        canonical = canonical_op(self.op)
+        resolve_op(canonical)
+        if canonical != self.op:
+            object.__setattr__(self, "op", canonical)
 
 
 @dataclass(frozen=True, slots=True)
@@ -482,11 +514,15 @@ def derived_refs[T: NamedTuple](schema: type[T]) -> T:
 
 
 def as_rate(value: object) -> RateOps:
-    """Coerce a scalar or rate node into a :class:`RateOps` expression."""
+    """Coerce a scalar, array, or rate node into a :class:`RateOps` expression."""
     if isinstance(value, RateOps):
         return value
     if isinstance(value, (int, float, np.integer, np.floating)):
         return Const(float(value))
+    if isinstance(value, np.ndarray):
+        if value.ndim == 0:
+            return Const(float(value))
+        return ArrayConst(value)
     raise TypeError(f"Cannot use {type(value).__name__} as a flow rate.")
 
 
@@ -537,17 +573,13 @@ def _apply_value_binary(op: str, left: object, right: object) -> Any:
     return apply_binary(op, left, right)
 
 
-def _unary(op: Literal["neg", "exp", "log", "abs", "tanh", "sqrt", "floor"], arg: object) -> Any:
+def _unary(op: str, arg: object) -> Any:
     if _is_value(arg):
         return _apply_value_unary(op, arg)
     return UnaryOp(op, as_rate(arg))
 
 
-def _binary(
-    op: Literal["pow", "maximum", "minimum"],
-    left: object,
-    right: object,
-) -> Any:
+def _binary(op: str, left: object, right: object) -> Any:
     if _is_value(left) or _is_value(right):
         return _apply_value_binary(op, left, right)
     return BinOp(op, as_rate(left), as_rate(right))
