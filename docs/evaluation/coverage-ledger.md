@@ -206,6 +206,7 @@ package closes is recorded, by row ID, in {doc}`tb-ports`.
 | WP15 | Output algebra | `plans/tb-ports-feature-completeness.plan.md` | `Trace` operators, windowed cumulative, multi-flow outputs, `OutputSet`, frames |
 | WP16 | Scale and solver safety | `plans/tb-ports-feature-completeness.plan.md` | TB-scale benchmark, surfaced `max_steps` failure, vmap-safe reciprocity check |
 | WP17 | FOI susceptibility surface | `plans/wp17-foi-susceptibility.plan.md` | Settled there: `ForceOfInfection(susceptibility=...)`; raises textbook 15 to `full` |
+| WP18 | Rate expression dispatch and deferred callables | `plans/rate-dispatch-and-defer.plan.md` | Settled there: `__array_ufunc__` / `__array_function__` on the four wrapper types with canonical op names; a `Defer` node and `defer(fn)` curry for arbitrary user code in the rate slot |
 
 WP5 lands before WP6, and before WP3, because every other part of a model may be
 parameterised in a time-varying fashion. WP6 is then the ordering constraint for
@@ -364,6 +365,7 @@ table below is **computed** from these declarations by
 | WP15 | Output algebra | *(no API rows; unblocks the TB ports)* |
 | WP16 | Scale and solver safety | *(no API rows; unblocks the TB ports)* |
 | WP17 | Force-of-infection susceptibility surface | *(no API rows; unblocks textbook 15)* |
+| WP18 | Rate expression dispatch and deferred callables | *(no API rows; opens the operator set and the `defer` on-ramp)* |
 <!-- /ledger:packages -->
 
 ## Coverage after each package
@@ -387,6 +389,7 @@ table below is **computed** from these declarations by
 | WP15 | 47 / 52 | 90% |
 | WP16 | 47 / 52 | 90% |
 | WP17 | 47 / 52 | 90% |
+| WP18 | 47 / 52 | 90% |
 <!-- /ledger:progression -->
 
 ## What never reaches `full`, and why that is fine
