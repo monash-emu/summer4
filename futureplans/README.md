@@ -53,3 +53,6 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
 - [`custom-rate-node-digest-collision.md`](custom-rate-node-digest-collision.md) —
   a custom `RateOps` node without `__rate_bytes__` digests by class name, so
   two such models share a jit cache entry and return the same wrong numbers.
+- [`no-defer-equivalent.md`](no-defer-equivalent.md) — no easy on-ramp for
+  arbitrary user code as a rate; `Transform` cannot occupy the rate slot and is
+  documented only as a precedence level. A `Defer` node is prototyped.
