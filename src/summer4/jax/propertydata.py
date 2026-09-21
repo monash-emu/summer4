@@ -6,6 +6,7 @@ validate with :meth:`PropertyData.check` / :meth:`wrap`.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -208,3 +209,19 @@ class PropertyData:
 
     def __neg__(self) -> PropertyData:
         return self._with_data(jnp.negative(self.data))
+
+    def __array_ufunc__(self, ufunc: Any, method: str, *inputs: Any, **kwargs: Any) -> Any:
+        from summer4.flows.algebra import dispatch_ufunc
+
+        return dispatch_ufunc(ufunc, method, inputs, kwargs, mode="value")
+
+    def __array_function__(
+        self,
+        func: Any,
+        types: Any,
+        args: tuple[Any, ...],
+        kwargs: Mapping[str, Any],
+    ) -> Any:
+        from summer4.flows.algebra import dispatch_array_function
+
+        return dispatch_array_function(func, types, args, kwargs, mode="value")

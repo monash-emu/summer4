@@ -18,10 +18,56 @@ can scale by.
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import Any
+from collections.abc import Callable, Mapping
+from typing import Any, Literal, cast
 
 import jax.numpy as jnp
+
+# NumPy ufunc names that are not summer4's existing op strings. ``_rate_bytes``
+# encodes the op string, so ``np.multiply`` and ``*`` must share one spelling
+# or two identical computations compile twice.
+UFUNC_ALIASES: dict[str, str] = {
+    "subtract": "sub",
+    "multiply": "mul",
+    "divide": "div",
+    "true_divide": "div",
+    "power": "pow",
+    "float_power": "pow",
+    "negative": "neg",
+    "absolute": "abs",
+    "fabs": "abs",
+}
+
+# summer4 spellings that are not ``jax.numpy`` attribute names.
+_JNP_NAMES: dict[str, str] = {
+    "sub": "subtract",
+    "mul": "multiply",
+    "div": "divide",
+    "pow": "power",
+    "neg": "negative",
+    "abs": "abs",
+}
+
+# Not elementwise rates. Masks belong to ``Selector``; ``matmul`` is
+# ``GroupedRate.__matmul__``.
+DENY_OPS: frozenset[str] = frozenset(
+    {
+        "matmul",
+        "greater",
+        "less",
+        "equal",
+        "not_equal",
+        "greater_equal",
+        "less_equal",
+        "logical_and",
+        "logical_or",
+        "logical_not",
+        "isnan",
+        "isinf",
+        "isfinite",
+        "signbit",
+    }
+)
 
 UNARY_OPS: dict[str, Callable[[Any], Any]] = {
     "neg": jnp.negative,
@@ -43,13 +89,53 @@ BINARY_OPS: dict[str, Callable[[Any, Any], Any]] = {
     "minimum": jnp.minimum,
 }
 
+# Ops that are neither in the two seed dicts (``sin``, ``cos``, …).
+_OP_IMPL: dict[str, Callable[..., Any]] = {}
+
+DispatchMode = Literal["symbolic", "trace", "value"]
+
+
+def canonical_op(name: str) -> str:
+    """Map a NumPy ufunc name onto summer4's existing op string, if one exists."""
+    return UFUNC_ALIASES.get(name, name)
+
+
+def resolve_op(name: str) -> Callable[..., Any]:
+    """Return the ``jax.numpy`` implementation of a canonical op name.
+
+    Raises:
+        ValueError: ``name`` is in :data:`DENY_OPS`, or ``jax.numpy`` has no
+            such function. The message names the offending op.
+    """
+    canonical = canonical_op(name)
+    if name in DENY_OPS or canonical in DENY_OPS:
+        raise ValueError(
+            f"Op {name!r} cannot be a rate. Boolean and integer masks belong to "
+            "Selector, not rate arithmetic, and 'matmul' is reserved for "
+            f"GroupedRate's @ operator. Refused: {', '.join(sorted(DENY_OPS))}."
+        )
+    cached = UNARY_OPS.get(canonical) or BINARY_OPS.get(canonical) or _OP_IMPL.get(canonical)
+    if cached is not None:
+        return cached
+    attr = _JNP_NAMES.get(canonical, canonical)
+    fn = getattr(jnp, attr, None)
+    if not callable(fn):
+        raise ValueError(
+            f"Op {name!r} has no jax.numpy equivalent. "
+            "Use a NumPy ufunc name (for example 'sin'), or a summer4 spelling "
+            "such as 'mul', 'sub', 'div', 'pow', 'neg' or 'abs'."
+        )
+    impl = cast(Callable[..., Any], fn)
+    _OP_IMPL[canonical] = impl
+    return impl
+
 
 def apply_unary(op: str, value: Any) -> Any:
     """Apply ``op`` pointwise, preserving a ``GroupedRate`` or ``PropertyData``."""
     fn = UNARY_OPS.get(op)
     if fn is None:
-        known = ", ".join(sorted(UNARY_OPS))
-        raise ValueError(f"Unknown unary op {op!r}. Known ops: {known}.")
+        fn = resolve_op(op)
+        UNARY_OPS[canonical_op(op)] = fn
     return _map_unary(fn, value)
 
 
@@ -57,9 +143,114 @@ def apply_binary(op: str, left: Any, right: Any) -> Any:
     """Apply ``op`` pointwise, preserving a ``GroupedRate`` or ``PropertyData``."""
     fn = BINARY_OPS.get(op)
     if fn is None:
-        known = ", ".join(sorted(BINARY_OPS))
-        raise ValueError(f"Unknown binary op {op!r}. Known ops: {known}.")
+        fn = resolve_op(op)
+        BINARY_OPS[canonical_op(op)] = fn
     return _map_binary(fn, left, right)
+
+
+def operands_are_mixed(inputs: tuple[Any, ...]) -> bool:
+    """True when a rate-tree node is combined with an evaluated wrapper."""
+    from summer4.flows.compiled import GroupedRate
+    from summer4.flows.rates import RateOps
+    from summer4.jax.propertydata import PropertyData
+    from summer4.results.trace import Trace
+
+    symbolic = any(isinstance(value, RateOps) for value in inputs)
+    evaluated = any(isinstance(value, (Trace, GroupedRate, PropertyData)) for value in inputs)
+    return symbolic and evaluated
+
+
+def _apply_mode(mode: DispatchMode, canonical: str, inputs: tuple[Any, ...]) -> Any:
+    if operands_are_mixed(inputs):
+        from summer4.flows.rates import _MIXED_EXPR
+
+        raise TypeError(_MIXED_EXPR)
+    if mode == "symbolic":
+        from summer4.flows.rates import BinOp, UnaryOp, as_rate
+
+        if len(inputs) == 1:
+            return UnaryOp(canonical, as_rate(inputs[0]))
+        return BinOp(canonical, as_rate(inputs[0]), as_rate(inputs[1]))
+    if mode == "trace":
+        from summer4.results.trace import Trace
+
+        if len(inputs) == 1:
+            owner = inputs[0]
+            if not isinstance(owner, Trace):
+                raise TypeError("Trace dispatch expected a Trace.")
+            return owner._map_unary(canonical)
+        return Trace._combine(inputs[0], inputs[1], canonical)
+    if len(inputs) == 1:
+        return apply_unary(canonical, inputs[0])
+    return apply_binary(canonical, inputs[0], inputs[1])
+
+
+def dispatch_ufunc(
+    ufunc: Any,
+    method: str,
+    inputs: tuple[Any, ...],
+    kwargs: Mapping[str, Any],
+    *,
+    mode: DispatchMode,
+) -> Any:
+    """Shared ``__array_ufunc__`` body.
+
+    ``mode`` is ``symbolic`` for a rate tree (build a node), ``trace`` for a
+    :class:`~summer4.results.trace.Trace`, and ``value`` for a
+    ``GroupedRate`` or ``PropertyData``.
+    """
+    if method != "__call__" or kwargs or len(inputs) not in (1, 2):
+        return NotImplemented
+    raw = getattr(ufunc, "__name__", None)
+    if not isinstance(raw, str):
+        return NotImplemented
+    # Validate before building so a bad op fails at construction, not at trace.
+    canonical = canonical_op(raw)
+    resolve_op(raw)
+    return _apply_mode(mode, canonical, inputs)
+
+
+def dispatch_array_function(
+    func: Any,
+    types: Any,
+    args: tuple[Any, ...],
+    kwargs: Mapping[str, Any],
+    *,
+    mode: DispatchMode,
+) -> Any:
+    """Shared ``__array_function__`` body. Five functions; everything else refuses.
+
+    An open implementation would claim reductions and reshapes that have no
+    meaning on a rate. ``np.maximum`` and the other three ufuncs normally
+    arrive via :func:`dispatch_ufunc`; they are listed here so a direct
+    ``__array_function__`` call still canonicalises.
+    """
+    del types
+    import numpy as np
+
+    if func is np.clip:
+        if kwargs.get("out") is not None:
+            return NotImplemented
+        from summer4.flows.rates import clip
+
+        expr = args[0] if args else kwargs["a"]
+        lo = args[1] if len(args) >= 2 else kwargs.get("a_min")
+        hi = args[2] if len(args) >= 3 else kwargs.get("a_max")
+        return clip(expr, lo, hi)
+    names = {
+        np.maximum: "maximum",
+        np.minimum: "minimum",
+        np.power: "power",
+        np.absolute: "absolute",
+    }
+    raw = names.get(func)
+    if raw is None or kwargs:
+        return NotImplemented
+    if len(args) not in (1, 2):
+        return NotImplemented
+    canonical = canonical_op(raw)
+    resolve_op(raw)
+    return _apply_mode(mode, canonical, args)
 
 
 def _map_unary(fn: Callable[[Any], Any], value: Any) -> Any:
