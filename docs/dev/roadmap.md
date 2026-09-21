@@ -891,7 +891,8 @@ three steps that together close WP10.
 - `MixingMatrix(check_reciprocal=...)` defaults to `False`. Runtime check uses
   `np.max` in the debug callback so `vmap` is safe; prefer
   `MixingMatrix.validate(matrix, population)` on the host.
-- User gate: `examples/notebooks/05-solvers.ipynb` (healthy vs `max_steps=2`).
+- User gate: `examples/notebooks/05-solvers.ipynb` (healthy vs `max_steps=16`;
+  early saves finite, later `inf`, `ok` is False).
 - This branch was cut from `feat/tb-scale-bench` because that handoff was not
   yet on `main`. Retarget the PR to `main` once step 11 merges, or merge the
   stack in order.

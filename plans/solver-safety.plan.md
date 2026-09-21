@@ -9,7 +9,7 @@ todos:
     content: MixingMatrix check_reciprocal default False; batch-safe callback; host validate()
     status: completed
   - id: gate
-    content: Extend 05-solvers.ipynb with max_steps=2 vs healthy ok; close KI22
+    content: Extend 05-solvers.ipynb with max_steps=16 partial trajectory vs healthy ok; close KI22
     status: completed
 isProject: false
 ---
@@ -44,4 +44,5 @@ which fails under `vmap`.
 ## Notebook
 
 Extend `examples/notebooks/05-solvers.ipynb` with a deliberately too-small
-`max_steps` and assert `SolverInfo.ok`.
+`max_steps` (enough for some accepted steps, not enough to finish) and assert
+`SolverInfo.ok` plus partial finite saves.
