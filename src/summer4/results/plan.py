@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 from numpy.typing import NDArray
@@ -13,12 +13,66 @@ from numpy.typing import NDArray
 from summer4.properties import Property
 from summer4.selectors import Selector
 
+if TYPE_CHECKING:
+    from summer4.results.outputset import OutputExpr
+
 type Side = Literal["source", "dest"]
 type Quantity = Compartments | FlowMass | ComputedValue | SaveFn | GroupedOutput
 
 
+class _OutputExprChain:
+    """Record post-ops on a save spec for :class:`~summer4.results.outputset.OutputSet`.
+
+    ``Compartments().total()`` does not reduce at save time. The save is the
+    quantity; :meth:`~summer4.results.outputset.OutputSet.evaluate` applies the
+    chain. Arithmetic on the returned expression is the same idea.
+    """
+
+    __slots__ = ()
+
+    def _as_output_expr(self) -> OutputExpr:
+        from summer4.results.outputset import OutputExpr
+
+        return OutputExpr.leaf(self)
+
+    def select(self, sel: Selector | np.ndarray) -> OutputExpr:
+        return self._as_output_expr().select(sel)
+
+    def total(self) -> OutputExpr:
+        return self._as_output_expr().total()
+
+    def rolling(
+        self,
+        window: int,
+        *,
+        how: Any = "mean",
+        center: bool = False,
+        min_periods: int | None = None,
+    ) -> OutputExpr:
+        return self._as_output_expr().rolling(
+            window, how=how, center=center, min_periods=min_periods
+        )
+
+    def cumulative(self, *, start: Any = None, end: Any = None) -> OutputExpr:
+        return self._as_output_expr().cumulative(start=start, end=end)
+
+    def midpoint(self) -> OutputExpr:
+        return self._as_output_expr().midpoint()
+
+    def integrate_intervals(
+        self, method: Literal["trapezoid", "simpson"] = "trapezoid"
+    ) -> OutputExpr:
+        return self._as_output_expr().integrate_intervals(method)
+
+    def integrate(self, method: Literal["trapezoid", "simpson"] = "trapezoid") -> OutputExpr:
+        return self._as_output_expr().integrate(method)
+
+    def at_times(self, ts: Any) -> OutputExpr:
+        return self._as_output_expr().at_times(ts)
+
+
 @dataclass(frozen=True, slots=True)
-class Compartments:
+class Compartments(_OutputExprChain):
     """Save compartment densities (optionally filtered / reduced at save time)."""
 
     where: Selector | None = None
@@ -36,7 +90,7 @@ def flow_names(flow: str | tuple[str, ...]) -> tuple[str, ...]:
 
 
 @dataclass(frozen=True, slots=True)
-class FlowMass:
+class FlowMass(_OutputExprChain):
     """Per-edge mass. Reduce *here* so the buffer is ``(n_saves, n_kept)``.
 
     ``flow`` is one name or several. Several flows are summed at each save
@@ -60,14 +114,14 @@ class FlowMass:
 
 
 @dataclass(frozen=True, slots=True)
-class ComputedValue:
+class ComputedValue(_OutputExprChain):
     """Capture a path from the derived-param struct produced by ``derived_fn``."""
 
     path: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
-class GroupedOutput:
+class GroupedOutput(_OutputExprChain):
     """Save a :class:`~summer4.flows.rates.Capture`d :class:`GroupedRate` by name.
 
     The resulting output is a :class:`~summer4.jax.propertydata.PropertyData`
@@ -79,7 +133,7 @@ class GroupedOutput:
 
 
 @dataclass(frozen=True, slots=True)
-class SaveFn:
+class SaveFn(_OutputExprChain):
     """Escape hatch: ``fn(ctx: SaveContext) -> array``.
 
     ``fn`` hashes by identity, so a lambda defined inside a loop retraces every

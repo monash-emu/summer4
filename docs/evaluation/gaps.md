@@ -50,7 +50,9 @@ function outputs; a results type; a dataframe view.
 **State:** done (ledger WP2 and WP4). `CompiledModel.run` returns a `Result` of
 named `Output`s; `SavePlan` declares what to keep; the query surface covers
 select, aggregate, cumulative, calendar resample, rolling and interpolated
-`at_times`, and `to_frame` / `to_pandas` give the dataframe view. Flow-output
+`at_times`, and `to_frame` / `to_pandas` give the dataframe view. An `OutputSet`
+names a DAG of those operations and contributes only its leaves to the save
+plan; `Result.to_frame` stacks the evaluated names. Flow-output
 polarity queries (`sum_over(..., side=)`, `integrate_intervals`, `integrate`) and
 validated `ComputedValue` capture ship alongside.
 

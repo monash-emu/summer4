@@ -28,8 +28,8 @@ pip install "summer4[calibration,pandas,frames] @ git+https://github.com/monash-
 | Extra | Packages | When you need it |
 | --- | --- | --- |
 | `calibration` | numpyro, optax | Sampling and MAP fits |
-| `pandas` | pandas | `Output.to_pandas` |
-| `frames` | polars, pyarrow | `Output.to_frame`, and the Arrow conversion `to_pandas` uses |
+| `pandas` | pandas | `Output.to_pandas`, `Result.to_frame(backend="pandas")` |
+| `frames` | polars, pyarrow | `Output.to_frame`, `Result.to_frame`, and the Arrow conversion `to_pandas` uses |
 | `jax` | jax, jaxlib, diffrax, equinox | Compatibility alias for this release. These packages are already core dependencies, so `pip install summer4[jax]` still works |
 
 ### Platforms

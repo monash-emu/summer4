@@ -106,6 +106,7 @@ compartment {class}`PropertyMap` they raise.
    SaveFn
    Result
    Output
+   OutputSet
    SolverInfo
    Target
    TargetSet
@@ -117,6 +118,10 @@ compartment {class}`PropertyMap` they raise.
 (:meth:`~summer4.flows.compiled.CompiledModel.expand` fills it).
 :class:`~summer4.results.targets.Target` / :class:`~summer4.results.targets.TargetSet`
 merge observation times into a save plan for sparse calibration runs.
+:attr:`~summer4.results.targets.Target.reduce` sums or averages a stratified
+prediction down to an aggregate series. :class:`~summer4.results.outputset.OutputSet`
+names a DAG of outputs; only its leaves enter the save plan, and
+:meth:`~summer4.results.result.Result.to_frame` stacks the evaluated names.
 
 ### Rates and adjustments
 

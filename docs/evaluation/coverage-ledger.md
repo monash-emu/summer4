@@ -81,7 +81,7 @@ reach, and it is the denominator for every percentage on this site.
 | D2 | `request_output_for_compartments` | outputs | `full` | `Compartments(where=)` / `Output.select` |  |
 | D3 | `request_aggregate_output` | outputs | `full` | `Output.sum_over` / `total` / `partition` |  |
 | D4 | `request_cumulative_output` | outputs | `full` | `Output.cumulative()` |  |
-| D5 | `request_function_output` | outputs | `full` | `SaveFn`; arithmetic on `Output.values` | `Output` has no operators yet; they arrive in WP15 |
+| D5 | `request_function_output` | outputs | `full` | `SaveFn`; `Output` operators and `OutputSet` |  |
 | D6 | `request_computed_value_output` | outputs | `full` | `ComputedValue` | Path validated against `derived_fn` return schema |
 | D7 | `request_track_modelled_value` | outputs | `full` | `ComputedValue` | Same capture path as D6 |
 | D8 | `add_computed_value_func` | outputs | `full` | `derived_fn hook` | compute_derived_params runs every step; run-start work goes in `prepare_fn` |
@@ -327,11 +327,12 @@ WP12 is **applied**: first tag `v0.2.0a1`, current tag `v0.2.0a3`. WP13 is
 **applied**: math nodes, vector-valued table interpolation, `Lookup`, and ageing
 sugar. WP14 is **applied**: `FOIKind.GENERALISED` with a calibratable exponent,
 and infectiousness weights keyed by any selector, applied per compartment
-before the group sum. Where the work has got to after that is
-{doc}`../dev/roadmap`, not this page. WP15 adds output algebra: `Output`
-operators, a windowed `cumulative`, multi-flow `FlowMass`, and named output
-sets to frames. WP16 benchmarks a TB-scale model and makes solver failure
-visible. Plan: `plans/tb-ports-feature-completeness.plan.md`.
+before the group sum. WP15 is **applied**: name-aligned `Output` operators,
+windowed `cumulative`, multi-flow `FlowMass`, an `OutputSet` whose plan saves
+only the leaves, and `Result.to_frame`. `Target(reduce=)` compares a stratified
+save with an aggregate series. Where the work has got to after that is
+{doc}`../dev/roadmap`, not this page. WP16 benchmarks a TB-scale model and makes
+solver failure visible. Plan: `plans/tb-ports-feature-completeness.plan.md`.
 
 ### WP11 — Sparse outputs and calibration targets (applied)
 

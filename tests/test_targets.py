@@ -15,13 +15,16 @@ from summer4 import (
     Compartments,
     Epoch,
     FlowModel,
+    Output,
     Property,
     PropertyData,
     PropertyMap,
+    Result,
     SavePlan,
     SaveRequest,
     Target,
     TargetSet,
+    TimeAxis,
     TransitionFlow,
     derived_refs,
 )
@@ -297,3 +300,63 @@ def test_gather_and_residuals() -> None:
     assert "I" in gathered
     resid = targets.residuals(res)["I"]
     np.testing.assert_allclose(np.asarray(resid), 0.0, atol=1e-6)
+
+
+def test_residuals_reduce_sum_and_mean_match_aggregate() -> None:
+    """A stratified save can meet a one-column observation."""
+    times = np.array([0.0, 1.0, 2.0])
+    axis = TimeAxis(values=times, epoch=None, kind="explicit")
+    pred = np.array([[1.0, 3.0], [2.0, 4.0], [0.0, 5.0]])
+    result = Result(
+        times=axis,
+        outputs={"I": Output(times=axis, values=pred, dims=("time", "compartment"))},
+    )
+    summed = Target(key="I", times=times, values=np.array([4.0, 6.0, 5.0]), reduce="sum")
+    resid = TargetSet(targets=(summed,)).residuals(result)["I"]
+    np.testing.assert_allclose(np.asarray(resid), 0.0, atol=1e-6)
+
+    averaged = Target(key="I", times=times, values=np.array([2.0, 3.0, 2.5]), reduce="mean")
+    resid_mean = TargetSet(targets=(averaged,)).residuals(result)["I"]
+    np.testing.assert_allclose(np.asarray(resid_mean), 0.0, atol=1e-6)
+
+    bare = Target(key="I", times=times, values=np.array([4.0, 6.0, 5.0]))
+    with pytest.raises(ValueError, match="incompatible"):
+        TargetSet(targets=(bare,)).residuals(result)
+
+
+def test_residuals_reduce_callable_and_rejects_unknown() -> None:
+    times = np.array([0.0, 1.0])
+    axis = TimeAxis(values=times, epoch=None, kind="explicit")
+    pred = np.array([[1.0, 10.0], [2.0, 20.0]])
+    result = Result(
+        times=axis,
+        outputs={"I": Output(times=axis, values=pred, dims=("time", "compartment"))},
+    )
+
+    def first_column(values: Any) -> Any:
+        return values[:, 0]
+
+    target = Target(key="I", times=times, values=np.array([1.0, 2.0]), reduce=first_column)
+    resid = TargetSet(targets=(target,)).residuals(result)["I"]
+    np.testing.assert_allclose(np.asarray(resid), 0.0, atol=1e-6)
+    with pytest.raises(ValueError, match="Target.reduce"):
+        Target(key="I", times=times, values=times, reduce="max")
+
+
+def test_residuals_reduce_is_traceable() -> None:
+    times = np.array([0.0, 1.0, 2.0])
+    axis = TimeAxis(values=times, epoch=None, kind="explicit")
+    pred = np.array([[1.0, 3.0], [2.0, 4.0], [0.0, 5.0]])
+    result = Result(
+        times=axis,
+        outputs={"I": Output(times=axis, values=pred, dims=("time", "compartment"))},
+    )
+    targets = TargetSet(
+        targets=(Target(key="I", times=times, values=np.array([4.0, 6.0, 5.0]), reduce="sum"),)
+    )
+
+    def loss(shift: Any) -> Any:
+        resid = targets.residuals(result)["I"]
+        return jnp.sum(jnp.asarray(resid) ** 2) + shift * 0.0
+
+    assert float(jax.jit(loss)(jnp.array(1.0))) == 0.0
