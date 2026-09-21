@@ -52,6 +52,7 @@ question you cannot answer about an opaque callable.
 
 Three of those are load-bearing in a way worth spelling out.
 
+(staging-pass)=
 ### Staging (`rate_stage` → `build_hoist_table`)
 
 A rate that depends only on parameters is evaluated **once per `run`**, not once
@@ -163,6 +164,47 @@ no dunders.
 *inside a builder function* is a new object per call, and every rebuild misses.
 If you reach for `Transform`, define the callable at module level.
 
+(identity-keying-cost)=
+### What identity keying actually costs
+
+The caveat is narrower than "inline functions recompile". It bites on model
+**rebuild**, never on `run`. Measured by counting traces — a jitted function's
+Python body executes once per trace, so a cache hit counts zero — with
+`jax.jit(..., static_argnums=0)` over a `CompiledModel`:
+
+| Pattern | Traces |
+|---|---|
+| One model, 50 parameter draws | **1** |
+| 50 rebuilds, callable defined at module level | **0** (hits the entry an identical earlier model compiled) |
+| 50 rebuilds, callable defined inside the builder | **50** |
+| One closure-built model, 50 runs | **1** |
+| Two closures capturing `scale=1.0` and `scale=2.0` | **2**, and the results differ |
+
+Three things follow.
+
+**Calibration is unaffected.** Parameters are dynamic — `prepare` promotes
+Python `float` leaves to arrays precisely so equinox does not key on their
+values — so thousands of draws against one model object compile once. The only
+way to pay is to construct a new `CompiledModel` per iteration, which a
+calibration loop does not do.
+
+**Closures are not ruled out**, and identity keying is the *correct* choice for
+them rather than a concession. The last row is the reason: two closures with
+identical source but different captured values are different programs and
+**must not** share a cache entry. `id()` separates them for free. Keying on
+`fn.__qualname__` would give both the same key
+(`build_closure.<locals>.cl`) and silently return the first closure's numbers
+for the second — the unsafe direction, and the same trap as
+[`custom-rate-node-digest-collision.md`](https://github.com/monash-emu/summer4/blob/main/futureplans/custom-rate-node-digest-collision.md).
+
+**What it does cost** is re-*building* with a freshly created callable: a
+notebook cell re-executed after editing the function, or a scenario sweep that
+rebuilds the model per variant. Both recompile, and neither is wrong — just
+slower. Note also that summer4 does not jit `run` itself; the model is
+documented as a static argument for callers who jit, and diffrax's `filter_jit`
+caches internally. A bare `cm.run(...)` in a script pays no summer4-level
+cache miss at all.
+
 ### 2. `derived_fn` — arbitrary code, once per step, named outputs
 
 `compile(derived_fn=...)` runs `derived_fn(params, y=, t=)` before the rates
@@ -223,7 +265,7 @@ measured against, and today it does not meet it:
 
 A `Defer` rate node closes this, and is cheap. The prototype is ~35 lines
 including all four dunders, and because its arguments are explicit it stages
-*exactly* (see the correction under [Staging](#staging-rate_stage-build_hoist_table)):
+*exactly* (see the correction under [Staging](#staging-pass)):
 
 ```python
 model.add_flow(
@@ -235,9 +277,11 @@ model.add_flow(
 Verified against `721ad04`: evaluates identically to the `Transform`
 workaround, `defer(f)(Param("x"), Param("y"))` classifies `run` and hoists,
 `defer(f)(Time(), Param("amp"))` classifies `step`. The one cost is that the
-digest must key on `id(fn)`, so a callable defined inside a builder function
-misses the jit cache — the same fail-safe caveat `Transform` and `derived_fn`
-already carry, and worth an optional `name=` for users who rebuild in a loop.
+digest must key on `id(fn)` — see
+[What identity keying actually costs](#identity-keying-cost).
+It is paid on model rebuild, not per `run`, it leaves calibration untouched, and
+it is the *safe* choice for closures. An optional `name=` is worth offering for
+users who rebuild in a sweep, but it is a convenience, not a correctness fix.
 
 Written up as
 [`futureplans/no-defer-equivalent.md`](https://github.com/monash-emu/summer4/blob/main/futureplans/no-defer-equivalent.md).
