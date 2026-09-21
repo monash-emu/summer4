@@ -58,6 +58,7 @@ from summer4.results import (
     ComputedValue,
     FlowMass,
     GroupedOutput,
+    Output,
     Result,
     SaveFn,
     SavePlan,
@@ -65,7 +66,6 @@ from summer4.results import (
     SolverInfo,
     Target,
     TargetSet,
-    Trace,
 )
 from summer4.selectors import (
     Absent,
@@ -120,6 +120,7 @@ __all__ = [
     "Nothing",
     "Not",
     "Or",
+    "Output",
     "Overwrite",
     "Param",
     "Prepared",
@@ -149,7 +150,6 @@ __all__ = [
     "TimeAxis",
     "TimeAxisKind",
     "TimeGrouping",
-    "Trace",
     "Trait",
     "TraitChain",
     "TraitMatrix",

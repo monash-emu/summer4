@@ -8,7 +8,7 @@ from typing import Any
 
 from jax.tree_util import register_pytree_node_class
 
-from summer4.results.trace import Trace
+from summer4.results.output import Output
 from summer4.time import TimeAxis
 
 
@@ -74,7 +74,7 @@ class SolverInfo:
 @register_pytree_node_class
 @dataclass(frozen=True, slots=True)
 class Result:
-    """Flat mapping of named :class:`~summer4.results.trace.Trace` objects from one solve.
+    """Flat mapping of named :class:`~summer4.results.output.Output` objects from one solve.
 
     Keys are exactly the names in the :class:`~summer4.results.plan.SavePlan`;
     there is no privileged ``.compartments`` / ``.flows`` namespace.
@@ -87,25 +87,25 @@ class Result:
     """
 
     times: TimeAxis
-    traces: Mapping[str, Trace]
+    outputs: Mapping[str, Output]
     solver: SolverInfo | None = None
     dense: Any | None = None
     _state_pmap: Any = field(default=None, repr=False, compare=False)
 
-    def __getitem__(self, key: str) -> Trace:
+    def __getitem__(self, key: str) -> Output:
         try:
-            return self.traces[key]
+            return self.outputs[key]
         except KeyError:
-            raise KeyError(f"Unknown result key {key!r}. Known: {list(self.traces)}") from None
+            raise KeyError(f"Unknown result key {key!r}. Known: {list(self.outputs)}") from None
 
     def __contains__(self, key: object) -> bool:
-        return isinstance(key, str) and key in self.traces
+        return isinstance(key, str) and key in self.outputs
 
     def __iter__(self) -> Iterator[str]:
-        return iter(self.traces)
+        return iter(self.outputs)
 
     def keys(self) -> Any:
-        return self.traces.keys()
+        return self.outputs.keys()
 
     def with_params(self, params: object) -> ResultWithParams:
         """Host-side provenance wrapper; does not enter the pytree."""
@@ -132,15 +132,15 @@ class Result:
     def tree_flatten(
         self,
     ) -> tuple[tuple[Any, ...], Any]:
-        keys = tuple(self.traces.keys())
-        dims = tuple(self.traces[k].dims for k in keys)
-        times_list = [self.traces[k].times.values for k in keys]
-        epochs = tuple(self.traces[k].times.epoch for k in keys)
-        kinds = tuple(self.traces[k].times.kind for k in keys)
+        keys = tuple(self.outputs.keys())
+        dims = tuple(self.outputs[k].dims for k in keys)
+        times_list = [self.outputs[k].times.values for k in keys]
+        epochs = tuple(self.outputs[k].times.epoch for k in keys)
+        kinds = tuple(self.outputs[k].times.kind for k in keys)
         flat_children: list[Any] = [self.times.values, self.solver, self.dense]
         pmaps: list[Any] = []
         for key in keys:
-            tr = self.traces[key]
+            tr = self.outputs[key]
             from summer4.jax.propertydata import PropertyData
 
             if isinstance(tr.values, PropertyData):
@@ -172,17 +172,17 @@ class Result:
         vals = rest[:n]
         trace_times = rest[n:]
         times = TimeAxis(values=time_values, epoch=epoch, kind=kind)
-        traces: dict[str, Trace] = {}
+        outputs: dict[str, Output] = {}
         for key, dim, pmap, val, tvals, ep, kd in zip(
             keys, dims, pmaps, vals, trace_times, epochs, kinds, strict=True
         ):
             values = PropertyData(pmap, val) if pmap is not None else val
-            traces[key] = Trace(
+            outputs[key] = Output(
                 times=TimeAxis(values=tvals, epoch=ep, kind=kd),
                 values=values,
                 dims=dim,
             )
-        return cls(times=times, traces=traces, solver=solver, dense=dense, _state_pmap=state_pmap)
+        return cls(times=times, outputs=outputs, solver=solver, dense=dense, _state_pmap=state_pmap)
 
 
 @dataclass(frozen=True, slots=True)

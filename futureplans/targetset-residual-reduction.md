@@ -12,7 +12,7 @@ pred.reshape(target.values.shape)
 falling back to `reshape(-1)` and raising if the sizes still disagree. There is
 no hook for reducing a wider prediction onto a narrower observation.
 
-For an unstratified model this is invisible: a `Compartments(where=...)` trace
+For an unstratified model this is invisible: a `Compartments(where=...)` output
 is one column and reshapes cleanly. For a stratified model it bites. On a
 `state x age` map:
 
@@ -52,8 +52,8 @@ Options:
 2. A `total=True` on `Compartments` and `FlowMass`, so the *save* is already
    scalar per time. Cheaper to solve, and composes with the existing
    `sum_over`.
-3. Let `Target.quantity` accept a `Trace`-to-`Trace` expression. Most general,
-   most design work, and it needs `Trace` arithmetic, which does not exist
+3. Let `Target.quantity` accept an `Output`-to-`Output` expression. Most general,
+   most design work, and it needs `Output` arithmetic, which does not exist
    either.
 
 Option 2 plus option 1 covers the common cases without new machinery.

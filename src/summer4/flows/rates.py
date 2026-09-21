@@ -279,7 +279,7 @@ class Capture(RateOps):
 
     Saved via :class:`~summer4.results.plan.GroupedOutput` so a force of
     infection (or any other grouped quantity) is inspectable as a
-    properly-dimensioned trace without re-slicing a broadcast array.
+    properly-dimensioned output without re-slicing a broadcast array.
     """
 
     name: str
@@ -637,7 +637,7 @@ def _is_value(value: object) -> bool:
     """True when ``value`` is already evaluated, not a rate-tree node.
 
     Python scalars stay symbolic (``tanh(0.5)`` is a node). Arrays, grouped
-    rates, property data and traces are applied immediately, which is how a
+    rates, property data and outputs are applied immediately, which is how a
     parameter array inside a jitted loss meets the same operator a rate tree
     uses.
     """
@@ -649,9 +649,9 @@ def _is_value(value: object) -> bool:
 
     from summer4.flows.compiled import GroupedRate
     from summer4.jax.propertydata import PropertyData
-    from summer4.results.trace import Trace
+    from summer4.results.output import Output
 
-    return isinstance(value, (Trace, GroupedRate, PropertyData, np.ndarray, jax.Array))
+    return isinstance(value, (Output, GroupedRate, PropertyData, np.ndarray, jax.Array))
 
 
 _MIXED_EXPR = (
@@ -662,21 +662,21 @@ _MIXED_EXPR = (
 
 def _apply_value_unary(op: str, arg: object) -> Any:
     from summer4.flows.algebra import apply_unary
-    from summer4.results.trace import Trace
+    from summer4.results.output import Output
 
-    if isinstance(arg, Trace):
+    if isinstance(arg, Output):
         return arg._map_unary(op)
     return apply_unary(op, arg)
 
 
 def _apply_value_binary(op: str, left: object, right: object) -> Any:
     from summer4.flows.algebra import apply_binary
-    from summer4.results.trace import Trace
+    from summer4.results.output import Output
 
     if isinstance(left, RateOps) or isinstance(right, RateOps):
         raise TypeError(_MIXED_EXPR)
-    if isinstance(left, Trace) or isinstance(right, Trace):
-        return Trace._combine(left, right, op)
+    if isinstance(left, Output) or isinstance(right, Output):
+        return Output._combine(left, right, op)
     return apply_binary(op, left, right)
 
 
@@ -736,7 +736,7 @@ def clip(x: object, lo: object | None = None, hi: object | None = None) -> Any:
 
     Either bound may be omitted. Both omitted is an error. Bounds and ``x``
     follow the same split as :func:`maximum`: rate expressions stay symbolic,
-    evaluated values (including a :class:`~summer4.results.trace.Trace`) are
+    evaluated values (including a :class:`~summer4.results.output.Output`) are
     applied now. Mixing the two raises; evaluate the expression with
     :func:`~summer4.flows.compiled.eval_closed` first.
     """

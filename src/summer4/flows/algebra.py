@@ -1,18 +1,18 @@
-"""Pointwise operators shared by rate trees and output traces.
+"""Pointwise operators shared by rate trees and saved outputs.
 
 :class:`~summer4.flows.rates.UnaryOp` and :class:`~summer4.flows.rates.BinOp`
 are the symbolic form. Evaluating them, and applying the same operation to an
 already-evaluated value (a JAX array, a :class:`~summer4.flows.compiled.GroupedRate`,
 or the :class:`~summer4.jax.propertydata.PropertyData` inside a
-:class:`~summer4.results.trace.Trace`), both go through :func:`apply_unary` and
+:class:`~summer4.results.output.Output`), both go through :func:`apply_unary` and
 :func:`apply_binary`.
 
 Wrapper policy stays with the wrapper. A ``GroupedRate`` combines only with the
 same grouping; a ``PropertyData`` only with an equal map. Neither broadcasts
-across names. Name-aligned ``Trace``-to-``Trace`` broadcasting is a later step;
+across names. Name-aligned ``Output``-to-``Output`` broadcasting is a later step;
 what this module provides is the numeric kernel that step will call after the
 indexes are aligned, and the kernel a parameter-only rate expression uses when
-:func:`~summer4.flows.compiled.eval_closed` turns it into an array a ``Trace``
+:func:`~summer4.flows.compiled.eval_closed` turns it into an array an ``Output``
 can scale by.
 """
 
@@ -92,7 +92,7 @@ BINARY_OPS: dict[str, Callable[[Any, Any], Any]] = {
 # Ops that are neither in the two seed dicts (``sin``, ``cos``, …).
 _OP_IMPL: dict[str, Callable[..., Any]] = {}
 
-DispatchMode = Literal["symbolic", "trace", "value"]
+DispatchMode = Literal["symbolic", "output", "value"]
 
 
 def canonical_op(name: str) -> str:
@@ -153,10 +153,10 @@ def operands_are_mixed(inputs: tuple[Any, ...]) -> bool:
     from summer4.flows.compiled import GroupedRate
     from summer4.flows.rates import RateOps
     from summer4.jax.propertydata import PropertyData
-    from summer4.results.trace import Trace
+    from summer4.results.output import Output
 
     symbolic = any(isinstance(value, RateOps) for value in inputs)
-    evaluated = any(isinstance(value, (Trace, GroupedRate, PropertyData)) for value in inputs)
+    evaluated = any(isinstance(value, (Output, GroupedRate, PropertyData)) for value in inputs)
     return symbolic and evaluated
 
 
@@ -171,15 +171,15 @@ def _apply_mode(mode: DispatchMode, canonical: str, inputs: tuple[Any, ...]) -> 
         if len(inputs) == 1:
             return UnaryOp(canonical, as_rate(inputs[0]))
         return BinOp(canonical, as_rate(inputs[0]), as_rate(inputs[1]))
-    if mode == "trace":
-        from summer4.results.trace import Trace
+    if mode == "output":
+        from summer4.results.output import Output
 
         if len(inputs) == 1:
             owner = inputs[0]
-            if not isinstance(owner, Trace):
-                raise TypeError("Trace dispatch expected a Trace.")
+            if not isinstance(owner, Output):
+                raise TypeError("Output dispatch expected an Output.")
             return owner._map_unary(canonical)
-        return Trace._combine(inputs[0], inputs[1], canonical)
+        return Output._combine(inputs[0], inputs[1], canonical)
     if len(inputs) == 1:
         return apply_unary(canonical, inputs[0])
     return apply_binary(canonical, inputs[0], inputs[1])
@@ -195,8 +195,8 @@ def dispatch_ufunc(
 ) -> Any:
     """Shared ``__array_ufunc__`` body.
 
-    ``mode`` is ``symbolic`` for a rate tree (build a node), ``trace`` for a
-    :class:`~summer4.results.trace.Trace`, and ``value`` for a
+    ``mode`` is ``symbolic`` for a rate tree (build a node), ``output`` for an
+    :class:`~summer4.results.output.Output`, and ``value`` for a
     ``GroupedRate`` or ``PropertyData``.
     """
     if method != "__call__" or kwargs or len(inputs) not in (1, 2):

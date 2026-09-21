@@ -30,7 +30,7 @@ class FlowMass:
     """Per-edge mass. Reduce *here* so the buffer is ``(n_saves, n_kept)``.
 
     A 200k-edge flow over 3650 days is ~5.8 GB dense and ~470 kB when summed
-    over age. Post-hoc edge queries use ``Trace.sum_over(..., side=)``,
+    over age. Post-hoc edge queries use ``Output.sum_over(..., side=)``,
     ``integrate``, and ``incidence``.
     """
 
@@ -50,7 +50,7 @@ class ComputedValue:
 class GroupedOutput:
     """Save a :class:`~summer4.flows.rates.Capture`d :class:`GroupedRate` by name.
 
-    The resulting trace is a :class:`~summer4.jax.propertydata.PropertyData`
+    The resulting output is a :class:`~summer4.jax.propertydata.PropertyData`
     over ``PropertyMap.from_property(group)``, so ``dims`` carry the grouping
     property name (e.g. ``("time", "age")``).
     """

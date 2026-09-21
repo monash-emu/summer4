@@ -42,8 +42,8 @@ reach, and it is the denominator for every percentage on this site.
 | L3 | `model.run()` | lifecycle | `full` | `CompiledModel.run()` | Returns a `Result`; Euler backend in Phase 2 |
 | L4 | `model.set_initial_population()` | lifecycle | `full` | `FlowModel.set_initial_population` / `InitialPopulation` |  |
 | L5 | `model.get_initial_population()` | lifecycle | `full` | `CompiledModel.initial_state` |  |
-| L6 | `model.get_outputs_df()` | lifecycle | `full` | `Trace.to_frame` / `to_pandas` | Polars default; pandas optional |
-| L7 | `model.get_derived_outputs_df()` | lifecycle | `full` | `Result` traces via `SavePlan` | Flat named traces; no parallel df namespace |
+| L6 | `model.get_outputs_df()` | lifecycle | `full` | `Output.to_frame` / `to_pandas` | Polars default; pandas optional |
+| L7 | `model.get_derived_outputs_df()` | lifecycle | `full` | `Result` outputs via `SavePlan` | Flat named outputs; no parallel df namespace |
 | S1 | `Stratification(name, strata)` | stratification | `full` | `Property + PropertyMap.stratify` |  |
 | S2 | `model.stratify_with()` | stratification | `full` | `PropertyMap.stratify` | `FlowModel.stratify` (in place, like summer2) or `PropertyMap.stratify` (new map) |
 | S3 | `Stratification(compartments=[...])` | stratification | `full` | `stratify(prop, where=selector)` | Generalised from names to a query |
@@ -77,11 +77,11 @@ reach, and it is the denominator for every percentage on this site.
 | P7 | `get_sigmoidal_interpolation_function` | parameters | `full` | `summer4.timevarying.sigmoidal` | `sharpness` is summer2 curvature; breakpoints may be `FieldRef`s |
 | P8 | `get_piecewise_function` | parameters | `full` | `summer4.timevarying.step` / `piecewise` | Right-continuous; breakpoints may be `FieldRef`s |
 | P9 | `get_time_callable` | parameters | `partial` | `compile() -> vf(t, y, params)` | A time callable, but not summer2's graph wrapper |
-| D1 | `request_output_for_flow` | outputs | `full` | `FlowMass` / `Trace` edge queries | `sum_over(..., side=)`, `incidence`, `integrate` |
-| D2 | `request_output_for_compartments` | outputs | `full` | `Compartments(where=)` / `Trace.select` |  |
-| D3 | `request_aggregate_output` | outputs | `full` | `Trace.sum_over` / `total` / `partition` |  |
-| D4 | `request_cumulative_output` | outputs | `full` | `Trace.cumulative()` |  |
-| D5 | `request_function_output` | outputs | `full` | `SaveFn`; arithmetic on `Trace.values` | `Trace` has no operators yet; they arrive in WP15 |
+| D1 | `request_output_for_flow` | outputs | `full` | `FlowMass` / `Output` edge queries | `sum_over(..., side=)`, `incidence`, `integrate` |
+| D2 | `request_output_for_compartments` | outputs | `full` | `Compartments(where=)` / `Output.select` |  |
+| D3 | `request_aggregate_output` | outputs | `full` | `Output.sum_over` / `total` / `partition` |  |
+| D4 | `request_cumulative_output` | outputs | `full` | `Output.cumulative()` |  |
+| D5 | `request_function_output` | outputs | `full` | `SaveFn`; arithmetic on `Output.values` | `Output` has no operators yet; they arrive in WP15 |
 | D6 | `request_computed_value_output` | outputs | `full` | `ComputedValue` | Path validated against `derived_fn` return schema |
 | D7 | `request_track_modelled_value` | outputs | `full` | `ComputedValue` | Same capture path as D6 |
 | D8 | `add_computed_value_func` | outputs | `full` | `derived_fn hook` | compute_derived_params runs every step; run-start work goes in `prepare_fn` |
@@ -156,7 +156,7 @@ contains every branch above it.
 | 0 | Taxonomy prerequisites | `feat/taxonomy-prereqs-phase0` | `285365c` | `plans/taxonomy-prereqs-phase0.plan.md` |
 | 1 | WP1 — flows core | `feat/flows-core` | `fd10502` | `plans/flows-core.plan.md` |
 | 2 | WP2 — trajectories and `Result` | `feat/results` | `2e66774` | `plans/results.plan.md` |
-| 2a | WP2 follow-up — `Trace.select` gather | `feat/trace-select-submap` | `50e0a31` | `plans/trace-select-submap.plan.md` |
+| 2a | WP2 follow-up — `Output.select` gather | `feat/trace-select-submap` | `50e0a31` | `plans/trace-select-submap.plan.md` |
 | 3 | WP7 — diffrax backend | `feat/diffrax-solver` | `32b3e00` | `plans/diffrax-solver.plan.md` |
 | 4 | WP4 — flow outputs and polarity | `feat/flow-outputs` | `088814a` | `plans/flow-outputs.plan.md` |
 | 5 | WP11 — sparse targets | `feat/sparse-targets` | `3c0139c` | `plans/sparse-targets.plan.md` |
@@ -203,7 +203,7 @@ package closes is recorded, by row ID, in {doc}`tb-ports`.
 | WP12 | Pinnable release | `plans/wp12-release.plan.md` | **Applied.** First tag `v0.2.0a1`; current tag `v0.2.0a3`. JAX is a core dependency; `frames` declares polars and pyarrow. Downstream smoke CI is step 3 of {doc}`../dev/roadmap` |
 | WP13 | Rate-tree math and tabular time series | `plans/tb-ports-feature-completeness.plan.md` | Math nodes, vector-valued table interpolation, `Lookup`, ageing sugar |
 | WP14 | Generalised force of infection | `plans/tb-ports-feature-completeness.plan.md` | **Applied.** `FOIKind.GENERALISED` with an exponent; selector-keyed infectiousness |
-| WP15 | Output algebra | `plans/tb-ports-feature-completeness.plan.md` | `Trace` operators, windowed cumulative, multi-flow outputs, `OutputSet`, frames |
+| WP15 | Output algebra | `plans/tb-ports-feature-completeness.plan.md` | `Output` operators, windowed cumulative, multi-flow outputs, `OutputSet`, frames |
 | WP16 | Scale and solver safety | `plans/tb-ports-feature-completeness.plan.md` | TB-scale benchmark, surfaced `max_steps` failure, vmap-safe reciprocity check |
 | WP17 | FOI susceptibility surface | `plans/wp17-foi-susceptibility.plan.md` | Settled there: `ForceOfInfection(susceptibility=...)`; raises textbook 15 to `full` |
 | WP18 | Rate expression dispatch and deferred callables | `plans/rate-dispatch-and-defer.plan.md` | Settled there: `__array_ufunc__` / `__array_function__` on the four wrapper types with canonical op names; a `Defer` node and `defer(fn)` curry for arbitrary user code in the rate slot |
@@ -249,7 +249,7 @@ would move people.
 **Closes:** L3 L6 L7 V1 T1 T2 D2 D3 D4 D5 (to `full`) · **Unblocks:** textbook
 3, 5, 6, 9, 11 and deepens 2, 4, 8, 10; summer2 `11-flows-between-strata`
 
-`CompiledModel.run` returns a `Result` of named `Trace`s. `Epoch` / `TimeAxis`
+`CompiledModel.run` returns a `Result` of named `Output`s. `Epoch` / `TimeAxis`
 map calendar dates; `SavePlan` names what to keep. Query surface covers select,
 aggregate, cumulative, calendar resample, rolling, and interpolated `at_times`.
 
@@ -271,7 +271,7 @@ port remains to write (time-varying and FOI are applied);
 summer2 `03-derived-outputs`,
 `04-flow-types`, `10-derived-outputs-stratified`
 
-`FlowMass` traces are `PropertyData` over the edge table. `sum_over(..., side=)`,
+`FlowMass` outputs are `PropertyData` over the edge table. `sum_over(..., side=)`,
 `.integrate()`, `.incidence()`, and validated `ComputedValue` paths are live.
 Textbook ports for 4 and 8 remain to write; chapter 10's honest blocker was WP5.
 Plan phase: `feat/flow-outputs`.
@@ -328,7 +328,7 @@ WP12 is **applied**: first tag `v0.2.0a1`, current tag `v0.2.0a3`. WP13 is
 sugar. WP14 is **applied**: `FOIKind.GENERALISED` with a calibratable exponent,
 and infectiousness weights keyed by any selector, applied per compartment
 before the group sum. Where the work has got to after that is
-{doc}`../dev/roadmap`, not this page. WP15 adds output algebra: `Trace`
+{doc}`../dev/roadmap`, not this page. WP15 adds output algebra: `Output`
 operators, a windowed `cumulative`, multi-flow `FlowMass`, and named output
 sets to frames. WP16 benchmarks a TB-scale model and makes solver failure
 visible. Plan: `plans/tb-ports-feature-completeness.plan.md`.

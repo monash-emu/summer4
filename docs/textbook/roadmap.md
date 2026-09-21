@@ -13,7 +13,7 @@ and Plotly convention. Fill the ledger `Ported` cell when a chapter ships.
 
 ## What a port also needs beyond the API
 
-1. **A plotting convention.** Plotly via `Trace.to_pandas()` (see {doc}`porting`).
+1. **A plotting convention.** Plotly via `Output.to_pandas()` (see {doc}`porting`).
 2. **Chapter figures.** Vendored under `docs/textbook/figures/<chapter>/` with
    `docs/textbook/figures/LICENSE`.
 3. **Licence and attribution.** BSD-2-Clause notice carried; adaptation stated.

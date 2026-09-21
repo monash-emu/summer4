@@ -135,12 +135,12 @@ Each is recorded as a note in
 | `PropertyData.where(sel, x)` **replaces** matching compartments | `jax/propertydata.py:112` | Read as "keep", it silently gives a force of infection over $S+E+R$. The model still integrates; the epidemic saturates on day one. |
 | `CompiledModel.describe` passes `None` for params | `flows/compiled.py:548` | Cannot size a plan for any model whose `derived_fn` indexes `params` — i.e. this one. Raises `'NoneType' object is not subscriptable`. |
 | `TargetSet.residuals` reshapes but cannot reduce | `results/targets.py:166` | A stratified save cannot meet a one-dimensional series; targets must be one band each, or go through `SaveFn`. |
-| `Trace.plot` hardcodes matplotlib | `results/trace.py:469` | `plot(legend=False)` raises under the Plotly backend. |
+| `Output.plot` hardcodes matplotlib | `results/output.py:582` | `plot(legend=False)` raises under the Plotly backend. |
 
 Two further notes already in `futureplans/` bear directly on calibrating
 against case counts: `state-ledgers-incidence.md` (quadrature incidence is not
 the solver's accumulated flow mass) and `trace-rolling-jaxpr.md`
-(`Trace.rolling` unrolls under `jit`).
+(`Output.rolling` unrolls under `jit`).
 
 ## Consequences for the roadmap
 

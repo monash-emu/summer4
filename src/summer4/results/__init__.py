@@ -1,6 +1,7 @@
-"""Queryable solve results: SavePlan, Trace, Result."""
+"""Queryable solve results: SavePlan, Output, Result."""
 
 from summer4.results.groups import SaveGroup, group_requests
+from summer4.results.output import Output
 from summer4.results.plan import (
     EVERYTHING,
     Compartments,
@@ -15,7 +16,6 @@ from summer4.results.plan import (
 )
 from summer4.results.result import Result, ResultWithParams, SolverInfo
 from summer4.results.targets import Target, TargetSet
-from summer4.results.trace import Trace
 
 __all__ = [
     "EVERYTHING",
@@ -23,6 +23,7 @@ __all__ = [
     "ComputedValue",
     "FlowMass",
     "GroupedOutput",
+    "Output",
     "OutputShape",
     "PlanDescription",
     "Result",
@@ -34,6 +35,5 @@ __all__ = [
     "SolverInfo",
     "Target",
     "TargetSet",
-    "Trace",
     "group_requests",
 ]

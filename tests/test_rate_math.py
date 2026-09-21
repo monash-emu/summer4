@@ -1,4 +1,4 @@
-"""Unary and extended binary rate operators, and the Trace seam they share."""
+"""Unary and extended binary rate operators, and the Output seam they share."""
 
 from __future__ import annotations
 
@@ -14,12 +14,12 @@ from summer4 import (  # noqa: E402
     ExitFlow,
     FlowModel,
     GroupedRate,
+    Output,
     Param,
     Property,
     PropertyData,
     PropertyMap,
     Time,
-    Trace,
     TransitionFlow,
     UnaryOp,
     clip,
@@ -59,9 +59,9 @@ def _tanh_scaleup(
     return start + (end - start) * (np.tanh(shape * (t - inflection)) + 1.0) / 2.0
 
 
-def _trace(values: np.ndarray) -> Trace:
+def _trace(values: np.ndarray) -> Output:
     times = np.linspace(0.0, 1.0, values.shape[0])
-    return Trace(
+    return Output(
         times=TimeAxis(values=times, epoch=None, kind="explicit"),
         values=values,
         dims=("time",),
@@ -300,7 +300,7 @@ def test_grouped_pow_and_maximum() -> None:
 
 
 def test_param_transform_scales_a_trace() -> None:
-    """The same ``tanh(Param)`` can scale a rate and, via eval_closed, a Trace."""
+    """The same ``tanh(Param)`` can scale a rate and, via eval_closed, an Output."""
     expr = tanh(Param("se"))
     params = {"se": 0.4}
     factor = eval_closed(expr, params)
@@ -350,7 +350,7 @@ def test_array_const_and_propertydata_use_the_same_kernel() -> None:
     state = Property("state", ("S", "I"))
     pmap = PropertyMap.from_property(state)
     pdata = PropertyData.wrap(pmap, np.array([[1.0, 4.0], [9.0, 16.0]]))
-    traced = Trace(
+    traced = Output(
         times=TimeAxis(values=np.array([0.0, 1.0]), epoch=None, kind="explicit"),
         values=pdata,
         dims=("time", "compartment"),

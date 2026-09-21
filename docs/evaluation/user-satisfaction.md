@@ -27,8 +27,8 @@ case data.*
 | Set the initial population | **Blocked** — build `y0` by hand with `select` |
 | Add infection, progression, recovery flows | Works (`ForceOfInfection` + `TransitionFlow`) |
 | Run the model | Works — `CompiledModel.run` returns a `Result` trajectory |
-| Request incidence by age | Works — `FlowMass` / `Trace` edge queries |
-| Plot | Works — `Trace.to_pandas()` then Plotly (pandas plotting backend) |
+| Request incidence by age | Works — `FlowMass` / `Output` edge queries |
+| Plot | Works — `Output.to_pandas()` then Plotly (pandas plotting backend) |
 | Calibrate | **Partial** — sparse `Target` / `TargetSet` fits exist; Bayesian workflow (WP10) does not |
 
 Seven of nine steps complete, one partial, one blocked. The modeller can build,

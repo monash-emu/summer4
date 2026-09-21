@@ -8,7 +8,7 @@ User-facing code is the same under both solvers:
 
 - **diffrax** — :meth:`Target.contribute` merges observation times into the
   request's ``ts``, so the solver hits them exactly and
-  :meth:`~summer4.results.trace.Trace.at_times` is a no-op gather;
+  :meth:`~summer4.results.output.Output.at_times` is a no-op gather;
 - **Euler** — the model saves on its grid and
   :meth:`~summer4.time.TimeAxis.weights_for` supplies the precomputed
   ``(idx, weight)`` pair that ``at_times`` already applies.
@@ -27,9 +27,9 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
+from summer4.results.output import Output
 from summer4.results.plan import Quantity, SavePlan, SaveRequest
 from summer4.results.result import Result
-from summer4.results.trace import Trace
 from summer4.time import Epoch
 
 
@@ -58,8 +58,8 @@ def _replace_request(plan: SavePlan, key: str, request: SaveRequest) -> SavePlan
     )
 
 
-def _trace_array(trace: Trace) -> Any:
-    values = trace.values
+def _output_array(output: Output) -> Any:
+    values = output.values
     return values.data if hasattr(values, "data") else values
 
 
@@ -159,7 +159,7 @@ class TargetSet:
             plan = target.contribute(plan)
         return plan
 
-    def gather(self, result: Result) -> dict[str, Trace]:
+    def gather(self, result: Result) -> dict[str, Output]:
         """Interpolate each target's key onto its observation times."""
         return {t.key: result[t.key].at_times(t.times) for t in self.targets}
 
@@ -172,7 +172,7 @@ class TargetSet:
         """
         out: dict[str, Any] = {}
         for target in self.targets:
-            pred = _trace_array(result[target.key].at_times(target.times))
+            pred = _output_array(result[target.key].at_times(target.times))
             # Prefer reshape to the observation shape; fall back to flat.
             try:
                 aligned = pred.reshape(target.values.shape)

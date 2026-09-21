@@ -16,7 +16,7 @@ The public API of summer4 today is the taxonomy (`Property`, `Trait`,
 `Selector`, `PropertyMap`, `Stratification`, `Groups`), flows
 (`FlowModel`, `CompiledModel`, `TransitionFlow` / `ExitFlow` / `EntryFlow`,
 `EdgeMap`, `Source` / `Dest`, rates and adjustments), results
-(`SavePlan`, `Result`, `Trace`, `Epoch` / `TimeAxis`, `Target` / `TargetSet`),
+(`SavePlan`, `Result`, `Output`, `Epoch` / `TimeAxis`, `Target` / `TargetSet`),
 epidemiology (`ForceOfInfection`, `MixingMatrix`), and
 time-varying helpers (`Time()`, `summer4.timevarying`, `summer4.data`).
 Initial population / population split (WP3) is applied

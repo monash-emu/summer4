@@ -2,7 +2,7 @@
 
 ## What is wrong today
 
-`Trace.incidence()` / `integrate()` recover counts from **saved instantaneous
+`Output.incidence()` / `integrate()` recover counts from **saved instantaneous
 rates** by trapezoid or Simpson quadrature over the save grid. That is
 second-order (trapezoid) at best and **not** equal to the solver's own
 accumulated flow mass. For calibration against case counts the bias is real
@@ -19,5 +19,5 @@ and cannot be removed from a finished `Result` — the information is gone.
 
 An opt-in save-plan / model flag that accumulates selected flow masses into
 `State.ledgers` during the step (exact for the solver's quadrature), exposed
-on the `Result` as a ledger trace. Trapezoid `Trace.incidence()` remains the
+on the `Result` as a ledger output. Trapezoid `Output.incidence()` remains the
 default post-hoc path for plans that did not request accumulation.

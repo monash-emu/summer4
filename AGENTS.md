@@ -42,7 +42,7 @@ Parameter work is staged (compile / run start / per step); see
 `docs/dev/run-stages.md`. Put `t`/`y`-independent computation in `prepare_fn`
 or a hoistable rate subtree, never in `derived_fn`.
 
-When changing or reviewing JAX-facing code (vector fields, `Trace` ops, save
+When changing or reviewing JAX-facing code (vector fields, `Output` ops, save
 evaluation, losses):
 
 1. Prefer **vectorized** gathers, `segment_*`, and `lax.scan` over Python loops

@@ -1,8 +1,8 @@
-# `Trace.plot` is coupled to matplotlib
+# `Output.plot` is coupled to matplotlib
 
 ## What is wrong today
 
-{meth}`Trace.plot` (`src/summer4/results/trace.py:469`) is:
+{meth}`Output.plot` (`src/summer4/results/output.py:582`) is:
 
 ```python
 def plot(self, **kwargs: Any) -> Any:
@@ -33,7 +33,7 @@ documentation convention, which puts the two at odds. The blast radius is
 currently small, because `myst-nb` runs each notebook in its own kernel, so the
 backend option set by one page does not reach another. But the coupling is a
 trap for any user who sets the backend globally in their own session and then
-calls `Trace.plot`.
+calls `Output.plot`.
 
 ## What a fix looks like
 
@@ -46,7 +46,7 @@ than incidental:
   index (`to_pandas` already names it `"time"`) and let the backend render it,
   dropping the `pyplot` import from the happy path.
 
-Either way, a test that sets the Plotly backend, calls `Trace.plot()`, and
+Either way, a test that sets the Plotly backend, calls `Output.plot()`, and
 asserts no matplotlib figure was created would pin the behaviour. Notebook call
 sites that pass matplotlib-only kwargs should move to
-`trace.to_pandas().plot(...)`.
+`output.to_pandas().plot(...)`.

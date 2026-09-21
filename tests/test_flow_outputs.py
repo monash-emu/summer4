@@ -27,7 +27,7 @@ from summer4 import (
 )
 from summer4.flows.edges import edge_labels, rewrite_edge_selector, sum_over_edge
 from summer4.jax.propertydata import PropertyData as PD
-from summer4.results.trace import Trace
+from summer4.results.output import Output
 from summer4.time import TimeAxis
 
 
@@ -145,7 +145,7 @@ def test_incidence_trapezoid_second_order() -> None:
 
     def _integral(ts: np.ndarray) -> float:
         vals = ts**2
-        trace = Trace(
+        trace = Output(
             times=TimeAxis(values=ts, epoch=None, kind="explicit"),
             values=vals,
             dims=("time",),
@@ -162,7 +162,7 @@ def test_simpson_beats_trapezoid_and_raises() -> None:
     ts = np.linspace(0.0, 1.0, 5)  # odd count, uniform
     vals = ts**2  # ∫_0^1 t^2 dt = 1/3
     analytic = 1.0 / 3.0
-    trace = Trace(
+    trace = Output(
         times=TimeAxis(values=ts, epoch=None, kind="explicit"),
         values=vals,
         dims=("time",),
@@ -171,7 +171,7 @@ def test_simpson_beats_trapezoid_and_raises() -> None:
     simp = float(np.asarray(trace.integrate(method="simpson").values))
     assert abs(simp - analytic) < abs(trap - analytic)
 
-    even = Trace(
+    even = Output(
         times=TimeAxis(values=np.linspace(0.0, 1.0, 4), epoch=None, kind="explicit"),
         values=np.linspace(0.0, 1.0, 4) ** 2,
         dims=("time",),
@@ -179,7 +179,7 @@ def test_simpson_beats_trapezoid_and_raises() -> None:
     with pytest.raises(ValueError, match="odd number"):
         even.integrate(method="simpson")
 
-    uneven = Trace(
+    uneven = Output(
         times=TimeAxis(values=np.array([0.0, 0.2, 0.5, 0.8, 1.0]), epoch=None, kind="explicit"),
         values=np.array([0.0, 0.04, 0.25, 0.64, 1.0]),
         dims=("time",),
@@ -268,7 +268,7 @@ def test_incidence_jaxpr_independent_of_t() -> None:
         vals = jnp.asarray(ts)
 
         def run(v: object) -> object:
-            trace = Trace(
+            trace = Output(
                 times=TimeAxis(values=ts, epoch=None, kind="explicit"),
                 values=v,
                 dims=("time",),

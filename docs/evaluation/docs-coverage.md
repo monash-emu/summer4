@@ -52,7 +52,7 @@ Chapter 10 notes unstratified $R_t$ without a next-generation-matrix helper.
 ### 1. Results object — closed
 
 Both corpora call `model.get_outputs_df()` and plot the result.
-`CompiledModel.run` returns a `Result`; `Trace.to_frame` / `to_pandas` and the
+`CompiledModel.run` returns a `Result`; `Output.to_frame` / `to_pandas` and the
 Plotly-via-pandas convention cover the publishable-run path. See
 {doc}`../dev/plotting`.
 

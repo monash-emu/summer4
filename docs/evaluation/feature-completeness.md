@@ -30,8 +30,8 @@ Two comparisons, both derived from source rather than from memory:
 | `model.run(parameters)` | `CompiledModel.run(...)` → `Result` |
 | `model.set_initial_population(distribution)` | `FlowModel.set_initial_population` / `InitialPopulation` |
 | `model.get_initial_population(parameters)` | `CompiledModel.initial_state` |
-| `model.get_outputs_df()` | `Trace.to_frame` / `to_pandas` |
-| `model.get_derived_outputs_df()` | `Result` traces via `SavePlan` |
+| `model.get_outputs_df()` | `Output.to_frame` / `to_pandas` |
+| `model.get_derived_outputs_df()` | `Result` outputs via `SavePlan` |
 
 ### Compartments and stratification — 4 of 8 complete (7 covered)
 
@@ -91,8 +91,8 @@ wrapper (P9).
 
 ### Derived outputs — 8 of 8
 
-`FlowMass` / `Trace` edge queries, `Compartments(where=)`, `Trace.sum_over` /
-`total` / `partition`, `Trace.cumulative()`, `SaveFn` plus trace arithmetic,
+`FlowMass` / `Output` edge queries, `Compartments(where=)`, `Output.sum_over` /
+`total` / `partition`, `Output.cumulative()`, `SaveFn` plus output arithmetic,
 and `ComputedValue` / `derived_fn` cover D1–D8.
 
 ### Solver — 2 of 2
@@ -137,7 +137,7 @@ The remaining API gaps are five deliberate shape mismatches that never reach
 | Compiled model + fixed-step integrator | **Implemented** | `CompiledModel`, `euler` |
 | Adaptive solver seam (diffrax) | **Implemented** | `solver=` name or diffrax instance |
 | Force of infection / mixing | **Implemented** | `summer4.epi` (`ForceOfInfection`, `MixingMatrix`) |
-| Derived outputs and results | **Implemented** | `Result`, `Trace`, `SavePlan`, `FlowMass` |
+| Derived outputs and results | **Implemented** | `Result`, `Output`, `SavePlan`, `FlowMass` |
 | Real-world time | **Implemented** | `Epoch`, `TimeAxis` |
 | Time-varying rates / dated data | **Implemented** | `summer4.timevarying`, `summer4.data` |
 | Calibration | Partial | Sparse `Target` / `TargetSet` (WP11); Bayesian workflow (WP10) ahead |

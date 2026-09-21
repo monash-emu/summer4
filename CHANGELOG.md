@@ -43,7 +43,7 @@ Tag: [`v0.2.0a2`](https://github.com/monash-emu/summer4/releases/tag/v0.2.0a2)
 ### Added
 
 - Rate-tree math (`tanh`, `clip`, `pow` and friends) that evaluates a
-  parameter-only expression and can also scale a saved `Trace`
+  parameter-only expression and can also scale a saved `Output`
   (`feat/rate-math`).
 - A batched table interpolator so a per-age or yearly series is one node, not a
   rebuilt gather on every vector-field call (`feat/table-interp`).
@@ -64,7 +64,7 @@ Tag: [`v0.2.0a2`](https://github.com/monash-emu/summer4/releases/tag/v0.2.0a2)
 Tag: [`v0.2.0a1`](https://github.com/monash-emu/summer4/releases/tag/v0.2.0a1)
 
 First pinnable release of the flows stack on `main`: compartment taxonomy,
-`FlowModel` / `CompiledModel`, results (`SavePlan`, `Result`, `Trace`),
+`FlowModel` / `CompiledModel`, results (`SavePlan`, `Result`, `Output`),
 Diffrax solvers, epidemiology (`ForceOfInfection`, `MixingMatrix`),
 time-varying rates, stratification, and honest packaging (JAX as a core
 dependency; `frames` extra for polars / pyarrow).

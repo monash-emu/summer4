@@ -18,7 +18,7 @@ and copyright line for those files belong in `docs/textbook/figures/LICENSE`.
 ## Plotting
 
 Plot with Plotly (already in the `docs` and `nb` pixi environments), driven
-from `Trace.to_pandas()`. Do not introduce a second plotting stack.
+from `Output.to_pandas()`. Do not introduce a second plotting stack.
 
 ## Code
 

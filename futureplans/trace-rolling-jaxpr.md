@@ -1,8 +1,8 @@
-# `Trace.rolling` may explode the jaxpr
+# `Output.rolling` may explode the jaxpr
 
 **Status:** open  
-**Where:** `Trace.rolling` → `Trace._apply_rolling` in
-`src/summer4/results/trace.py`
+**Where:** `Output.rolling` → `Output._apply_rolling` in
+`src/summer4/results/output.py`
 
 ## Problem
 

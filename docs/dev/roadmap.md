@@ -133,7 +133,7 @@ changed about them is recorded here instead, and overrides them.
 | `tb-ports-feature-completeness` | WP3, all of it | **Applied** on `feat/initial-population`; the plan that shipped is `plans/initial-population.plan.md`. `KI3`, `TM6`, `L4`, `L5` and `S8` are already `full`. Port-order step 3 is a no-op — skip it |
 | `tb-ports-feature-completeness` | §14c | `EpiModel` no longer exists (`plans/remove-epimodel.plan.md`). There are no `EpiModel.add_infection_*_flow` methods to extend. Builder sugar belongs on `ForceOfInfection` construction, used with `FlowModel`; `adjust=` already exists on `TransitionFlow` |
 | `tb-ports-feature-completeness` | §13.3, §14e, §15e | Notebook numbers are stale: `examples/notebooks/` already reaches `12-model-stratification.ipynb`. Use the numbers in the step sections below |
-| `tb-ports-feature-completeness` | §15a | Step 4 landed scalar/array `Trace` arithmetic, unary ops on a `Trace` (`tanh(trace)`), and `eval_closed` so a parameter transform can scale a `Trace`. Name-aligned `Trace` ∘ `Trace`, `cumulative(start=)`, `midpoint` and multi-flow `FlowMass` remain step 9. Clear the `D5` note in step 10 |
+| `tb-ports-feature-completeness` | §15a | Step 4 landed scalar/array `Output` arithmetic, unary ops on an `Output` (`tanh(output)`), and `eval_closed` so a parameter transform can scale an `Output`. Name-aligned `Output` ∘ `Output`, `cumulative(start=)`, `midpoint` and multi-flow `FlowMass` remain step 9. Clear the `D5` note in step 10 |
 | `wp12-release` | Step 2b | JAX has native Windows x86_64 CPU support; the Windows `jaxlib` wheel is experimental. Native Windows GPU is unsupported. WSL2 is the Windows GPU route, and that support is experimental. This repository's pixi platforms stay `osx-arm64` and `linux-64` |
 | `rate-dispatch-and-defer` | §22.8, §23.8 | Notebook `14` is taken by `14-custom-rate-nodes.ipynb`. Step 22 uses `examples/notebooks/15-array-dispatch.ipynb`. Step 23 uses `examples/notebooks/16-deferred-functions.ipynb` |
 
@@ -200,7 +200,7 @@ This step makes summer4 installable by tag instead of by commit SHA. It fixes
 the packaging first: `import summer4` already imports JAX, so the "NumPy only"
 claim in the installation docs is false — JAX, jaxlib, diffrax and equinox move
 into the core dependencies, and a new `frames` extra declares the polars and
-pyarrow that `Trace.to_pandas` silently needs. Then it bumps the version to
+pyarrow that `Output.to_pandas` silently needs. Then it bumps the version to
 `0.2.0a1`, tags it, and documents the git install honestly, including that JAX
 has no native Windows support. It closes `KI23` and `TM9`, which unblocks the
 tb_macro port (step 20).
@@ -360,11 +360,11 @@ rebuilt on every vector-field call. It closes `KI6`, `KI10`, `KI11` and `TM4`.
 ### What the previous worker left you
 
 - Operators that landed: unary `neg`, `exp`, `log`, `abs`, `tanh`, `sqrt`, `floor`; binary `pow`, `maximum`, `minimum`; `clip` is `minimum(maximum(x, lo), hi)`. Dunders `__pow__`, `__rpow__`, `__neg__`, `__abs__`. None of §13.1's operators were deferred.
-- The numeric kernel is `summer4.flows.algebra.apply_unary` / `apply_binary`. Rate evaluation and value-side arithmetic (a `GroupedRate`, a `PropertyData`, a `Trace`) share it. Grouped rates still refuse a different grouping.
-- `eval_closed(expr, params)` evaluates a parameter-only tree (`tanh(Param("s"))`, `Param("x") ** Param("p")`). The same object can be a flow rate or a `Transform` argument. A `Trace` does not carry parameters, so `trace * expr` raises and names `eval_closed`; `trace * eval_closed(expr, params)` is the combination. Name-aligned `Trace` ∘ `Trace`, `cumulative(start=)`, `midpoint` and multi-flow `FlowMass` are still step 9.
+- The numeric kernel is `summer4.flows.algebra.apply_unary` / `apply_binary`. Rate evaluation and value-side arithmetic (a `GroupedRate`, a `PropertyData`, an `Output`) share it. Grouped rates still refuse a different grouping.
+- `eval_closed(expr, params)` evaluates a parameter-only tree (`tanh(Param("s"))`, `Param("x") ** Param("p")`). The same object can be a flow rate or a `Transform` argument. An `Output` does not carry parameters, so `output * expr` raises and names `eval_closed`; `output * eval_closed(expr, params)` is the combination. Name-aligned `Output` ∘ `Output`, `cumulative(start=)`, `midpoint` and multi-flow `FlowMass` are still step 9.
 - `UnaryOp` is run-stage when its argument is. A parameter-only `exp(Param("a") * Param("b"))` is one hoist slot. A step-stage `exp` still descends, so the parameter product inside `exp(a * b + Time())` hoists. `hoist=True` and `hoist=False` matched on that expression.
 - Default JAX is float32. The 50-time triangular and tanh checks use `rtol=1e-5`.
-- `examples/notebooks/13-rate-math-and-tables.ipynb` exists. Extend it; do not start a second notebook. It currently asserts the triangular seed, the tanh scale-up, and scaling a trace by `eval_closed(tanh(Param("se")))`.
+- `examples/notebooks/13-rate-math-and-tables.ipynb` exists. Extend it; do not start a second notebook. It currently asserts the triangular seed, the tanh scale-up, and scaling an output by `eval_closed(tanh(Param("se")))`.
 - No ledger status moved. Route-today text for `KI4`, `KI11`, `KI14` and `TM4` now names the nodes that exist. `TM4` stays `partial` until this step closes it. `S6` is untouched.
 
 ### Read first
@@ -479,7 +479,7 @@ density to exponent 0.
   downstream ports can use ageing sugar, and demography for step 20 (tb_macro
   port) no longer needs hand-written chains.
 - User gate for steps 4–6 is still open on PR #15:
-  `examples/notebooks/13-rate-math-and-tables.ipynb` (seed, tanh, trace scale,
+  `examples/notebooks/13-rate-math-and-tables.ipynb` (seed, tanh, output scale,
   death table, mixing Lookup, ageing).
 - `MixingMatrix` per-call row normalisation remains
   `futureplans/mixing-matrix-per-call-normalisation.md`.
@@ -575,9 +575,9 @@ came out reusable for step 16's `susceptibility=`, since
 
 ### Summary
 
-A `Trace` cannot be divided by another `Trace`, so every per-capita rate, every
+An `Output` cannot be divided by another `Output`, so every per-capita rate, every
 percentage and every parameter-scaled output in Kiribati's ~150 derived outputs
-would be hand-written array arithmetic. This step gives `Trace` arithmetic
+would be hand-written array arithmetic. This step gives `Output` arithmetic
 operators with name-aligned broadcasting, a windowed `cumulative(start=)`, the
 summer2 `midpoint()` flow-output convention needed for numerical parity, and a
 `FlowMass` that sums several flows. It also folds in a deferred fix: the rolling
@@ -615,7 +615,7 @@ window currently builds a Python loop whose jaxpr grows with trajectory length.
 
 1. `AGENTS.md`, especially *JAX is the primary runtime target*
 2. `plans/tb-ports-feature-completeness.plan.md` §15a, §15b, §15d
-3. `src/summer4/results/trace.py`, `src/summer4/results/result.py`
+3. `src/summer4/results/output.py`, `src/summer4/results/result.py`
 4. `futureplans/trace-rolling-jaxpr.md`,
    `futureplans/state-ledgers-incidence.md`
 
@@ -663,7 +663,7 @@ the analyses expect, folds in the deferred target-residual reduction, and closes
 ### Do
 
 Follow §15c, the `targetset-residual-reduction` half of §15d, and §15e. Delete
-that futureplans note and its README bullet. Clear the `D5` row's "`Trace` has
+that futureplans note and its README bullet. Clear the `D5` row's "`Output` has
 no operators yet; they arrive in WP15" note in the API ledger — it is no longer
 true. Extend `examples/notebooks/06-flow-outputs.ipynb`.
 
@@ -731,7 +731,7 @@ a 185-year run that exceeds it returns silently wrong trajectories — which, in
 calibration, become silently wrong posteriors. This step surfaces failure as
 `SolverInfo.ok`, derives a sensible default step ceiling from the time span
 instead of a magic number, and makes the mixing-matrix reciprocity check safe
-under `vmap` (it currently calls `float()` on a traced value). It closes `KI22`
+under `vmap` (it currently calls `float()` on an outputd value). It closes `KI22`
 and is the last thing before calibration.
 
 ### Read first
@@ -1156,7 +1156,7 @@ user is happy with that before implementing (plan §22.5).
    surface: a fixable mistake*
 4. `docs/dev/run-stages.md`
 5. `src/summer4/flows/rates.py` and `src/summer4/flows/algebra.py`
-6. `src/summer4/results/trace.py` and `src/summer4/jax/propertydata.py`
+6. `src/summer4/results/output.py` and `src/summer4/jax/propertydata.py`
 
 ### Do
 

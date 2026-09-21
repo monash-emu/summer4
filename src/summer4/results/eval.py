@@ -108,7 +108,7 @@ def values_for(req: Any, raw: Any, model: Any) -> Any:
 
     Both Euler and diffrax backends strip ``PropertyData.data`` when stacking
     saves; this is the single place that rebuilds the maps so the backends
-    cannot disagree about a trace's ``values``.
+    cannot disagree about an output's ``values``.
     """
     what = req.what if hasattr(req, "what") else req
     match what:

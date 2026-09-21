@@ -14,12 +14,12 @@ from summer4 import (  # noqa: E402
     EntryFlow,
     FlowModel,
     GroupedRate,
+    Output,
     Param,
     Property,
     PropertyData,
     PropertyMap,
     Time,
-    Trace,
     UnaryOp,
     clip,
     exp,
@@ -35,9 +35,9 @@ _GOLDEN_EXP = "756e6172793a6578706669656c64282778272c29"
 _GOLDEN_ADD = "62696e6f703a6164646669656c64282778272c296669656c64282778272c29"
 
 
-def _trace(values: np.ndarray) -> Trace:
+def _trace(values: np.ndarray) -> Output:
     times = np.linspace(0.0, 1.0, values.shape[0])
-    return Trace(
+    return Output(
         times=TimeAxis(values=times, epoch=None, kind="explicit"),
         values=values,
         dims=("time",),
@@ -129,7 +129,7 @@ def test_numpy_ufunc_preserves_each_wrapper() -> None:
 
     trace = _trace(np.array([1.0, 2.0]))
     got_trace = np.exp(trace)
-    assert isinstance(got_trace, Trace)
+    assert isinstance(got_trace, Output)
     assert got_trace.dims == ("time",)
 
     node = np.exp(Param("x"))

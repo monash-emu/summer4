@@ -11,8 +11,8 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
 ## Conventions
 
 - One concern per file; prefer a stable slug (`trace-rolling-jaxpr.md`).
-- Link to concrete symbols or paths (`Trace._apply_rolling`,
-  `src/summer4/results/trace.py`).
+- Link to concrete symbols or paths (`Output._apply_rolling`,
+  `src/summer4/results/output.py`).
 - Say what is wrong today, why it hurts (e.g. jaxpr size ∝ T), and what a fix
   should look like.
 - Agents: read this folder when planning; append or update notes when you flag
@@ -21,14 +21,14 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
 ## Notes
 
 - [`trace-rolling-jaxpr.md`](trace-rolling-jaxpr.md) — Python loop in
-  `Trace._apply_rolling` grows the jaxpr with trajectory length.
+  `Output._apply_rolling` grows the jaxpr with trajectory length.
 - [`state-ledgers-incidence.md`](state-ledgers-incidence.md) — opt-in exact
   incidence via `State.ledgers` (post-hoc trapezoid is biased for calibration).
 - [`targetset-residual-reduction.md`](targetset-residual-reduction.md) —
   `TargetSet.residuals` cannot reduce a stratified save onto an aggregate
   series.
 - [`trace-plot-backend-coupling.md`](trace-plot-backend-coupling.md) —
-  `Trace.plot` hardcodes matplotlib and forwards backend-specific kwargs.
+  `Output.plot` hardcodes matplotlib and forwards backend-specific kwargs.
 - [`foi-unstratified-dummy-pop.md`](foi-unstratified-dummy-pop.md) —
   unstratified FOI still needs a singleton `pop` property + `[[1.0]]` matrix.
 - [`foi-multi-property-mixing.md`](foi-multi-property-mixing.md) —

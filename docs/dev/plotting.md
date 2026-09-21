@@ -1,6 +1,6 @@
 # Plotting
 
-summer4 does not own a charting layer, and it should not. A `Trace` converts to
+summer4 does not own a charting layer, and it should not. An `Output` converts to
 a dataframe, and the dataframe is plotted by whatever the reader already uses.
 What this page settles is what *the documentation* uses, so that notebooks do
 not each make the choice again.
@@ -16,14 +16,14 @@ import plotly.io as pio
 pd.options.plotting.backend = "plotly"
 pio.renderers.default = "notebook_connected"
 
-figure = trace.to_pandas().plot(title="Prevalence")
+figure = output.to_pandas().plot(title="Prevalence")
 figure.update_layout(yaxis_title="people")
 figure
 ```
 
 This is the idiom the summer2 documentation used, so a reader arriving from
 summer2 recognises it, and it needs nothing from `summer4` itself —
-{meth}`~summer4.results.trace.Trace.to_pandas` already returns a frame indexed
+{meth}`~summer4.results.output.Output.to_pandas` already returns a frame indexed
 by date when the result carries an {class}`~summer4.time.Epoch`.
 
 Leave the figure as the last expression of the cell. Do not call `figure.show()`:
@@ -44,14 +44,14 @@ Because each figure loads its own matching plotly.js, `conf.py` deliberately
 does **not** pin a version in `html_js_files`; doing so loads a second major
 version of the library into the same page.
 
-## `Trace.plot` stays matplotlib
+## `Output.plot` stays matplotlib
 
-{meth}`~summer4.results.trace.Trace.plot` imports matplotlib and is the quick
+{meth}`~summer4.results.output.Output.plot` imports matplotlib and is the quick
 host-side look at a result — at a REPL, or in a test. It is not backend-aware:
 it passes `**kwargs` through to `DataFrame.plot`, so calls like
 `plot(legend=False)` raise under the Plotly backend, and it always sets the
 x-label through `pyplot`. Prefer `to_pandas().plot(...)` in documentation, and
-keep `Trace.plot` for interactive work.
+keep `Output.plot` for interactive work.
 
 ## Scope
 

@@ -48,7 +48,7 @@ Request mechanisms for compartment-based, flow-based, aggregate, cumulative and
 function outputs; a results type; a dataframe view.
 
 **State:** done (ledger WP2 and WP4). `CompiledModel.run` returns a `Result` of
-named `Trace`s; `SavePlan` declares what to keep; the query surface covers
+named `Output`s; `SavePlan` declares what to keep; the query surface covers
 select, aggregate, cumulative, calendar resample, rolling and interpolated
 `at_times`, and `to_frame` / `to_pandas` give the dataframe view. Flow-output
 polarity queries (`sum_over(..., side=)`, `incidence`, `integrate`) and
@@ -130,7 +130,7 @@ Still missing / partial:
   that need diagrams (especially 12–19 when unblocked) still need copies under
   the BSD-2-Clause notice, or redraws.
 - ~~**A plotting convention.**~~ Settled: Plotly through the pandas plotting
-  backend over `Trace.to_pandas()`, as in the summer2 documentation. See
+  backend over `Output.to_pandas()`, as in the summer2 documentation. See
   {doc}`../dev/plotting` for the decision and the Sphinx renderer it requires.
 - **A documentation CI check.** `pixi run -e docs docs-strict` should run on
   every pull request, since the site executes its own claims.

@@ -105,7 +105,7 @@ compartment {class}`PropertyMap` they raise.
    ComputedValue
    SaveFn
    Result
-   Trace
+   Output
    SolverInfo
    Target
    TargetSet

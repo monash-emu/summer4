@@ -27,7 +27,7 @@ type CalendarRule = str | int
 
 
 class ReduceHow(StrEnum):
-    """Aggregation for time reductions (:meth:`TimeAxis.rolling`, Trace resample).
+    """Aggregation for time reductions (:meth:`TimeAxis.rolling`, Output resample).
 
     Prefer these members at call sites. Bare strings such as ``"sum"`` are still
     accepted and coerced.
@@ -188,7 +188,7 @@ def _normalize_rule(rule: CalendarRule) -> CalendarRule:
     raise ValueError(
         f"Unsupported calendar rule {rule!r}. Supported: 'D', 'W'/'W-<DAY>', "
         f"'ME', 'QE', 'YE', or an integer factor. For exotic offsets use "
-        f"Trace.to_pandas() and resample there."
+        f"Output.to_pandas() and resample there."
     )
 
 

@@ -286,7 +286,7 @@ mechanism, and the difference matters.
 jnp.exp(Param("beta"))          # Error interpreting argument … as an abstract array
 jnp.clip(Param("beta"), 0, 1)
 jnp.maximum(Param("beta"), 0.0)
-jnp.exp(some_trace)             # also fails on Trace, GroupedRate, PropertyData
+jnp.exp(some_trace)             # also fails on Output, GroupedRate, PropertyData
 ```
 
 Operators work (`Param("b") * 2` builds a `BinOp`) because Python routes them
@@ -309,7 +309,7 @@ the evaluated wrapper types, preserving the wrapper:
 | call | `np.*` or a `summer4` helper | `jnp` equivalent |
 |---|---|---|
 | on `RateOps` | builds `UnaryOp` / `BinOp` | `TypeError` |
-| on `Trace` | returns `Trace` | `TypeError` |
+| on `Output` | returns `Output` | `TypeError` |
 | on `GroupedRate` | returns `GroupedRate` | `TypeError` |
 | on `PropertyData` | returns `PropertyData` | `TypeError` |
 
@@ -325,7 +325,7 @@ first-order epidemiological need. `clip` is still sugar over `maximum` +
 
 ### The fix, applied
 
-`__array_ufunc__` and `__array_function__` are on `RateOps`, `Trace`,
+`__array_ufunc__` and `__array_function__` are on `RateOps`, `Output`,
 `GroupedRate` and `PropertyData`. The op is a **canonical string**, resolved to
 a `jax.numpy` callable at evaluation — computegraph's `getattr(fnp, func_str)`
 trick. Six of summer4's existing spellings are not NumPy's (`mul` vs

@@ -40,7 +40,7 @@ original analyses re-run on numpyro.
 
 - **tb_macro** — tb_macro rows complete today: **8 of 9**, and every other row is `partial`. The force of infection is `ForceOfInfection(kind=FOIKind.GENERALISED)`; calibration is still a hand-written numpyro model (the original hand-writes that too).
 - **Kiribati** — Kiribati rows complete today: **13 of 23**. Every capability except calibration and scale has *some* route, but a faithful, calibratable port would re-implement several layers by hand. Remaining blockers:
-  1. **Output algebra** at summer2 scale — `KI13`–`KI17`. `Trace` has no operators, `cumulative()` has no start, `FlowMass` names one flow, there is no summer2 midpoint convention and no `Result` → frame.
+  1. **Output algebra** at summer2 scale — `KI13`–`KI17`. `Output` has no operators, `cumulative()` has no start, `FlowMass` names one flow, there is no summer2 midpoint convention and no `Result` → frame.
   2. **Calibration workflow** — `KI18`–`KI21`. No priors, likelihoods, gradient-free sampler or posterior-run tooling exist.
   3. **Scale** — `KI22`. Nothing measures a 160-compartment, 185-year model, and a solver that exceeds its step ceiling fails silently.
 
@@ -62,10 +62,10 @@ original analyses re-run on numpyro.
 | KI11 | Kiribati | Interpolation knots derived with log / max (screening rate, outcome floors) | `full` | `log` / `maximum` on a `TableInterp` or on scalar `Interp` knots | — |
 | KI12 | Kiribati | Computed values (detection rates, matrix distance) | `full` | `ComputedValue` over `derived_fn` | — |
 | KI13 | Kiribati | Outputs summed over several flows and filtered by strata | `partial` | One `FlowMass` per flow added by hand, or `SaveFn` | WP15 |
-| KI14 | Kiribati | Output arithmetic: per-capita, percentages, × parameter | `partial` | `Trace` × scalar/array, and `eval_closed` for a parameter expression such as `tanh(Param(...))`; no name-aligned `Trace` ÷ `Trace` | WP15 |
+| KI14 | Kiribati | Output arithmetic: per-capita, percentages, × parameter | `partial` | `Output` × scalar/array, and `eval_closed` for a parameter expression such as `tanh(Param(...))`; no name-aligned `Output` ÷ `Output` | WP15 |
 | KI15 | Kiribati | Cumulative output from a start year | `partial` | `between(...).cumulative()` then re-padding | WP15 |
 | KI16 | Kiribati | summer2 midpoint flow-output convention (parity) | `partial` | Hand-written averaging of saved rates | WP15 |
-| KI17 | Kiribati | Named output set to a frame / parquet | `partial` | Per-trace `to_pandas` concatenated by hand | WP15 |
+| KI17 | Kiribati | Named output set to a frame / parquet | `partial` | Per-output `to_pandas` concatenated by hand | WP15 |
 | KI18 | Kiribati | Priors and Normal targets, including a prior-distributed sd | `none` | — | WP10 |
 | KI19 | Kiribati | Gradient-free posterior sampling (replacing `DEMetropolisZ`) | `none` | — | WP10 |
 | KI20 | Kiribati | MAP fit (replacing nevergrad) | `partial` | Hand-written optax loop, as in the case study | WP10 |

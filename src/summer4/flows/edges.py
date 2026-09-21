@@ -102,7 +102,7 @@ def rewrite_edge_selector(table: PropertyMap, sel: Selector) -> Selector:
     """Lower ``Source``/``Dest`` against an edge ``table`` alone (no ``EdgeMap``).
 
     Gates are derived from the ``@source`` / ``@dest`` marker columns so a
-    :class:`~summer4.results.trace.Trace` can select edges without holding an
+    :class:`~summer4.results.output.Output` can select edges without holding an
     unhashable :class:`EdgeMap` in pytree aux.
     """
     src_gate, dest_gate = _marker_gates(table)

@@ -9,7 +9,7 @@ flows with summer4.
 Chapters 1–6 document the **compartment taxonomy**. Chapter 8 documents
 **flows**: named transitions over a map, `CompiledModel`, and edge queries with
 `Source` / `Dest`. Chapter 9 documents **running and results**:
-`CompiledModel.run`, `SavePlan`, `Result` / `Trace`, and `Epoch`. Chapter 10
+`CompiledModel.run`, `SavePlan`, `Result` / `Output`, and `Epoch`. Chapter 10
 documents **sparse calibration targets** (`Target` / `TargetSet`). Bayesian
 likelihoods and priors are still WP10; {doc}`../evaluation/index` quantifies
 the remaining gap. Chapter 7 maps the summer2 vocabulary onto what exists.

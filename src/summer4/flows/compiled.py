@@ -419,11 +419,11 @@ def eval_closed(expr: RateOps, derived: object) -> Any:
     """Evaluate a parameter-only rate expression against ``derived``.
 
     ``tanh(Param("s"))`` can multiply a flow and, once evaluated, a saved
-    :class:`~summer4.results.trace.Trace`. This is that evaluation: constants
+    :class:`~summer4.results.output.Output`. This is that evaluation: constants
     and parameters only, including the unary and binary nodes built from them.
     An expression that reads time, compartment state, or another flow raises
     ``ValueError`` — it has to run inside the vector field, where those inputs
-    exist. ``Trace`` arithmetic then takes the array this returns.
+    exist. ``Output`` arithmetic then takes the array this returns.
     """
     from summer4.flows.stages import rate_stage
 
@@ -1162,9 +1162,9 @@ class CompiledModel:
         """
         from summer4.results.eval import dims_for_quantity, values_for
         from summer4.results.groups import group_requests
+        from summer4.results.output import Output
         from summer4.results.plan import EVERYTHING, SavePlan
         from summer4.results.result import Result
-        from summer4.results.trace import Trace
         from summer4.solvers.base import SolveSpec
         from summer4.solvers.diffrax_backend import KNOWN_SOLVER_NAMES, diffrax_solve
         from summer4.solvers.euler_backend import euler_solve
@@ -1244,7 +1244,7 @@ class CompiledModel:
                 solver_stats=bool(expanded.solver_stats),
             )
 
-        traces: dict[str, Trace] = {}
+        outputs: dict[str, Output] = {}
         for key, req in expanded.requests.items():
             from summer4.results.plan import GroupedOutput
 
@@ -1262,11 +1262,11 @@ class CompiledModel:
                 kind=TimeAxisKind.GRID,
             )
             values = values_for(req, raw, self)
-            traces[key] = Trace(times=trace_times, values=values, dims=dims)
+            outputs[key] = Output(times=trace_times, values=values, dims=dims)
 
         return Result(
             times=times,
-            traces=traces,
+            outputs=outputs,
             solver=out.stats,
             dense=out.dense,
             _state_pmap=self.pmap if out.dense is not None else None,

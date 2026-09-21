@@ -193,7 +193,7 @@ def test_compartments_where_in_saveplan_stays_map_aware() -> None:
 
 
 def test_jit_select_gather_shrinks_under_jit() -> None:
-    """Trace.select gather must stay usable as the default jax.jit target path."""
+    """Output.select gather must stay usable as the default jax.jit target path."""
     state, age, pmap, cm, y0 = _compiled_sir()
 
     def loss(scale: object) -> Any:
