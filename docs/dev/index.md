@@ -11,6 +11,7 @@ Starting work? [Roadmap](roadmap.md) names the next step and how to run it.
 
 roadmap
 architecture
+rate-expressions
 run-stages
 data-structures
 selector-evaluation
