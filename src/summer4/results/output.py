@@ -448,17 +448,18 @@ class Output:
             out = PropertyData(self.values.pmap, out)
         return self._with(values=out)
 
-    def incidence(self, method: QuadMethod = "trapezoid") -> Output:
-        """Integrate instantaneous rates over each save interval.
+    def integrate_intervals(self, method: QuadMethod = "trapezoid") -> Output:
+        """Integrate along time, one panel per save interval.
 
         Returns ``T-1`` rows (trapezoid) or ``(T-1)/2`` Simpson panels, with
-        times at each panel's right edge.
+        times at each panel's right edge. :meth:`integrate` is the same
+        quadrature summed over the whole window.
 
         **Quadrature error.** Trapezoid over a save interval is second-order
-        accurate; summer2's accumulated incidence is exact for the solver's own
-        quadrature. For calibration against case counts that bias is real and
-        is **not** recoverable from a :class:`~summer4.results.result.Result`.
-        Mitigations: save finer than you calibrate and :meth:`resample`; use
+        accurate. It is not the solver's own accumulated flow, and that
+        difference is **not** recoverable from a finished
+        :class:`~summer4.results.result.Result`.
+        Mitigations: save on a finer grid and :meth:`resample`; use
         ``method='simpson'``; eventually an opt-in accumulator in
         ``State.ledgers`` (not implemented).
         """
@@ -470,19 +471,19 @@ class Output:
 
         if method == "trapezoid":
             if times.size < 2:
-                raise ValueError("incidence() needs at least 2 time points.")
+                raise ValueError("integrate_intervals() needs at least 2 time points.")
             dt = xp.asarray(np.diff(times)).reshape((-1,) + (1,) * (data_t.ndim - 1))
             panels = (data_t[:-1] + data_t[1:]) * (0.5 * dt)
             new_t = times[1:]
         elif method == "simpson":
-            dt0 = _require_uniform_odd(times, op="incidence")
+            dt0 = _require_uniform_odd(times, op="integrate_intervals")
             y0 = data_t[:-2:2]
             y1 = data_t[1:-1:2]
             y2 = data_t[2::2]
             panels = (dt0 / 3.0) * (y0 + 4.0 * y1 + y2)
             new_t = times[2::2]
         else:
-            raise ValueError(f"Unknown incidence method {method!r}.")
+            raise ValueError(f"Unknown integrate_intervals method {method!r}.")
 
         out = xp.moveaxis(panels, 0, t_ax)
         new_times = TimeAxis(values=new_t, epoch=self.times.epoch, kind=TimeAxisKind.EXPLICIT)
@@ -491,7 +492,7 @@ class Output:
     def integrate(self, method: QuadMethod = "trapezoid") -> Output:
         """Integrate over the whole time window; drops the ``time`` axis.
 
-        See :meth:`incidence` for the quadrature-error caveats. Simpson
+        See :meth:`integrate_intervals` for the quadrature-error caveats. Simpson
         requires a uniform grid with an odd point count.
         """
         xp = _xp()

@@ -617,7 +617,7 @@ window currently builds a Python loop whose jaxpr grows with trajectory length.
 2. `plans/tb-ports-feature-completeness.plan.md` §15a, §15b, §15d
 3. `src/summer4/results/output.py`, `src/summer4/results/result.py`
 4. `futureplans/trace-rolling-jaxpr.md`,
-   `futureplans/state-ledgers-incidence.md`
+   `futureplans/state-ledgers-flow-integral.md`
 
 ### Do
 
@@ -625,7 +625,7 @@ Follow §15a, §15b and the `trace-rolling-jaxpr` half of §15d. Every operation
 must work inside `jit`: index alignment at trace time, gathers and arithmetic
 traced. Delete `futureplans/trace-rolling-jaxpr.md` and its bullet in
 `futureplans/README.md` once it is folded in. Document `midpoint()` as a parity
-convention, not exact incidence.
+convention, not the solver's accumulated flow.
 
 Cut from: `main`. Merges into: `main`.
 

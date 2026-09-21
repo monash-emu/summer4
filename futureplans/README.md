@@ -22,8 +22,9 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
 
 - [`trace-rolling-jaxpr.md`](trace-rolling-jaxpr.md) — Python loop in
   `Output._apply_rolling` grows the jaxpr with trajectory length.
-- [`state-ledgers-incidence.md`](state-ledgers-incidence.md) — opt-in exact
-  incidence via `State.ledgers` (post-hoc trapezoid is biased for calibration).
+- [`state-ledgers-flow-integral.md`](state-ledgers-flow-integral.md) — opt-in
+  exact flow accumulation via `State.ledgers` (post-hoc trapezoid is not the
+  solver's own integral).
 - [`targetset-residual-reduction.md`](targetset-residual-reduction.md) —
   `TargetSet.residuals` cannot reduce a stratified save onto an aggregate
   series.

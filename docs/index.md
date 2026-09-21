@@ -137,7 +137,7 @@ See {doc}`getting-started/quickstart` for the taxonomy walkthrough and
 
 summer4 can describe a stratified compartment space, compile named flows
 (including infection FOI and mixing), time-parameterise rates, select an
-adaptive solver, and `run()` to a queryable `Result` with incidence and
+adaptive solver, and `run()` to a queryable `Result` with interval integrals and
 dataframe export. It cannot yet wrap initial population / population split
 (WP3), load and scale empirical contact surveys (WP9), or run a Bayesian
 calibration workflow (WP10). Chapter 15 remains partial for lack of a FOI

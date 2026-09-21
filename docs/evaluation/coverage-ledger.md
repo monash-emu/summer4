@@ -77,7 +77,7 @@ reach, and it is the denominator for every percentage on this site.
 | P7 | `get_sigmoidal_interpolation_function` | parameters | `full` | `summer4.timevarying.sigmoidal` | `sharpness` is summer2 curvature; breakpoints may be `FieldRef`s |
 | P8 | `get_piecewise_function` | parameters | `full` | `summer4.timevarying.step` / `piecewise` | Right-continuous; breakpoints may be `FieldRef`s |
 | P9 | `get_time_callable` | parameters | `partial` | `compile() -> vf(t, y, params)` | A time callable, but not summer2's graph wrapper |
-| D1 | `request_output_for_flow` | outputs | `full` | `FlowMass` / `Output` edge queries | `sum_over(..., side=)`, `incidence`, `integrate` |
+| D1 | `request_output_for_flow` | outputs | `full` | `FlowMass` / `Output` edge queries | `sum_over(..., side=)`, `integrate_intervals`, `integrate` |
 | D2 | `request_output_for_compartments` | outputs | `full` | `Compartments(where=)` / `Output.select` |  |
 | D3 | `request_aggregate_output` | outputs | `full` | `Output.sum_over` / `total` / `partition` |  |
 | D4 | `request_cumulative_output` | outputs | `full` | `Output.cumulative()` |  |
@@ -272,7 +272,7 @@ summer2 `03-derived-outputs`,
 `04-flow-types`, `10-derived-outputs-stratified`
 
 `FlowMass` outputs are `PropertyData` over the edge table. `sum_over(..., side=)`,
-`.integrate()`, `.incidence()`, and validated `ComputedValue` paths are live.
+`.integrate()`, `.integrate_intervals()`, and validated `ComputedValue` paths are live.
 Textbook ports for 4 and 8 remain to write; chapter 10's honest blocker was WP5.
 Plan phase: `feat/flow-outputs`.
 

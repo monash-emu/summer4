@@ -334,7 +334,7 @@ def _sum_over_property_name(expr: RateOps) -> str | None:
         case Capture(inner=inner):
             return _sum_over_property_name(inner)
         case BinOp(left=left, right=right):
-            # Prefer a Reduce / sum_over on either side (FOI = contact * grouped).
+            # Prefer a Reduce / sum_over on either side of a product.
             return _sum_over_property_name(left) or _sum_over_property_name(right)
         case _:
             custom = getattr(expr, "group_by", None)

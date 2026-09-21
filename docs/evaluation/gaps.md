@@ -51,7 +51,7 @@ function outputs; a results type; a dataframe view.
 named `Output`s; `SavePlan` declares what to keep; the query surface covers
 select, aggregate, cumulative, calendar resample, rolling and interpolated
 `at_times`, and `to_frame` / `to_pandas` give the dataframe view. Flow-output
-polarity queries (`sum_over(..., side=)`, `incidence`, `integrate`) and
+polarity queries (`sum_over(..., side=)`, `integrate_intervals`, `integrate`) and
 validated `ComputedValue` capture ship alongside.
 
 ### 1.6 `PropertyMap` must become hashable
