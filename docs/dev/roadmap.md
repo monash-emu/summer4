@@ -113,7 +113,7 @@ run at any time from `main`.
 | 19 | G | WP9 | `docs/textbook-16-19` | `plans/wp9-contact-surveys.plan.md` | Step 19 | planned | — |
 | 20 | H | — | *(new repo)* | `plans/tb-macro-summer4-port.plan.md` | Whole | planned | — |
 | 21 | H | — | *(new repo)* | `plans/kiribati-tb-summer4-port.plan.md` | Whole | planned | — |
-| 22 | I | WP18 | `feat/rate-array-dispatch` | `plans/rate-dispatch-and-defer.plan.md` | Step 22 | planned | — |
+| 22 | I | WP18 | `feat/rate-array-dispatch` | `plans/rate-dispatch-and-defer.plan.md` | Step 22 | done | — |
 | 23 | I | WP18 | `feat/rate-defer` | `plans/rate-dispatch-and-defer.plan.md` | Step 23 | planned | — |
 <!-- /roadmap:steps -->
 
@@ -1095,6 +1095,8 @@ session rather than inventing steps here.
 
 ## Step 22 — `feat/rate-array-dispatch`
 
+**Landed:** feat/rate-array-dispatch, PR #21, 2026-09-21.
+
 ### Summary
 
 This step makes NumPy's dispatch protocols work on rate expressions, so
@@ -1183,6 +1185,41 @@ closes no ledger row, and is independent of step 22.
 `_rate_bytes` totality fix has landed, with
 `grep -n "return type(expr).__name__.encode()" src/summer4/flows/rates.py`.
 Either answer is fine; the plan says what each means.
+
+### What the previous worker left you
+
+- Step 8 is still the single `next` step. Phase I does not take the current
+  position: the checker allows only one current step, and compartment
+  infectiousness has not landed. This step stays `planned` until its own
+  handoff marks it `done`.
+- The `_rate_bytes` totality fix **has landed** (`fix/custom-rate-node-digest`,
+  on `main` before this branch). There is no
+  `return type(expr).__name__.encode()` fallback. `register_rate_eval` rejects
+  a class without `__rate_bytes__`. `Defer` must implement it; registration
+  should succeed. Do not re-implement the totality fix.
+- `np.ndarray * RateOps` is one `BinOp` with an `ArrayConst`. The suite did not
+  break. `as_rate` also accepts arrays; a 0-d array becomes `Const`. Dataclass
+  equality of `ArrayConst` is still unusable (NumPy's ambiguous truth value);
+  compare `.value` with `assert_allclose`.
+- `DENY_OPS` is exactly the planned list. Nothing extra was added. `matmul` on
+  a rate node raises `ValueError`. `GroupedRate` does **not** refuse it:
+  defining `__array_ufunc__` turns `@` into a matmul ufunc, so `GroupedRate`
+  delegates `matmul` to `__matmul__` / `__rmatmul__`. `M @ grouped` still
+  matches the hand computation.
+- `__array_function__` is still only `np.clip`, `np.maximum`, `np.minimum`,
+  `np.power` and `np.absolute`. The last four normally arrive as ufuncs;
+  `np.clip` is the one that needed the allowlist. No further functions were
+  required.
+- Notebook numbering: `14` is taken by `14-custom-rate-nodes.ipynb`. This step
+  shipped `examples/notebooks/15-array-dispatch.ipynb`. Use
+  `examples/notebooks/16-deferred-functions.ipynb` (the correction is in the
+  table above).
+- `pixi run -e docs docs-strict` still fails on
+  `docs/summer2/10-derived-outputs-stratified.ipynb`, the pre-existing
+  source-side `adjust=` bug in `futureplans/split-adjust-selector-side.md`.
+  Not this step.
+- User gate for this step is still open on PR #21:
+  `examples/notebooks/15-array-dispatch.ipynb`.
 
 ### Read first
 
