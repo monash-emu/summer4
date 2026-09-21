@@ -43,8 +43,8 @@ question you cannot answer about an opaque callable.
 | Pass | Where | Question it answers | Impossible over an opaque `Function` because… |
 |---|---|---|---|
 | `_eval_rate` | `flows/compiled.py` | what is the value? | (this one is possible — it is the only one) |
-| `rate_stage` | `flows/stages.py` | does this depend on `t`, `y`, or another flow? | a callable's free variables are not introspectable |
-| `build_hoist_table` | `flows/stages.py` | which subtrees can move from per-step to run-start? | you cannot hoist what you cannot classify |
+| `rate_stage` | `flows/stages.py` | does this depend on `t`, `y`, or another flow? | **partly possible** — see the correction below |
+| `build_hoist_table` | `flows/stages.py` | which subtrees can move from per-step to run-start? | sub-node hoisting (an `Interp` knot stack) needs the node's internal structure |
 | `_rate_bytes` | `flows/rates.py` | are two models structurally identical? | callables have no value identity, only `id()` |
 | `_flow_refs` | `flows/rates.py` | which flows must be evaluated first? | `topo_sort` needs the edge before the call runs |
 | `_field_paths` | `flows/rates.py` | which parameter paths does the model read? | needed to validate `derived_fn` output |
@@ -57,11 +57,34 @@ Three of those are load-bearing in a way worth spelling out.
 A rate that depends only on parameters is evaluated **once per `run`**, not once
 per solver step. With a 4000-step solve, an `Interp` knot stack built from
 calibrated `FieldRef`s is the difference between one `jnp.stack` and four
-thousand. That optimisation needs a compile-time predicate over the expression
-— "does this subtree read `t` or `y`?" — and that predicate is a structural walk
-of typed nodes. Over a `Function(some_closure, …)` the answer is always
-"assume yes", because the closure might read anything. computegraph has no
-staging distinction for exactly this reason: every node runs every step.
+thousand. That optimisation needs a compile-time predicate over the expression:
+"does this subtree read `t` or `y`?"
+
+**Correction to an earlier version of this page**, which claimed the predicate
+is impossible over a `Function`-style node because a callable's free variables
+are not introspectable. That is too strong, and the distinction it misses is
+the one that matters for the rest of this page.
+
+A `Function(func, args)` — computegraph's, or a `Defer(fn, *args)` in summer4 —
+takes its dependencies as **explicit arguments**. Nothing is hidden, so the
+node's stage is exactly the join of its arguments' stages. Verified with a
+~35-line `Defer` prototype: `defer(f)(Param("x"), Param("y"))` classifies as
+`run` and hoists; `defer(f)(Time(), Param("amp"))` classifies as `step`. The
+predicate is only defeated by a callable that *closes over* model state rather
+than receiving it, which is a property of how the callable is written, not of
+the node being generic.
+
+computegraph therefore *could* have staged; it simply never did — every node
+runs every step. That is a missing feature in summer2, not a consequence of its
+design.
+
+What typed nodes uniquely buy here is finer: **sub-node** hoisting. `Interp` is
+hoisted in three independent pieces — the breakpoint stack, the value stack and
+the argument — so knots built from calibrated `FieldRef`s stack once per run
+even though the argument is `Time()` and the node as a whole is step-stage. A
+generic node is all-or-nothing: wrap that same interpolation in a `Defer` whose
+argument is `Time()` and the knot stack rebuilds on every one of the 4000 steps.
+That is a real benefit, and a narrower one than originally claimed.
 
 ### Digest and jit cache (`_rate_bytes`)
 
@@ -175,6 +198,54 @@ The package-author path, documented in
 {doc}`../cookbook/01-custom-rates`. Worth it when the same named process
 appears in many models; overkill for one hazard. If you take it you **must
 implement `__rate_bytes__`**; `register_rate_eval` raises without it.
+
+### There is no good on-ramp, and that is a gap
+
+summer2 had one: `computegraph.defer(f)(param("y"), 5.1)`. Two lines of
+library code, no class, no registration, no protocol. A modeller writes an
+ordinary Python function, wraps it, calls it with a mix of parameters and
+literals, and gets a node. That is the standard summer4's easy entry should be
+measured against, and today it does not meet it:
+
+- **`Transform` cannot be a rate.** `TransitionFlow(..., rate=Transform(f, ...))`
+  raises `TypeError: Cannot use Transform as a flow rate`. It is an adjustment
+  only. The workaround is to set the rate to a dummy `1.0` and write a
+  `Transform` whose callable ignores its first argument —
+  `Transform(lambda prev, t, amp: f(t, amp), Time(), Param("amp"))`. That is
+  not an on-ramp a non-programmer will find.
+- **`Transform` is undocumented as an escape hatch.** It appears in
+  {doc}`../user/08-flows` and {doc}`../user/07-from-summer2` *only* as an
+  adjustment precedence level (`Overwrite` → `Multiply` → `Transform`). Nothing
+  in the docs says "this is where you put arbitrary code".
+- **The `prev` first parameter is a surprise.** `defer` had no such thing.
+- **`derived_fn` is heavier than the job.** A `NamedTuple` schema plus a
+  `(params, *, y, t)` hook, and per [R3](run-stages.md) it disables parameter
+  hoisting model-wide.
+- **The cookbook's ladder skips the rung.** {doc}`../cookbook/01-custom-rates`
+  goes from `Reduce` arithmetic, to an FOI-specific `kind=` callable, to
+  subclassing `RateOps`. There is no general "wrap my function" step between
+  rungs 1 and 3.
+
+A `Defer` rate node closes this, and is cheap. The prototype is ~35 lines
+including all four dunders, and because its arguments are explicit it stages
+*exactly* (see the correction under [Staging](#staging-rate_stage-build_hoist_table)):
+
+```python
+model.add_flow(
+    TransitionFlow("infection", state["S"], state["I"],
+                   defer(my_own_function)(Time(), Param("amp")))
+)
+```
+
+Verified against `721ad04`: evaluates identically to the `Transform`
+workaround, `defer(f)(Param("x"), Param("y"))` classifies `run` and hoists,
+`defer(f)(Time(), Param("amp"))` classifies `step`. The one cost is that the
+digest must key on `id(fn)`, so a callable defined inside a builder function
+misses the jit cache — the same fail-safe caveat `Transform` and `derived_fn`
+already carry, and worth an optional `name=` for users who rebuild in a loop.
+
+Written up as
+[`futureplans/no-defer-equivalent.md`](https://github.com/monash-emu/summer4/blob/main/futureplans/no-defer-equivalent.md).
 
 ## The operator surface: a fixable mistake
 
