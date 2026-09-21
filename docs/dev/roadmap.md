@@ -114,7 +114,7 @@ run at any time from `main`.
 | 20 | H | — | *(new repo)* | `plans/tb-macro-summer4-port.plan.md` | Whole | planned | — |
 | 21 | H | — | *(new repo)* | `plans/kiribati-tb-summer4-port.plan.md` | Whole | planned | — |
 | 22 | I | WP18 | `feat/rate-array-dispatch` | `plans/rate-dispatch-and-defer.plan.md` | Step 22 | done | — |
-| 23 | I | WP18 | `feat/rate-defer` | `plans/rate-dispatch-and-defer.plan.md` | Step 23 | planned | — |
+| 23 | I | WP18 | `feat/rate-defer` | `plans/rate-dispatch-and-defer.plan.md` | Step 23 | done | — |
 <!-- /roadmap:steps -->
 
 `Closes` lists row IDs of {doc}`../evaluation/tb-ports` (and, where a step moves
@@ -1166,6 +1166,8 @@ the five allowlisted functions, say which and why.
 
 ## Step 23 — `feat/rate-defer`
 
+**Landed:** feat/rate-defer, PR #22, 2026-09-21.
+
 ### Summary
 
 This step gives arbitrary user code a first-class door into the rate slot.
@@ -1188,52 +1190,49 @@ Either answer is fine; the plan says what each means.
 
 ### What the previous worker left you
 
-- Step 8 is still the single `next` step. Phase I does not take the current
-  position: the checker allows only one current step, and compartment
-  infectiousness has not landed. This step stays `planned` until its own
-  handoff marks it `done`.
-- The `_rate_bytes` totality fix **has landed** (`fix/custom-rate-node-digest`,
-  on `main` before this branch). There is no
-  `return type(expr).__name__.encode()` fallback. `register_rate_eval` rejects
-  a class without `__rate_bytes__`. `Defer` must implement it; registration
-  should succeed. Do not re-implement the totality fix.
-- `np.ndarray * RateOps` is one `BinOp` with an `ArrayConst`. The suite did not
-  break. `as_rate` also accepts arrays; a 0-d array becomes `Const`. Dataclass
-  equality of `ArrayConst` is still unusable (NumPy's ambiguous truth value);
-  compare `.value` with `assert_allclose`.
-- `DENY_OPS` is exactly the planned list. Nothing extra was added. `matmul` on
-  a rate node raises `ValueError`. `GroupedRate` does **not** refuse it:
-  defining `__array_ufunc__` turns `@` into a matmul ufunc, so `GroupedRate`
-  delegates `matmul` to `__matmul__` / `__rmatmul__`. `M @ grouped` still
-  matches the hand computation.
-- `__array_function__` is still only `np.clip`, `np.maximum`, `np.minimum`,
-  `np.power` and `np.absolute`. The last four normally arrive as ufuncs;
-  `np.clip` is the one that needed the allowlist. No further functions were
-  required.
-- Notebook numbering: `14` is taken by `14-custom-rate-nodes.ipynb`. This step
-  shipped `examples/notebooks/15-array-dispatch.ipynb`. Use
-  `examples/notebooks/16-deferred-functions.ipynb` (the correction is in the
-  table above).
+Phase I is finished. Step 8 stays the single `next` step. There is no step
+24, and this handoff does not take the current position: the checker allows
+only one current step, and compartment infectiousness has not landed.
+
+- `kwargs` did not break any traversal. They are stored as a key-sorted tuple
+  of pairs, so keyword order does not change the node. The keyword-order test
+  passes.
+- Initial-population R2 found a `Time()` argument without a new rule, but not
+  by walking `__rate_children__` (plan §23.6 predicted a child walk; that
+  prediction was slightly wrong). `Defer.__rate_stage__` returns `step` when
+  any argument is step-stage, and the existing
+  `rate_stage(...) != "run"` check in `set_initial_population` then raises.
+  The error names `Time`. A param-only `Defer` is accepted.
+- Do not generalise `__rate_children__` into `__children__` yet. Hoist is the
+  only consumer. Flow-ref order, field paths and capture saving still use
+  their own dunders. That remains recommendation item 3 in
+  `docs/dev/rate-expressions.md`.
+- `rate_stage` does pass `params_are_static`, despite the plan saying no
+  change was needed. Without the flag a param-only `Defer` is run-stage even
+  when parameters are dynamic. Zero-argument hooks keep the old call;
+  a hook that accepts the keyword (or `**kwargs`) receives the flag.
+- `futureplans/no-defer-equivalent.md` is deleted. `P2` stays `full`; its
+  route now names `defer` first.
 - `pixi run -e docs docs-strict` still fails on
   `docs/summer2/10-derived-outputs-stratified.ipynb`, the pre-existing
   source-side `adjust=` bug in `futureplans/split-adjust-selector-side.md`.
-  Not this step.
-- User gate for this step is still open on PR #21:
-  `examples/notebooks/15-array-dispatch.ipynb`.
+- User gates still open: `examples/notebooks/15-array-dispatch.ipynb` on
+  PR #21, and `examples/notebooks/16-deferred-functions.ipynb` on PR #22.
+  `pixi run notebook` is the sign-off; the suite only proves they execute.
 
 ### Read first
 
 1. `AGENTS.md`
 2. `plans/rate-dispatch-and-defer.plan.md` — *Context*, *Ordering*,
    *Read first*, then all of *Step 23*
-3. `docs/dev/rate-expressions.md` — especially *There is no good on-ramp* and
-   *What identity keying actually costs*
-4. `futureplans/no-defer-equivalent.md`
-5. `docs/dev/run-stages.md`
-6. `src/summer4/flows/stages.py` (all of it), and `_eval_rate` plus
+3. `docs/dev/rate-expressions.md` — *The on-ramp is defer* and
+   *What identity keying actually costs*. `futureplans/no-defer-equivalent.md`
+   was deleted when this step landed.
+4. `docs/dev/run-stages.md`
+5. `src/summer4/flows/stages.py` (all of it), and `_eval_rate` plus
    `_collect_capture_meta` in `src/summer4/flows/compiled.py`
-7. `docs/cookbook/01-custom-rates.ipynb` — the rung structure you are inserting
-   into
+6. `docs/cookbook/01-custom-rates.ipynb` — the rung structure this step
+   inserted into
 
 ### Do
 
