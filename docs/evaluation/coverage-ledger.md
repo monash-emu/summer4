@@ -69,7 +69,7 @@ reach, and it is the denominator for every percentage on this site.
 | A4 | `Stratification.add_infectiousness_adjustments` | adjustments | `full` | `ForceOfInfection(infectiousness=...)` | FOI-owned, deliberately not on Stratification (as A1) |
 | M1 | `Stratification.set_mixing_matrix` | mixing | `full` | `summer4.epi.MixingMatrix` | Weights transmission; `TraitMatrix` still moves people |
 | P1 | `Parameter` | parameters | `full` | `FieldRef via derived_refs` | Schema-checked, IDE-completable |
-| P2 | `Function` | parameters | `full` | `Transform / callables in derived_fn` |  |
+| P2 | `Function` | parameters | `full` | `defer / Transform / callables in derived_fn` | `defer` is the rate-slot door; `Transform` only adjusts an existing rate |
 | P3 | `Time` | parameters | `full` | `Time()` rate node; `t` on `derived_fn` | |
 | P4 | `DerivedOutput (as a rate input)` | parameters | `full` | `FlowRef, .sum(), .sum_over()` | Topologically ordered, cycles detected |
 | P5 | `Data` | parameters | `full` | `summer4.data.Data` | Dated series → `Interp` via `Epoch` |

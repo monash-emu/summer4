@@ -240,55 +240,38 @@ The package-author path, documented in
 appears in many models; overkill for one hazard. If you take it you **must
 implement `__rate_bytes__`**; `register_rate_eval` raises without it.
 
-### There is no good on-ramp, and that is a gap
+### The on-ramp is `defer`
 
-summer2 had one: `computegraph.defer(f)(param("y"), 5.1)`. Two lines of
-library code, no class, no registration, no protocol. A modeller writes an
-ordinary Python function, wraps it, calls it with a mix of parameters and
-literals, and gets a node. That is the standard summer4's easy entry should be
-measured against, and today it does not meet it:
-
-- **`Transform` cannot be a rate.** `TransitionFlow(..., rate=Transform(f, ...))`
-  raises `TypeError: Cannot use Transform as a flow rate`. It is an adjustment
-  only. The workaround is to set the rate to a dummy `1.0` and write a
-  `Transform` whose callable ignores its first argument —
-  `Transform(lambda prev, t, amp: f(t, amp), Time(), Param("amp"))`. That is
-  not an on-ramp a non-programmer will find.
-- **`Transform` is undocumented as an escape hatch.** It appears in
-  {doc}`../user/08-flows` and {doc}`../user/07-from-summer2` *only* as an
-  adjustment precedence level (`Overwrite` → `Multiply` → `Transform`). Nothing
-  in the docs says "this is where you put arbitrary code".
-- **The `prev` first parameter is a surprise.** `defer` had no such thing.
-- **`derived_fn` is heavier than the job.** A `NamedTuple` schema plus a
-  `(params, *, y, t)` hook, and per [R3](run-stages.md) it disables parameter
-  hoisting model-wide.
-- **The cookbook's ladder skips the rung.** {doc}`../cookbook/01-custom-rates`
-  goes from `Reduce` arithmetic, to an FOI-specific `kind=` callable, to
-  subclassing `RateOps`. There is no general "wrap my function" step between
-  rungs 1 and 3.
-
-A `Defer` rate node closes this, and is cheap. The prototype is ~35 lines
-including all four dunders, and because its arguments are explicit it stages
-*exactly* (see the correction under [Staging](#staging-pass)):
+summer2's door was `computegraph.defer(f)(param("y"), 5.1)`: an ordinary
+function, wrapped, called with parameters and literals. summer4's equivalent
+is `defer`:
 
 ```python
 model.add_flow(
-    TransitionFlow("infection", state["S"], state["I"],
-                   defer(my_own_function)(Time(), Param("amp")))
+    TransitionFlow(
+        "infection",
+        state["S"],
+        state["I"],
+        defer(my_own_function)(Time(), Param("amp")),
+    )
 )
 ```
 
-Verified against `721ad04`: evaluates identically to the `Transform`
-workaround, `defer(f)(Param("x"), Param("y"))` classifies `run` and hoists,
-`defer(f)(Time(), Param("amp"))` classifies `step`. The one cost is that the
-digest must key on `id(fn)` — see
-[What identity keying actually costs](#identity-keying-cost).
-It is paid on model rebuild, not per `run`, it leaves calibration untouched, and
-it is the *safe* choice for closures. An optional `name=` is worth offering for
-users who rebuild in a sweep, but it is a convenience, not a correctness fix.
+`fn` is called with traced JAX values (arrays, or a `GroupedRate` /
+`PropertyData` when an argument evaluates to one). Pass every dependency as
+an argument. A value closed over is invisible to staging and to the digest.
 
-Written up as
-[`futureplans/no-defer-equivalent.md`](https://github.com/monash-emu/summer4/blob/main/futureplans/no-defer-equivalent.md).
+`defer(f)(Param("x"), Param("y"))` is run-stage and hoists.
+`defer(f)(Time(), Param("amp"))` is step-stage, and a param-only argument
+inside it still hoists. The digest keys on `id(fn)` unless you pass `name=`.
+`name=` asserts that two function objects are the same program. A wrong name
+is a wrong answer. See
+[What identity keying actually costs](#identity-keying-cost).
+
+`Transform` is not this door. It cannot occupy the rate slot, it is an
+adjustment of a rate that already exists, and its callable takes the previous
+rate as a first argument. `derived_fn` still owns multi-output derived
+quantities; it is not the way to write one hazard.
 
 ## The operator surface: a fixable mistake
 

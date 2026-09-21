@@ -287,6 +287,113 @@ class Capture(RateOps):
 
 
 @dataclass(frozen=True, slots=True)
+class Defer(RateOps):
+    """Call ``fn`` on evaluated rate arguments. The general escape hatch.
+
+    ``fn`` is called with **traced JAX values**: arrays, or a
+    :class:`~summer4.flows.compiled.GroupedRate` /
+    :class:`~summer4.jax.propertydata.PropertyData` when an argument evaluates
+    to one. It must be traceable under :func:`jax.jit`. Pass every dependency
+    as an argument. A value closed over instead is invisible to staging, to
+    hoisting and to the digest, and nothing here can catch that.
+
+    ``name`` is optional and affects only the jit-cache digest. The default
+    key is ``id(fn)``, which keeps two closures with the same source and
+    different captured values from sharing a compiled program. Passing
+    ``name=`` asserts that those calls are the same program. A wrong name is
+    a wrong answer, not a slower run.
+
+    ``kwargs`` are stored as a key-sorted tuple of pairs so the node stays
+    hashable and keyword order does not change it.
+    """
+
+    fn: Callable[..., Any]
+    args: tuple[RateOps, ...]
+    kwargs: tuple[tuple[str, RateOps], ...]
+    name: str | None = None
+
+    def __init__(
+        self,
+        fn: Callable[..., Any],
+        *args: object,
+        name: str | None = None,
+        **kwargs: object,
+    ) -> None:
+        object.__setattr__(self, "fn", fn)
+        object.__setattr__(self, "args", tuple(as_rate(arg) for arg in args))
+        object.__setattr__(
+            self,
+            "kwargs",
+            tuple(sorted((key, as_rate(value)) for key, value in kwargs.items())),
+        )
+        object.__setattr__(self, "name", name)
+
+    def __rate_stage__(self, *, params_are_static: bool) -> str:
+        """``step`` if any argument is step-stage, else ``run``."""
+        from summer4.flows.stages import rate_stage
+
+        children = (*self.args, *(value for _, value in self.kwargs))
+        if any(
+            rate_stage(child, params_are_static=params_are_static) == "step" for child in children
+        ):
+            return "step"
+        return "run"
+
+    def __rate_children__(self) -> tuple[RateOps, ...]:
+        return (*self.args, *(value for _, value in self.kwargs))
+
+    def __flow_refs__(self) -> set[str]:
+        refs: set[str] = set()
+        for child in self.__rate_children__():
+            refs |= _flow_refs(child)
+        return refs
+
+    def __field_paths__(self) -> set[tuple[str, ...]]:
+        paths: set[tuple[str, ...]] = set()
+        for child in self.__rate_children__():
+            paths |= _field_paths(child)
+        return paths
+
+    def __capture_children__(self) -> tuple[RateOps, ...]:
+        return self.__rate_children__()
+
+    def __rate_bytes__(self) -> bytes:
+        # Identity, not ``__qualname__``. Every lambda is ``<lambda>``; keying
+        # on the name would make two different closures share a jit cache entry
+        # and silently return the first one's numbers.
+        key = self.name if self.name is not None else str(id(self.fn))
+        parts = [b"defer", key.encode()]
+        for child in self.args:
+            parts.append(_rate_bytes(child))
+        for key_name, value in self.kwargs:
+            parts.append(key_name.encode())
+            parts.append(_rate_bytes(value))
+        return b"".join(parts)
+
+
+@register_rate_eval(Defer)
+def _eval_defer(expr: Defer, *, eval_child: Callable[[RateOps], Any], **_: Any) -> Any:
+    """Evaluate ``expr.fn`` on its arguments. The return is aligned like any rate."""
+    args = [eval_child(arg) for arg in expr.args]
+    kwargs = {key: eval_child(value) for key, value in expr.kwargs}
+    return expr.fn(*args, **kwargs)
+
+
+def defer(fn: Callable[..., Any], *, name: str | None = None) -> Callable[..., Defer]:
+    """Wrap ``fn`` so calling it builds a :class:`Defer` node.
+
+    ``defer(f)(Time(), Param("amp"))`` is the documented spelling.
+    ``Defer(f, Time(), Param("amp"))`` is the same node. See :class:`Defer`
+    for what ``fn`` receives and for what ``name=`` asserts.
+    """
+
+    def wrapped(*args: object, **kwargs: object) -> Defer:
+        return Defer(fn, *args, name=name, **kwargs)
+
+    return wrapped
+
+
+@dataclass(frozen=True, slots=True)
 class ArrayConst(RateOps):
     """Literal array rate (e.g. a static mixing matrix)."""
 

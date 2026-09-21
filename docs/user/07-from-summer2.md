@@ -129,6 +129,7 @@ pmap.to_dicts()    # {'state': 'I', 'age': '0-4'}
 | `query_flows` | `CompiledModel.edges` / `Source` / `Dest` | |
 | `Multiply` / `Overwrite` | same names on `adjust=` | Flow-owned, not on `Stratification` |
 | `np.exp(graph_object)` and other ufuncs | `np.exp(rate)` — the same spelling | `jnp.exp(rate)` does not work; JAX has no dispatch hook |
+| `computegraph.defer(f)(...)` | `defer(f)(...)` | `name=` asserts two functions are the same program; the default key is `id(fn)` |
 | `finalize` | `FlowModel.compile()` | Returns a `CompiledModel` |
 | `set_initial_population` / `get_initial_population` | `FlowModel.set_initial_population` / `CompiledModel.initial_state` | Declarative `InitialPopulation` |
 | `set_population_split` / `adjust_population_split` | `Split(prop, weights, by=, where=)` | Weights normalised; even default on carriers |
