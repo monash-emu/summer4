@@ -248,21 +248,61 @@ def _check_overwrite_overlap(
                 )
 
 
+def _polarize_where(
+    sel: Selector,
+    default_side: type[Source] | type[Dest],
+    split_properties: frozenset[str],
+) -> Selector:
+    """Wrap a polarity-free ``where`` in ``Source`` or ``Dest``.
+
+    A property this flow's ``split=`` introduces is absent on the source, so a
+    bare trait of it selects the destination. Every other bare trait keeps
+    ``default_side``. A mix such as ``age["young"] & clinical[c]`` is
+    polarized one subtree at a time, so age stays on the source.
+    """
+    if not split_properties or default_side is Dest:
+        return default_side(sel)
+    props = selector_properties(sel)
+    if props and props <= split_properties:
+        return Dest(sel)
+    if props.isdisjoint(split_properties):
+        return default_side(sel)
+    match sel:
+        case And(left=left, right=right):
+            return And(
+                _polarize_where(left, default_side, split_properties),
+                _polarize_where(right, default_side, split_properties),
+            )
+        case Or(left=left, right=right):
+            return Or(
+                _polarize_where(left, default_side, split_properties),
+                _polarize_where(right, default_side, split_properties),
+            )
+        case Not(inner=inner):
+            return Not(_polarize_where(inner, default_side, split_properties))
+        case _:
+            return default_side(sel)
+
+
 def _bind_adjust_masks(
     adjust: tuple[Adjustment, ...],
     edge_map: EdgeMap,
     default_side: type[Source] | type[Dest],
     *,
     name: str,
+    split_properties: frozenset[str] | None = None,
 ) -> tuple[NDArray[np.bool_] | None, ...]:
     """Bind each adjustment's ``where`` to an edge mask via ``EdgeMap.mask``."""
+    introduced = split_properties if split_properties is not None else frozenset()
     masks: list[NDArray[np.bool_] | None] = []
     for adj in adjust:
         if adj.where is None:
             masks.append(None)
             continue
         where = adj.where
-        sel: Selector = where if _has_polarity(where) else default_side(where)
+        sel: Selector = (
+            where if _has_polarity(where) else _polarize_where(where, default_side, introduced)
+        )
         if edge_map.dest_idx is None and _contains_side(sel, Dest):
             raise ValueError("Dest(...) in where= on a flow without a destination")
         if edge_map.src_idx is None and _contains_side(sel, Source):
@@ -379,7 +419,13 @@ def actualize(flow: FlowLike, pmap: PropertyMap, *, strict_pairing: bool = True)
             pmap, flow.pairing, edges.src_idx, edges.dest_idx
         )
         adjust = canonical_adjustments(flow.adjust)
-        masks = _bind_adjust_masks(adjust, edges.edge_map, Source, name=flow.name)
+        masks = _bind_adjust_masks(
+            adjust,
+            edges.edge_map,
+            Source,
+            name=flow.name,
+            split_properties=frozenset(flow.split) if flow.split else None,
+        )
         _check_overwrite_overlap(adjust, masks, edges.edge_map)
         return TransitionEdges(
             name=flow.name,
