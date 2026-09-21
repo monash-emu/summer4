@@ -46,3 +46,6 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
 - [`adjustment-expanding-arrays.md`](adjustment-expanding-arrays.md) — evaluate
   adjustment chains over unique value combinations (summer3proto `polarized`)
   instead of folding over every edge; benchmark-gated.
+- [`tb-scale-euler-xla-simplifier.md`](tb-scale-euler-xla-simplifier.md) —
+  TB-scale euler `run` hits an XLA algebraic-simplifier stuck loop (~1 s/run
+  even when warm); dopri5 does not.
