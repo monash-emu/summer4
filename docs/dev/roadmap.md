@@ -74,11 +74,11 @@ Two conventions that are easy to get wrong:
 <!-- roadmap:current -->
 | Field | Value |
 | --- | --- |
-| Step | 10 |
+| Step | 11 |
 | Status | next |
-| Branch | `feat/output-sets` |
+| Branch | `feat/tb-scale-bench` |
 | Cut from | `main` |
-| Last landed | `feat/trace-algebra` |
+| Last landed | `feat/output-sets` |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -101,8 +101,8 @@ run at any time from `main`.
 | 7 | C | WP14 | `feat/epi-generalised-foi` | `plans/tb-ports-feature-completeness.plan.md` | 14a | done | — |
 | 8 | C | WP14 | `feat/epi-compartment-infectiousness` | `plans/tb-ports-feature-completeness.plan.md` | 14b | done | KI4 KI5 TM5 |
 | 9 | D | WP15 | `feat/trace-algebra` | `plans/tb-ports-feature-completeness.plan.md` | 15a | done | — |
-| 10 | D | WP15 | `feat/output-sets` | `plans/tb-ports-feature-completeness.plan.md` | 15c | next | KI13 KI14 KI15 KI16 KI17 |
-| 11 | E | WP16 | `feat/tb-scale-bench` | `plans/tb-ports-feature-completeness.plan.md` | 16a | planned | — |
+| 10 | D | WP15 | `feat/output-sets` | `plans/tb-ports-feature-completeness.plan.md` | 15c | done | KI13 KI14 KI15 KI16 KI17 |
+| 11 | E | WP16 | `feat/tb-scale-bench` | `plans/tb-ports-feature-completeness.plan.md` | 16a | next | — |
 | 12 | E | WP16 | `feat/solver-safety` | `plans/tb-ports-feature-completeness.plan.md` | 16b | planned | KI22 |
 | 13 | F | WP10 | `feat/epi-priors-likelihoods` | `plans/tb-ports-feature-completeness.plan.md` | 10.1 | planned | — |
 | 14 | F | WP10 | `feat/epi-sampling` | `plans/tb-ports-feature-completeness.plan.md` | 10.2 | planned | — |
@@ -644,6 +644,8 @@ Set step 9 `done`, step 10 `next`.
 
 ## Step 10 — `feat/output-sets`
 
+**Landed:** feat/output-sets, PR #26, 2026-09-21.
+
 ### Summary
 
 Kiribati declares about 150 named outputs, many defined in terms of others.
@@ -731,6 +733,43 @@ synthetic model with Kiribati's *shape* and none of its data, and records
 compile time, jaxpr equation counts, wall time per run and `vmap` over 64
 parameter sets, for both the Euler and the adaptive solver. Those numbers become
 the baseline that later regressions are measured against.
+
+### What the previous worker left you
+
+- `OutputSet` is the named DAG. A leaf is a save spec; `total()`, `midpoint()`,
+  `cumulative(start=)` and the other single-output query methods are post-ops
+  applied in `evaluate`, not in the solver. `outputs.ref(name)` (and
+  `* Param(...)`, including `tanh(Param(...))`) is an interior node. Cycles
+  raise and name the loop.
+- `plan()` saves each distinct spec once. The save key is the first output
+  name that uses it; a second spec in that same expression is `name__2`. A key
+  already in the base plan is kept, times included, when the quantity matches.
+  The solved `Result` holds the **raw** leaf under that key. `evaluate` is
+  what returns the named values. Do not read a post-processed name off the
+  solve result.
+- `sum_over` on `Compartments` / `FlowMass` is the save-time field, not a
+  post-op (a method of that name would hide the field). Group afterwards with
+  `outputs.ref(name).sum_over(...)`. `Compartments(sum_over=)` still reduces
+  at save time.
+- `Result.to_frame(shape="wide"|"long", backend="polars"|"pandas")` is
+  host-side. Wide needs one shared time axis; long adds property columns and
+  allows mixed grids. A polars frame writes parquet with `.write_parquet`.
+- `Target(reduce="sum"|"mean"|callable)` reduces every axis after the leading
+  time axis before the residual. The note's `total=True` on the save spec was
+  not added. `futureplans/targetset-residual-reduction.md` is deleted.
+- `cumulative(start=)` still needs a concrete time axis, including inside
+  `jit`. The DAG unrolls one step per named output; this step's ~150-output
+  bench is where that cost gets measured. No new `futureplans/` note.
+- `KI13`–`KI17` are `full`. Readiness today is **18 / 23** (Kiribati) and
+  **8 / 9** (tb_macro). No API-ledger row moved (still 47 / 52). The `D5`
+  note that said `Output` has no operators is cleared.
+- Textbook chapter 8 and summer2 `03` and `10` were already ported at `full`.
+  `OutputSet` makes a Kiribati-scale rewrite of those pages cheaper; they were
+  not re-ported here.
+- Plan pointer: `plans/output-sets.plan.md`. User gate, still open on PR #26:
+  `examples/notebooks/06-flow-outputs.ipynb` (prevalence and per-capita
+  incidence, a parameter scale, cumulative from day 14, infected people by
+  age from the long frame).
 
 ### Read first
 
