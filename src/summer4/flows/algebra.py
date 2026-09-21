@@ -9,9 +9,9 @@ or the :class:`~summer4.jax.propertydata.PropertyData` inside a
 
 Wrapper policy stays with the wrapper. A ``GroupedRate`` combines only with the
 same grouping; a ``PropertyData`` only with an equal map. Neither broadcasts
-across names. Name-aligned ``Output``-to-``Output`` broadcasting is a later step;
-what this module provides is the numeric kernel that step will call after the
-indexes are aligned, and the kernel a parameter-only rate expression uses when
+across names. An :class:`~summer4.results.output.Output` aligns with another
+``Output`` by dim name before calling the numeric kernel here. The same kernel
+is what a parameter-only rate expression uses when
 :func:`~summer4.flows.compiled.eval_closed` turns it into an array an ``Output``
 can scale by.
 """

@@ -139,8 +139,8 @@ Each is recorded as a note in
 
 Two further notes already in `futureplans/` bear directly on calibrating
 against case counts: `state-ledgers-incidence.md` (quadrature incidence is not
-the solver's accumulated flow mass) and `trace-rolling-jaxpr.md`
-(`Output.rolling` unrolls under `jit`).
+the solver's accumulated flow mass). `Output.rolling` used to unroll under
+`jit`; that window is now a host-side index plus one gather.
 
 ## Consequences for the roadmap
 

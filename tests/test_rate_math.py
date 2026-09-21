@@ -321,8 +321,8 @@ def test_param_transform_scales_a_trace() -> None:
 
     with pytest.raises(TypeError, match="eval_closed"):
         _ = _trace(values) * expr
-    with pytest.raises(TypeError, match="name-aligned"):
-        _ = _trace(values) / _trace(values)
+    divided = _trace(values) / _trace(values)
+    np.testing.assert_allclose(np.asarray(divided.values), np.ones_like(values))
 
     out = tanh(_trace(values))
     np.testing.assert_allclose(np.asarray(out.values), np.tanh(values))

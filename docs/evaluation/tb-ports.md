@@ -40,7 +40,7 @@ original analyses re-run on numpyro.
 
 - **tb_macro** — tb_macro rows complete today: **8 of 9**, and every other row is `partial`. The force of infection is `ForceOfInfection(kind=FOIKind.GENERALISED)`; calibration is still a hand-written numpyro model (the original hand-writes that too).
 - **Kiribati** — Kiribati rows complete today: **13 of 23**. Every capability except calibration and scale has *some* route, but a faithful, calibratable port would re-implement several layers by hand. Remaining blockers:
-  1. **Output algebra** at summer2 scale — `KI13`–`KI17`. `Output` has no operators, `cumulative()` has no start, `FlowMass` names one flow, there is no summer2 midpoint convention and no `Result` → frame.
+  1. **Output algebra** at summer2 scale — `KI13`–`KI17`. Name-aligned `Output` arithmetic, `cumulative(start=)`, `midpoint()`, and multi-flow `FlowMass` exist; a named output set and `Result` → frame do not (`KI17`).
   2. **Calibration workflow** — `KI18`–`KI21`. No priors, likelihoods, gradient-free sampler or posterior-run tooling exist.
   3. **Scale** — `KI22`. Nothing measures a 160-compartment, 185-year model, and a solver that exceeds its step ceiling fails silently.
 
@@ -61,10 +61,10 @@ original analyses re-run on numpyro.
 | KI10 | Kiribati | Per-age time series from UN tables (death rates, treatment outcomes) | `full` | `Data.table(times, values, over=age).interp()` — one `TableInterp`, a `GroupedRate` over age | — |
 | KI11 | Kiribati | Interpolation knots derived with log / max (screening rate, outcome floors) | `full` | `log` / `maximum` on a `TableInterp` or on scalar `Interp` knots | — |
 | KI12 | Kiribati | Computed values (detection rates, matrix distance) | `full` | `ComputedValue` over `derived_fn` | — |
-| KI13 | Kiribati | Outputs summed over several flows and filtered by strata | `partial` | One `FlowMass` per flow added by hand, or `SaveFn` | WP15 |
-| KI14 | Kiribati | Output arithmetic: per-capita, percentages, × parameter | `partial` | `Output` × scalar/array, and `eval_closed` for a parameter expression such as `tanh(Param(...))`; no name-aligned `Output` ÷ `Output` | WP15 |
-| KI15 | Kiribati | Cumulative output from a start year | `partial` | `between(...).cumulative()` then re-padding | WP15 |
-| KI16 | Kiribati | summer2 midpoint flow-output convention (parity) | `partial` | Hand-written averaging of saved rates | WP15 |
+| KI13 | Kiribati | Outputs summed over several flows and filtered by strata | `partial` | `FlowMass(flow=(...), where=..., sum_over=...)` sums those flows after one filter; a named output DAG is still hand-written | WP15 |
+| KI14 | Kiribati | Output arithmetic: per-capita, percentages, × parameter | `partial` | Name-aligned `Output` ∘ `Output`, plus scalar/array and `eval_closed` for a parameter expression such as `tanh(Param(...))`; the named output DAG is still hand-written | WP15 |
+| KI15 | Kiribati | Cumulative output from a start year | `partial` | `Output.cumulative(start=)` zeros before a save time and sums from there | WP15 |
+| KI16 | Kiribati | summer2 midpoint flow-output convention (parity) | `partial` | `Output.midpoint()` (`out[0] = f[0]`, then the average with the previous sample) | WP15 |
 | KI17 | Kiribati | Named output set to a frame / parquet | `partial` | Per-output `to_pandas` concatenated by hand | WP15 |
 | KI18 | Kiribati | Priors and Normal targets, including a prior-distributed sd | `none` | — | WP10 |
 | KI19 | Kiribati | Gradient-free posterior sampling (replacing `DEMetropolisZ`) | `none` | — | WP10 |
@@ -78,7 +78,7 @@ original analyses re-run on numpyro.
 | TM4 | tb_macro | Rates as functions of `t` and params (triangular seed, tanh scale-up) | `full` | `clip(h * (1 - abs(Time() - peak) / w), 0)` and a `tanh` scale-up rate tree | — |
 | TM5 | tb_macro | Per-age FOI `I / N**exp` with rel_sus per source compartment | `full` | `kind=FOIKind.GENERALISED` plus `adjust=(Multiply(Param("rel_sus"), where=source),)` on the infection flow | — |
 | TM6 | tb_macro | Initial population with even split over ragged strata | `full` | `InitialPopulation` | — |
-| TM7 | tb_macro | Rolling-sum flow target queried at times | `full` | `FlowMass` → `rolling(7, how="sum")` → `at_times` (unrolled jaxpr, fixed in WP15) | — |
+| TM7 | tb_macro | Rolling-sum flow target queried at times | `full` | `FlowMass` → `rolling(7, how="sum")` → `at_times` (window indexes are host-side; jaxpr size does not grow with trajectory length) | — |
 | TM8 | tb_macro | Poisson likelihood, uniform prior, NUTS | `partial` | Hand-written numpyro model over `run` | WP10 |
 | TM9 | tb_macro | summer4 installable from a tagged GitHub release | `full` | Pin `tag = "v0.2.0a3"` | — |
 <!-- /ledger:ports -->

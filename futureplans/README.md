@@ -10,8 +10,8 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
 
 ## Conventions
 
-- One concern per file; prefer a stable slug (`trace-rolling-jaxpr.md`).
-- Link to concrete symbols or paths (`Output._apply_rolling`,
+- One concern per file; prefer a stable slug (`state-ledgers-incidence.md`).
+- Link to concrete symbols or paths (`Output.incidence`,
   `src/summer4/results/output.py`).
 - Say what is wrong today, why it hurts (e.g. jaxpr size ∝ T), and what a fix
   should look like.
@@ -20,8 +20,6 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
 
 ## Notes
 
-- [`trace-rolling-jaxpr.md`](trace-rolling-jaxpr.md) — Python loop in
-  `Output._apply_rolling` grows the jaxpr with trajectory length.
 - [`state-ledgers-incidence.md`](state-ledgers-incidence.md) — opt-in exact
   incidence via `State.ledgers` (post-hoc trapezoid is biased for calibration).
 - [`targetset-residual-reduction.md`](targetset-residual-reduction.md) —
