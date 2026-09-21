@@ -74,11 +74,11 @@ Two conventions that are easy to get wrong:
 <!-- roadmap:current -->
 | Field | Value |
 | --- | --- |
-| Step | 8 |
+| Step | 9 |
 | Status | next |
-| Branch | `feat/epi-compartment-infectiousness` |
+| Branch | `feat/trace-algebra` |
 | Cut from | `main` |
-| Last landed | `feat/epi-generalised-foi` |
+| Last landed | `feat/epi-compartment-infectiousness` |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -99,8 +99,8 @@ run at any time from `main`.
 | 5 | B | WP13 | `feat/table-interp` | `plans/tb-ports-feature-completeness.plan.md` | 13.2 | done | KI6 KI10 KI11 TM4 |
 | 6 | B | WP13 | `feat/ageing-sugar` | `plans/tb-ports-feature-completeness.plan.md` | 13.3 | done | KI2 TM3 |
 | 7 | C | WP14 | `feat/epi-generalised-foi` | `plans/tb-ports-feature-completeness.plan.md` | 14a | done | — |
-| 8 | C | WP14 | `feat/epi-compartment-infectiousness` | `plans/tb-ports-feature-completeness.plan.md` | 14b | next | KI4 KI5 TM5 |
-| 9 | D | WP15 | `feat/trace-algebra` | `plans/tb-ports-feature-completeness.plan.md` | 15a | planned | — |
+| 8 | C | WP14 | `feat/epi-compartment-infectiousness` | `plans/tb-ports-feature-completeness.plan.md` | 14b | done | KI4 KI5 TM5 |
+| 9 | D | WP15 | `feat/trace-algebra` | `plans/tb-ports-feature-completeness.plan.md` | 15a | next | — |
 | 10 | D | WP15 | `feat/output-sets` | `plans/tb-ports-feature-completeness.plan.md` | 15c | planned | KI13 KI14 KI15 KI16 KI17 |
 | 11 | E | WP16 | `feat/tb-scale-bench` | `plans/tb-ports-feature-completeness.plan.md` | 16a | planned | — |
 | 12 | E | WP16 | `feat/solver-safety` | `plans/tb-ports-feature-completeness.plan.md` | 16b | planned | KI22 |
@@ -513,6 +513,8 @@ Set step 7 `done`, step 8 `next`.
 
 ## Step 8 — `feat/epi-compartment-infectiousness`
 
+**Landed:** feat/epi-compartment-infectiousness, PR #24, 2026-09-21.
+
 ### Summary
 
 Infectiousness weights currently key only on the traits of the property the
@@ -580,6 +582,34 @@ operators with name-aligned broadcasting, a windowed `cumulative(start=)`, the
 summer2 `midpoint()` flow-output convention needed for numerical parity, and a
 `FlowMass` that sums several flows. It also folds in a deferred fix: the rolling
 window currently builds a Python loop whose jaxpr grows with trajectory length.
+
+### What the previous worker left you
+
+- The weight machinery **is reusable** for step 16's `susceptibility=`.
+  `coerce_compartment_weights` and `apply_compartment_weights` in
+  `src/summer4/epi/infection.py` (exported from `summer4.epi`) turn either a
+  `group_by` trait map or a sequence of `(selector, weight)` pairs into one
+  sorted pair list, then multiply a compartment-aligned vector. Call those.
+  Do **not** call `scale_infectious_pool`: susceptibility is not normalised.
+  A selector that is not a trait of `group_by` cannot be folded into the
+  `GroupedRate`; apply the weights to the compartment-aligned rate after
+  mixing. `futureplans/foi-susceptibility-surface.md` points at the two
+  functions. `.at[sel].mul` is not usable under `grad` (`scatter_mul` needs
+  `unique_indices`); the apply function uses `jnp.where` for that reason.
+- Pairs are unrolled. Keep the list small.
+- `KI4`, `KI5` and `TM5` are `full`. Ports readiness today is **13 / 23**
+  (Kiribati) and **8 / 9** (tb_macro). WP14 is applied. No API-ledger row
+  moved (still 47 / 52). `TM5`'s `rel_sus` is still
+  `adjust=(Multiply(...),)` on the infection flow, not a FOI susceptibility
+  surface — that is step 16.
+- User gate, still open on PR #24: `examples/notebooks/09-epi-models.ipynb`
+  (generalised exp=1 / exp=0 bars, compartment × age weights, four-source
+  reinfection). Plan pointer: `plans/epi-compartment-infectiousness.plan.md`.
+- Multi-property mixing and unstratified dummy-`pop` remain
+  `futureplans/foi-multi-property-mixing.md` and
+  `futureplans/foi-unstratified-dummy-pop.md`. No new `futureplans/` note.
+- Steps 22–23 (rate-array dispatch and `defer`) are already on `main` and
+  are independent of this sequence. Ignore §14c (`EpiModel`).
 
 ### Read first
 
