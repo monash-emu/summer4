@@ -31,7 +31,7 @@ Rules:
 | `UnaryOp` | same stage as its argument |
 | `Interp` | step if any of breakpoints/values/arg is step, else run |
 | `GaussianPulse` | step if any of arg/centre/width/height is step, else run |
-| any other `RateOps` | `expr.__rate_stage__()` if that attribute exists and is callable, else **step** (conservative; `ForceOfInfection` stays step) |
+| any other `RateOps` | `expr.__rate_stage__(params_are_static=...)` when the hook accepts that keyword, otherwise `expr.__rate_stage__()`, else **step** (conservative; `ForceOfInfection` stays step). `Defer` uses the keyword: a param-only call is run-stage only while parameters are static |
 
 ## Hoisting rule (`build_hoist_table`)
 
@@ -48,8 +48,10 @@ Walk the roots depth-first. The roots are every flow's `rate`, every
 
    Then descend into `arg`, and into any breakpoints/values not covered by a
    slot.
-3. Otherwise descend into the children of `BinOp`, `UnaryOp` and `GaussianPulse`. Do not
-   descend into `Capture` or unknown custom nodes.
+3. Otherwise descend into the children of `BinOp`, `UnaryOp` and `GaussianPulse`, into a
+   `Lookup` index, and into `__rate_children__()` when a node defines it (so a step-stage
+   `Defer` still hoists a run-stage argument). Do not descend into `Capture` or unknown
+   custom nodes.
 4. Skip a key that already has a slot, because shared node objects are
    evaluated once.
 

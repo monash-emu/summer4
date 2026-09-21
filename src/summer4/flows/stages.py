@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal, cast
@@ -127,11 +128,32 @@ def rate_stage(expr: RateOps, *, params_are_static: bool) -> Stage:
         return "step" if table == "step" or index == "step" else "run"
     stage_fn = getattr(expr, "__rate_stage__", None)
     if callable(stage_fn):
-        result = stage_fn()
+        result = _invoke_rate_stage(stage_fn, params_are_static=params_are_static)
         if result not in ("run", "step"):
             raise TypeError(f"__rate_stage__ must return 'run' or 'step', got {result!r}.")
         return result  # type: ignore[no-any-return]
     return "step"
+
+
+def _invoke_rate_stage(stage_fn: Callable[..., Any], *, params_are_static: bool) -> Any:
+    """Call a custom stage hook, passing the flag only when it accepts it.
+
+    The historical contract is ``__rate_stage__(self)``. ``Defer`` needs the
+    flag: a param-only node is run-stage only while parameters are static.
+    A hook that does not declare the keyword keeps the old zero-argument call.
+    """
+    accepts_flag = False
+    try:
+        parameters = inspect.signature(stage_fn).parameters
+    except (TypeError, ValueError):
+        pass
+    else:
+        accepts_flag = "params_are_static" in parameters or any(
+            param.kind is inspect.Parameter.VAR_KEYWORD for param in parameters.values()
+        )
+    if accepts_flag:
+        return stage_fn(params_are_static=params_are_static)
+    return stage_fn()
 
 
 def _is_leaf(expr: RateOps) -> bool:
@@ -196,6 +218,11 @@ def build_hoist_table(roots: Sequence[RateOps], *, params_are_static: bool) -> H
             return
         if isinstance(node, Lookup):
             walk(node.index)
+            return
+        children_fn = getattr(node, "__rate_children__", None)
+        if callable(children_fn):
+            for child in children_fn():
+                walk(child)
             return
         # Capture and unknown custom nodes: do not descend.
 

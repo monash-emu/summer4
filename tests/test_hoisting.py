@@ -87,6 +87,13 @@ def test_rate_stage_classification_table() -> None:
 
     assert rate_stage(_Staged(), params_are_static=True) == "run"
 
+    class _Flagged(RateOps):
+        def __rate_stage__(self, *, params_are_static: bool) -> str:
+            return "run" if params_are_static else "step"
+
+    assert rate_stage(_Flagged(), params_are_static=True) == "run"
+    assert rate_stage(_Flagged(), params_are_static=False) == "step"
+
 
 def _equiv_model() -> tuple[FlowModel, PropertyMap, PropertyData, Any]:
     class P(NamedTuple):
