@@ -69,7 +69,7 @@ original analyses re-run on numpyro.
 | KI20 | Kiribati | MAP fit (replacing nevergrad) | `partial` | Hand-written optax loop, as in the case study | WP10 |
 | KI21 | Kiribati | Posterior full runs × scenarios, quantiles, averted differences | `none` | — | WP10 |
 | KI22 | Kiribati | Verified compile time, step cost and solver safety at TB scale | `full` | `benchmarks/tb_scale.py`; `SolverInfo.ok` when `max_steps` is exhausted; `MixingMatrix.validate` / vmap-safe reciprocity | — |
-| KI23 | Kiribati | summer4 installable from a tagged GitHub release | `full` | Pin `tag = "v0.2.0a3"` | — |
+| KI23 | Kiribati | summer4 installable from a tagged GitHub release | `full` | Pin `tag = "v0.2.0a4"` | — |
 | TM1 | tb_macro | Ragged map: clinical × infectious only on `active` | `full` | `stratify(prop, where=state["active"])` | — |
 | TM2 | tb_macro | Partial destination (even split), collapse, expand | `full` | `identity_join` equal split; source-only properties dropped | — |
 | TM3 | tb_macro | Ageing 0 → 5 → 15 | `full` | `TraitChain.from_breakpoints(age)` | — |
@@ -78,7 +78,7 @@ original analyses re-run on numpyro.
 | TM6 | tb_macro | Initial population with even split over ragged strata | `full` | `InitialPopulation` | — |
 | TM7 | tb_macro | Rolling-sum flow target queried at times | `full` | `FlowMass` → `rolling(7, how="sum")` → `at_times` (window indexes are host-side; jaxpr size does not grow with trajectory length) | — |
 | TM8 | tb_macro | Poisson likelihood, uniform prior, NUTS | `partial` | Hand-written numpyro model over `run` | WP10 |
-| TM9 | tb_macro | summer4 installable from a tagged GitHub release | `full` | Pin `tag = "v0.2.0a3"` | — |
+| TM9 | tb_macro | summer4 installable from a tagged GitHub release | `full` | Pin `tag = "v0.2.0a4"` | — |
 <!-- /ledger:ports -->
 
 ## Port order

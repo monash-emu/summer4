@@ -1,15 +1,16 @@
 # summer4
 
-JAX-native compartmental modelling. Current tag: **`v0.2.0a3`**. See
+JAX-native compartmental modelling. Current tag: **`v0.2.0a4`**. See
 [CHANGELOG.md](CHANGELOG.md) and [docs/releases/](docs/releases/) for what each
 release does.
 
 This release ships the compartment taxonomy (`Property`, `Trait`, a Kleene
 three-valued selector algebra, an immutable NumPy-backed `PropertyMap`) and a
 flows layer (`FlowModel`, `CompiledModel`, named transition/entry/exit flows, a
-JAX vector field). Repeated `CompiledModel.run()` calls with the same save plan
-reuse the Diffrax / equinox JIT cache, including when params are plain
-`{str: float}` dicts.
+JAX vector field), plus the TB-port surface: ageing sugar, generalised FOI,
+and `Output` / `OutputSet` algebra. Repeated `CompiledModel.run()` calls with
+the same save plan reuse the Diffrax / equinox JIT cache, including when
+params are plain `{str: float}` dicts.
 
 Importing summer4 imports JAX. JAX, jaxlib, diffrax and equinox are core dependencies.
 

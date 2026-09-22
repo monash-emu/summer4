@@ -169,7 +169,7 @@ contains every branch above it.
 
 Every phase in the table is now on `main`, as of the merge of PR #7
 (`eceba1e`) and PR #8 (`769f9f1`). The first pinnable tag was `v0.2.0a1`; the
-current tag is `v0.2.0a3` (`prepare()` boxes float params for Diffrax JIT cache). The table is kept as
+current tag is `v0.2.0a4` (TB-port surface: ageing, generalised FOI, Output / OutputSet). The table is kept as
 history of the stack order.
 
 Every phase shipped its notebook: `examples/notebooks/01-taxonomy.ipynb`
@@ -187,7 +187,7 @@ in *The path to 100%* below is its scope statement, not its design. Every
 remaining package is planned.
 
 WP10 remains planned in
-`plans/tb-ports-feature-completeness.plan.md`. WP12–WP16 have shipped.
+`plans/tb-ports-feature-completeness.plan.md`. WP12–WP16 and WP18 have shipped.
 That plan exists to make two
 tuberculosis models portable to summer4; which of their capabilities each
 package closes is recorded, by row ID, in {doc}`tb-ports`.
@@ -200,13 +200,13 @@ package closes is recorded, by row ID, in {doc}`tb-ports`.
 | — | Textbook / docs catch-up | `plans/textbook-catchup.plan.md` (C1–C4) | **Applied.** Ports for unblocked chapters and summer2 pages; evaluation prose refresh |
 | WP9 | Contact survey data | `plans/wp9-contact-surveys.plan.md` | Settled there: `ContactMatrix` loading and validation, rebinning, reciprocity, population adaptation, scaling, textbook 16-19 |
 | WP10 | Calibration | `plans/tb-ports-feature-completeness.plan.md` | Settled there: priors, likelihoods on `Target`, numpyro samplers (NUTS and gradient-free ensemble), MAP, posterior runs; lives in `summer4.epi` |
-| WP12 | Pinnable release | `plans/wp12-release.plan.md` | **Applied.** First tag `v0.2.0a1`; current tag `v0.2.0a3`. JAX is a core dependency; `frames` declares polars and pyarrow. Downstream smoke CI is step 3 of {doc}`../dev/roadmap` |
-| WP13 | Rate-tree math and tabular time series | `plans/tb-ports-feature-completeness.plan.md` | Math nodes, vector-valued table interpolation, `Lookup`, ageing sugar |
+| WP12 | Pinnable release | `plans/wp12-release.plan.md` | **Applied.** First tag `v0.2.0a1`; current tag `v0.2.0a4`. JAX is a core dependency; `frames` declares polars and pyarrow. Downstream smoke CI is step 3 of {doc}`../dev/roadmap` |
+| WP13 | Rate-tree math and tabular time series | `plans/tb-ports-feature-completeness.plan.md` | **Applied.** Math nodes, vector-valued table interpolation, `Lookup`, ageing sugar |
 | WP14 | Generalised force of infection | `plans/tb-ports-feature-completeness.plan.md` | **Applied.** `FOIKind.GENERALISED` with an exponent; selector-keyed infectiousness |
 | WP15 | Output algebra | `plans/tb-ports-feature-completeness.plan.md` | **Applied.** `Output` operators, windowed cumulative, multi-flow outputs, `OutputSet`, frames |
 | WP16 | Scale and solver safety | `plans/tb-ports-feature-completeness.plan.md` | **Applied.** TB-scale benchmark, `SolverInfo.ok`, span-derived `max_steps`, vmap-safe reciprocity |
 | WP17 | FOI susceptibility surface | `plans/wp17-foi-susceptibility.plan.md` | Settled there: `ForceOfInfection(susceptibility=...)`; raises textbook 15 to `full` |
-| WP18 | Rate expression dispatch and deferred callables | `plans/rate-dispatch-and-defer.plan.md` | Settled there: `__array_ufunc__` / `__array_function__` on the four wrapper types with canonical op names; a `Defer` node and `defer(fn)` curry for arbitrary user code in the rate slot |
+| WP18 | Rate expression dispatch and deferred callables | `plans/rate-dispatch-and-defer.plan.md` | **Applied.** `__array_ufunc__` / `__array_function__` on the four wrapper types with canonical op names; a `Defer` node and `defer(fn)` curry for arbitrary user code in the rate slot |
 
 WP5 lands before WP6, and before WP3, because every other part of a model may be
 parameterised in a time-varying fashion. WP6 is then the ordering constraint for
@@ -323,7 +323,7 @@ everything above, including WP11's declarative targets.
 **Closes:** *(no API rows)* · **Unblocks:** the Kiribati and tb_macro ports;
 see {doc}`tb-ports` for the rows each closes and the computed readiness after each.
 
-WP12 is **applied**: first tag `v0.2.0a1`, current tag `v0.2.0a3`. WP13 is
+WP12 is **applied**: first tag `v0.2.0a1`, current tag `v0.2.0a4`. WP13 is
 **applied**: math nodes, vector-valued table interpolation, `Lookup`, and ageing
 sugar. WP14 is **applied**: `FOIKind.GENERALISED` with a calibratable exponent,
 and infectiousness weights keyed by any selector, applied per compartment
