@@ -16,13 +16,13 @@ import numpy as np
 from summer4 import (
     Compartments,
     FlowModel,
+    Output,
     Property,
     PropertyData,
     PropertyMap,
     Result,
     SavePlan,
     SaveRequest,
-    Trace,
     TransitionFlow,
 )
 
@@ -52,8 +52,8 @@ def main() -> None:
     """Compile a linear SIR, run it, and check the final susceptible count."""
     _reject_editable_checkout()
     installed = version("summer4")
-    if installed != "0.2.0a3":
-        raise SystemExit(f"expected summer4 0.2.0a3, installed {installed}")
+    if installed != "0.2.0a4":
+        raise SystemExit(f"expected summer4 0.2.0a4, installed {installed}")
 
     state = Property("state", ("S", "I", "R"))
     model = FlowModel(PropertyMap.from_property(state))
@@ -75,10 +75,10 @@ def main() -> None:
     )
     if not isinstance(result, Result):
         raise SystemExit(f"run() returned {type(result).__name__}, expected Result")
-    trace = result["compartments"]
-    if not isinstance(trace, Trace):
-        raise SystemExit(f"compartments trace has type {type(trace).__name__}")
-    final = np.asarray(trace.values.data)[-1]
+    compartments = result["compartments"]
+    if not isinstance(compartments, Output):
+        raise SystemExit(f"compartments output has type {type(compartments).__name__}")
+    final = np.asarray(compartments.values.data)[-1]
     if final.shape != (3,):
         raise SystemExit(f"expected 3 compartments, got shape {final.shape}")
     np.testing.assert_allclose(final[0], EXPECTED_S, rtol=1e-4, atol=1e-3)
