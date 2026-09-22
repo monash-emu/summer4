@@ -186,8 +186,8 @@ WP9 now has a detailed plan, `plans/wp9-contact-surveys.plan.md`; the paragraph
 in *The path to 100%* below is its scope statement, not its design. Every
 remaining package is planned.
 
-WP10 and WP15–WP16 remain planned in
-`plans/tb-ports-feature-completeness.plan.md`. WP12, WP13 and WP14 have shipped.
+WP10 remains planned in
+`plans/tb-ports-feature-completeness.plan.md`. WP12–WP16 have shipped.
 That plan exists to make two
 tuberculosis models portable to summer4; which of their capabilities each
 package closes is recorded, by row ID, in {doc}`tb-ports`.
@@ -203,8 +203,8 @@ package closes is recorded, by row ID, in {doc}`tb-ports`.
 | WP12 | Pinnable release | `plans/wp12-release.plan.md` | **Applied.** First tag `v0.2.0a1`; current tag `v0.2.0a3`. JAX is a core dependency; `frames` declares polars and pyarrow. Downstream smoke CI is step 3 of {doc}`../dev/roadmap` |
 | WP13 | Rate-tree math and tabular time series | `plans/tb-ports-feature-completeness.plan.md` | Math nodes, vector-valued table interpolation, `Lookup`, ageing sugar |
 | WP14 | Generalised force of infection | `plans/tb-ports-feature-completeness.plan.md` | **Applied.** `FOIKind.GENERALISED` with an exponent; selector-keyed infectiousness |
-| WP15 | Output algebra | `plans/tb-ports-feature-completeness.plan.md` | `Output` operators, windowed cumulative, multi-flow outputs, `OutputSet`, frames |
-| WP16 | Scale and solver safety | `plans/tb-ports-feature-completeness.plan.md` | TB-scale benchmark, surfaced `max_steps` failure, vmap-safe reciprocity check |
+| WP15 | Output algebra | `plans/tb-ports-feature-completeness.plan.md` | **Applied.** `Output` operators, windowed cumulative, multi-flow outputs, `OutputSet`, frames |
+| WP16 | Scale and solver safety | `plans/tb-ports-feature-completeness.plan.md` | **Applied.** TB-scale benchmark, `SolverInfo.ok`, span-derived `max_steps`, vmap-safe reciprocity |
 | WP17 | FOI susceptibility surface | `plans/wp17-foi-susceptibility.plan.md` | Settled there: `ForceOfInfection(susceptibility=...)`; raises textbook 15 to `full` |
 | WP18 | Rate expression dispatch and deferred callables | `plans/rate-dispatch-and-defer.plan.md` | Settled there: `__array_ufunc__` / `__array_function__` on the four wrapper types with canonical op names; a `Defer` node and `defer(fn)` curry for arbitrary user code in the rate slot |
 
@@ -331,8 +331,10 @@ before the group sum. WP15 is **applied**: name-aligned `Output` operators,
 windowed `cumulative`, multi-flow `FlowMass`, an `OutputSet` whose plan saves
 only the leaves, and `Result.to_frame`. `Target(reduce=)` compares a stratified
 save with an aggregate series. Where the work has got to after that is
-{doc}`../dev/roadmap`, not this page. WP16 benchmarks a TB-scale model and makes
-solver failure visible. Plan: `plans/tb-ports-feature-completeness.plan.md`.
+{doc}`../dev/roadmap`, not this page. WP16 is **applied**: a Kiribati-shaped
+TB-scale benchmark, `SolverInfo.ok` when adaptive solves hit their step ceiling,
+a span-derived default `max_steps`, and a vmap-safe reciprocity check. Plan:
+`plans/tb-ports-feature-completeness.plan.md`.
 
 ### WP11 — Sparse outputs and calibration targets (applied)
 

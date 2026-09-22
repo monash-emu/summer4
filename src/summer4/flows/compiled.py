@@ -1152,6 +1152,7 @@ class CompiledModel:
         rtol: float | None = None,
         atol: float | None = None,
         max_steps: int | None = None,
+        throw: bool | None = None,
     ) -> Any:
         """Integrate and return a :class:`~summer4.results.Result`.
 
@@ -1159,6 +1160,10 @@ class CompiledModel:
         ``"heun"``, ``"tsit5"``, ``"dopri5"``) or a diffrax solver instance.
         With no ``y0``, uses :meth:`initial_state` when an initial population
         is attached.
+
+        ``throw`` is passed to diffrax when a bool is given; the default
+        (``None`` → ``False``) leaves failure visible on
+        :attr:`~summer4.results.SolverInfo.ok` instead of raising.
         """
         from summer4.results.eval import dims_for_quantity, values_for
         from summer4.results.groups import group_requests
@@ -1214,6 +1219,7 @@ class CompiledModel:
             atol=atol,
             max_steps=max_steps,
             dense=bool(expanded.dense),
+            throw=throw,
         )
 
         use_euler = solver == "euler" or (isinstance(solver, str) and solver.lower() == "euler")

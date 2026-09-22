@@ -39,9 +39,8 @@ original analyses re-run on numpyro.
 ## Verdict
 
 - **tb_macro** — tb_macro rows complete today: **8 of 9**, and every other row is `partial`. The force of infection is `ForceOfInfection(kind=FOIKind.GENERALISED)`; calibration is still a hand-written numpyro model (the original hand-writes that too).
-- **Kiribati** — Kiribati rows complete today: **18 of 23**. Remaining blockers:
+- **Kiribati** — Kiribati rows complete today: **19 of 23**. Remaining blockers:
   1. **Calibration workflow** — `KI18`–`KI21`. No priors, likelihoods, gradient-free sampler or posterior-run tooling. A MAP fit is still a hand-written optax loop (`KI20`).
-  2. **Scale** — `KI22`. Nothing measures a 160-compartment, 185-year model, and a solver that exceeds its step ceiling fails silently.
 
 ## Ports ledger
 
@@ -69,7 +68,7 @@ original analyses re-run on numpyro.
 | KI19 | Kiribati | Gradient-free posterior sampling (replacing `DEMetropolisZ`) | `none` | — | WP10 |
 | KI20 | Kiribati | MAP fit (replacing nevergrad) | `partial` | Hand-written optax loop, as in the case study | WP10 |
 | KI21 | Kiribati | Posterior full runs × scenarios, quantiles, averted differences | `none` | — | WP10 |
-| KI22 | Kiribati | Verified compile time, step cost and solver safety at TB scale | `none` | — | WP16 |
+| KI22 | Kiribati | Verified compile time, step cost and solver safety at TB scale | `full` | `benchmarks/tb_scale.py`; `SolverInfo.ok` when `max_steps` is exhausted; `MixingMatrix.validate` / vmap-safe reciprocity | — |
 | KI23 | Kiribati | summer4 installable from a tagged GitHub release | `full` | Pin `tag = "v0.2.0a3"` | — |
 | TM1 | tb_macro | Ragged map: clinical × infectious only on `active` | `full` | `stratify(prop, where=state["active"])` | — |
 | TM2 | tb_macro | Partial destination (even split), collapse, expand | `full` | `identity_join` equal split; source-only properties dropped | — |
@@ -106,12 +105,12 @@ Computed by `scripts/coverage_report.py`; do not edit by hand.
 <!-- ledger:port-readiness -->
 | After | Kiribati | tb_macro |
 | --- | --- | --- |
-| today | 18 / 23 | 8 / 9 |
-| WP12 | 18 / 23 | 8 / 9 |
-| WP13 | 18 / 23 | 8 / 9 |
-| WP3 | 18 / 23 | 8 / 9 |
-| WP14 | 18 / 23 | 8 / 9 |
-| WP15 | 18 / 23 | 8 / 9 |
+| today | 19 / 23 | 8 / 9 |
+| WP12 | 19 / 23 | 8 / 9 |
+| WP13 | 19 / 23 | 8 / 9 |
+| WP3 | 19 / 23 | 8 / 9 |
+| WP14 | 19 / 23 | 8 / 9 |
+| WP15 | 19 / 23 | 8 / 9 |
 | WP16 | 19 / 23 | 8 / 9 |
 | WP10 | 23 / 23 | 9 / 9 |
 <!-- /ledger:port-readiness -->

@@ -37,14 +37,15 @@ class MixingMatrix:
     :class:`ArrayConst`).
 
     ``check_reciprocal`` verifies $K_{ab} N_a = K_{ba} N_b$ at **evaluation**
-    time (it needs the population), not at construction. A user who expects a
-    constructor error will otherwise think it passed.
+    time (it needs the population), not at construction. Defaults to ``False``
+    so a matrix carried in parameters stays vmap-safe; call
+    :meth:`validate` on the host when you want an eager check.
     """
 
     prop: Property
     matrix: RateOps
     normalize: MixingNormalize = MixingNormalize.ROWS
-    check_reciprocal: bool = True
+    check_reciprocal: bool = False
     _static: NDArray[np.float64] | None = None
 
     def __init__(
@@ -53,7 +54,7 @@ class MixingMatrix:
         matrix: object,
         *,
         normalize: MixingNormalizeArg = MixingNormalize.ROWS,
-        check_reciprocal: bool = True,
+        check_reciprocal: bool = False,
     ) -> None:
         resolved = coerce_strenum(MixingNormalize, normalize, what="MixingMatrix normalize")
         n = len(prop.traits)
@@ -108,7 +109,12 @@ class MixingMatrix:
         return mat
 
     def check_reciprocity(self, matrix: Any, population: Any) -> None:
-        """Raise if $K_{ab} N_a \\neq K_{ba} N_b$ (run-time; needs population)."""
+        """Raise if $K_{ab} N_a \\neq K_{ba} N_b$ (run-time; needs population).
+
+        Under ``vmap`` the residual may be batched; the callback reduces with
+        ``np.max`` so ``float()`` is never called on a multi-element array.
+        Prefer :meth:`validate` for an eager host-side check.
+        """
         import jax.numpy as jnp
 
         if not self.check_reciprocal:
@@ -117,14 +123,42 @@ class MixingMatrix:
         n = jnp.asarray(population)
         left = k * n[:, None]
         diff = jnp.max(jnp.abs(left - left.T))
+        name = self.prop.name
 
         def _raise(d: Any) -> None:
-            if float(d) > 1e-6:
+            max_diff = float(np.max(np.asarray(d)))
+            if max_diff > 1e-6:
                 raise ValueError(
-                    f"MixingMatrix for {self.prop.name!r} is not reciprocal: "
-                    f"max |K_ab N_a - K_ba N_b| = {float(d)}."
+                    f"MixingMatrix for {name!r} is not reciprocal: "
+                    f"max |K_ab N_a - K_ba N_b| = {max_diff}."
                 )
 
         import jax
 
         jax.debug.callback(_raise, diff)
+
+    @staticmethod
+    def validate(
+        matrix: object,
+        population: object,
+        *,
+        name: str = "mixing",
+        tol: float = 1e-6,
+    ) -> None:
+        """Host-side reciprocity check (no JAX tracers / callbacks)."""
+        k = np.asarray(matrix, dtype=np.float64)
+        n = np.asarray(population, dtype=np.float64)
+        if k.ndim != 2 or k.shape[0] != k.shape[1]:
+            raise ValueError(f"MixingMatrix.validate expects a square matrix, got {k.shape}.")
+        if n.shape != (k.shape[0],):
+            raise ValueError(
+                f"MixingMatrix.validate population shape {n.shape} does not match "
+                f"matrix side {k.shape[0]}."
+            )
+        left = k * n[:, None]
+        max_diff = float(np.max(np.abs(left - left.T)))
+        if max_diff > tol:
+            raise ValueError(
+                f"MixingMatrix for {name!r} is not reciprocal: "
+                f"max |K_ab N_a - K_ba N_b| = {max_diff}."
+            )
