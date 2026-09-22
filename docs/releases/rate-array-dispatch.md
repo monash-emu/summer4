@@ -1,6 +1,6 @@
 # NumPy ufuncs on rate expressions
 
-**Status:** unreleased, on `feat/rate-array-dispatch`. Not a tag.
+**Status:** shipped in {doc}`v0.2.0a4` (`feat/rate-array-dispatch`).
 
 `np.sin(Param("phase"))` builds a rate node. `jnp.sin` still does not: JAX
 implements no dispatch hook, so the spelling is `np.*`.

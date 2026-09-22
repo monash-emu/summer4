@@ -1,13 +1,14 @@
 # summer4 documentation
 
 **summer4** is a JAX-native compartmental modelling platform under active
-development. The current tag (`0.2.0a3`) ships the **compartment taxonomy**, a
-**flows** layer, a **results** layer, **epidemiology** (`summer4.epi`), and
-**time-varying** rates (`summer4.timevarying` / `summer4.data`): declare
-compartments, attach named flows (including infection and mixing), compile to
-a vector field, and `run()` to a queryable `Result`. Repeated `run()` calls
-with the same save plan reuse the Diffrax / equinox JIT cache — including with
-plain `{str: float}` params; see {doc}`releases/v0.2.0a3`.
+development. The current tag (`0.2.0a4`) ships the **compartment taxonomy**, a
+**flows** layer, a **results** layer (`Output` / `OutputSet`), **epidemiology**
+(`summer4.epi`, including generalised FOI), and **time-varying** rates
+(`summer4.timevarying` / `summer4.data`): declare compartments, attach named
+flows (including infection and mixing), compile to a vector field, and `run()`
+to a queryable `Result`. Repeated `run()` calls with the same save plan reuse
+the Diffrax / equinox JIT cache — including with plain `{str: float}` params.
+See {doc}`releases/v0.2.0a4` for the TB-port surface on this tag.
 
 ```{admonition} Read this first — scope of the current release
 :class: important
@@ -16,10 +17,10 @@ The public API of summer4 today is the taxonomy (`Property`, `Trait`,
 `Selector`, `PropertyMap`, `Stratification`, `Groups`), flows
 (`FlowModel`, `CompiledModel`, `TransitionFlow` / `ExitFlow` / `EntryFlow`,
 `EdgeMap`, `Source` / `Dest`, rates and adjustments), results
-(`SavePlan`, `Result`, `Output`, `Epoch` / `TimeAxis`, `Target` / `TargetSet`),
-epidemiology (`ForceOfInfection`, `MixingMatrix`), and
-time-varying helpers (`Time()`, `summer4.timevarying`, `summer4.data`).
-Initial population / population split (WP3) is applied
+(`SavePlan`, `Result`, `Output`, `OutputSet`, `Epoch` / `TimeAxis`,
+`Target` / `TargetSet`), epidemiology (`ForceOfInfection`, `FOIKind`,
+`MixingMatrix`), and time-varying helpers (`Time()`, `summer4.timevarying`,
+`summer4.data`). Initial population / population split (WP3) is applied
 (`InitialPopulation` / `Split` / `CompiledModel.initial_state`). Bayesian
 calibration (likelihoods / priors; WP10) is still ahead.
 

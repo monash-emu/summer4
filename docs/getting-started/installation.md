@@ -1,6 +1,6 @@
 # Installation
 
-summer4 is an alpha (`0.2.0a3`). The API is not stable, and the package is not
+summer4 is an alpha (`0.2.0a4`). The API is not stable, and the package is not
 published to PyPI. Install from the git tag. Release notes for each tag are
 under {doc}`../releases/index`.
 
@@ -14,13 +14,13 @@ A pixi project that depends on the tagged release:
 
 ```toml
 [pypi-dependencies]
-summer4 = { git = "https://github.com/monash-emu/summer4.git", tag = "v0.2.0a3", extras = ["calibration", "pandas", "frames"] }
+summer4 = { git = "https://github.com/monash-emu/summer4.git", tag = "v0.2.0a4", extras = ["calibration", "pandas", "frames"] }
 ```
 
 Or with pip:
 
 ```bash
-pip install "summer4[calibration,pandas,frames] @ git+https://github.com/monash-emu/summer4.git@v0.2.0a3"
+pip install "summer4[calibration,pandas,frames] @ git+https://github.com/monash-emu/summer4.git@v0.2.0a4"
 ```
 
 ### Extras
