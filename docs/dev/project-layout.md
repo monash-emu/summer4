@@ -12,7 +12,7 @@ summer4/
 ├── examples/notebooks/       # runnable feature notebooks (executed by pytest)
 ├── docs/                     # this site
 ├── tests/                    # unit, property-based and workflow tests
-├── benchmarks/               # pytest-benchmark suites
+├── benchmarks/               # taxonomy pytest-benchmark + TB-scale suite
 ├── scripts/                  # repository tooling
 ├── plans/                    # accepted plans, kept as historical record
 ├── AGENTS.md                 # the contribution contract

@@ -74,11 +74,11 @@ Two conventions that are easy to get wrong:
 <!-- roadmap:current -->
 | Field | Value |
 | --- | --- |
-| Step | 11 |
+| Step | 13 |
 | Status | next |
-| Branch | `feat/tb-scale-bench` |
+| Branch | `feat/epi-priors-likelihoods` |
 | Cut from | `main` |
-| Last landed | `feat/output-sets` |
+| Last landed | `feat/solver-safety` |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -102,9 +102,9 @@ run at any time from `main`.
 | 8 | C | WP14 | `feat/epi-compartment-infectiousness` | `plans/tb-ports-feature-completeness.plan.md` | 14b | done | KI4 KI5 TM5 |
 | 9 | D | WP15 | `feat/trace-algebra` | `plans/tb-ports-feature-completeness.plan.md` | 15a | done | — |
 | 10 | D | WP15 | `feat/output-sets` | `plans/tb-ports-feature-completeness.plan.md` | 15c | done | KI13 KI14 KI15 KI16 KI17 |
-| 11 | E | WP16 | `feat/tb-scale-bench` | `plans/tb-ports-feature-completeness.plan.md` | 16a | next | — |
-| 12 | E | WP16 | `feat/solver-safety` | `plans/tb-ports-feature-completeness.plan.md` | 16b | planned | KI22 |
-| 13 | F | WP10 | `feat/epi-priors-likelihoods` | `plans/tb-ports-feature-completeness.plan.md` | 10.1 | planned | — |
+| 11 | E | WP16 | `feat/tb-scale-bench` | `plans/tb-ports-feature-completeness.plan.md` | 16a | done | — |
+| 12 | E | WP16 | `feat/solver-safety` | `plans/tb-ports-feature-completeness.plan.md` | 16b | done | KI22 |
+| 13 | F | WP10 | `feat/epi-priors-likelihoods` | `plans/tb-ports-feature-completeness.plan.md` | 10.1 | next | — |
 | 14 | F | WP10 | `feat/epi-sampling` | `plans/tb-ports-feature-completeness.plan.md` | 10.2 | planned | — |
 | 15 | F | WP10 | `feat/epi-posterior-runs` | `plans/tb-ports-feature-completeness.plan.md` | 10.3 | planned | KI18 KI19 KI20 KI21 TM8 |
 | 16 | G | WP17 | `feat/foi-susceptibility` | `plans/wp17-foi-susceptibility.plan.md` | Whole | planned | — |
@@ -724,6 +724,8 @@ summer2 pages this made cheaper to port (do not port them here).
 
 ## Step 11 — `feat/tb-scale-bench`
 
+**Landed:** feat/tb-scale-bench, PR #27, 2026-09-21.
+
 ### Summary
 
 Nothing measures a realistic model. The benchmarks cover the compartment
@@ -802,6 +804,8 @@ than fixing it here.
 
 ## Step 12 — `feat/solver-safety`
 
+**Landed:** feat/solver-safety, PR #28, 2026-09-21.
+
 ### Summary
 
 The adaptive solver runs with `throw=False` and a hard step ceiling of 4096, so
@@ -811,6 +815,31 @@ calibration, become silently wrong posteriors. This step surfaces failure as
 instead of a magic number, and makes the mixing-matrix reciprocity check safe
 under `vmap` (it currently calls `float()` on an outputd value). It closes `KI22`
 and is the last thing before calibration.
+
+### What the previous worker left you
+
+- Headline numbers (macOS arm64, 2026-09-21), also in `benchmarks/README.md`:
+
+  | Solver | Build+compile | VF eqns | Run jaxpr | Wall / run | vmap×64 | OutputSet evaluate |
+  | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+  | euler | 0.013 s | 1041 | 1663 | 1.081 s | 1.556 s | 0.009 s |
+  | dopri5 | 0.013 s | 1041 | 104 | 0.014 s | 0.094 s | 0.010 s |
+
+  Model: 160 compartments, 35 flows, 178 outputs, yearly saves 1850–2035.
+- Warm **euler** is stuck at ~1 s/run: XLA algebraic simplifier hits a circular
+  loop every call. Dopri5 warms to ~14 ms. Note:
+  `futureplans/tb-scale-euler-xla-simplifier.md`. Do not treat the euler wall
+  column as “185 Euler steps cost a second” until that is fixed.
+- The bench passes `max_steps=100000` for dopri5. The library default of 4096
+  is exactly the silent-failure bug this step closes (`KI22`).
+- Suite: `benchmarks/tb_scale.py` + `benchmarks/test_bench_tb_scale.py`
+  (`@pytest.mark.slow`). `pixi run test` / `test-all` collect that file; push
+  `test-quick` skips it. Plan pointer: `plans/tb-scale-bench.plan.md`.
+- Multi-flow `FlowMass(("inf_a", "inf_b"))` raises when infection flows have
+  different selected edge dims after source-specific `adjust=`; the bench sums
+  per-flow midpoint refs in the `OutputSet` instead.
+- No ledger row moved. No `src/summer4` change. No user-gate notebook (bench
+  only).
 
 ### Read first
 
@@ -849,6 +878,26 @@ negative binomial) attached to targets, and a traceable
 `TargetSet.log_likelihood`. A likelihood's scale may itself be a prior, which is
 how Kiribati's hierarchical target standard deviation works. It is the first of
 three steps that together close WP10.
+
+### What the previous worker left you
+
+- Phase E (WP16) is finished. `KI22` is `full`; Kiribati readiness today is
+  **19 / 23**.
+- `SolverInfo.ok` is a traced bool (`result_code == 0`). Euler sets
+  `result_code=0`. Diffrax still defaults to `throw=False`; pass `throw=True`
+  to raise. Step 14 should branch on `ok` inside the jitted log density.
+- Default `max_steps` is `max(4096, ceil((t1-t0)/dt) * 64)`. A stiff 185-year
+  yearly-dt run still wants an explicit ceiling (the bench uses 100000).
+- `MixingMatrix(check_reciprocal=...)` defaults to `False`. Runtime check uses
+  `np.max` in the debug callback so `vmap` is safe; prefer
+  `MixingMatrix.validate(matrix, population)` on the host.
+- User gate: `examples/notebooks/05-solvers.ipynb` (healthy vs `max_steps=16`;
+  early saves finite, later `inf`, `ok` is False).
+- This branch was cut from `feat/tb-scale-bench` because that handoff was not
+  yet on `main`. Retarget the PR to `main` once step 11 merges, or merge the
+  stack in order.
+- Note `futureplans/tb-scale-euler-xla-simplifier.md` is still open; euler wall
+  time in the bench is not a fair step-cost number.
 
 ### Read first
 

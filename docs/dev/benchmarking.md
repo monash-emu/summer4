@@ -1,13 +1,20 @@
 # Benchmarking
 
 ```bash
-pixi run bench        # table in the current environment
-pixi run bench-json   # JSON keyed by JAX version, into benchmarks/results/
+pixi run bench        # taxonomy table in the current environment
+pixi run bench-json   # taxonomy JSON keyed by JAX version, into benchmarks/results/
+pixi run test         # also runs the slow TB-scale suite (marked slow)
 ```
 
-`benchmarks/` uses [pytest-benchmark](https://pytest-benchmark.readthedocs.io).
-`benchmarks/results/` is gitignored: benchmark numbers are machine-specific and
-are compared within a run, not across commits on different hardware.
+`benchmarks/` uses [pytest-benchmark](https://pytest-benchmark.readthedocs.io)
+for the taxonomy suite. `benchmarks/results/` is gitignored: those dumps are
+machine-specific and are compared within a run, not across commits on different
+hardware.
+
+The **TB-scale** suite (`test_bench_tb_scale.py`) is different: it is ordinary
+pytest (marked `slow`), collected by `pixi run test` / `test-all`, and its
+headline numbers are **committed** in `benchmarks/README.md` as the regression
+baseline for a Kiribati-shaped model.
 
 ## What is measured
 
@@ -24,8 +31,14 @@ per-map query cache is bypassed. Benchmarking a warm select measures a
 dictionary lookup, which is not interesting; benchmarking a cold one measures
 the `int8` passes over the table, which is.
 
-For the shape of these curves, measured live at documentation build time, see
-{doc}`performance`.
+`test_bench_tb_scale.py` builds a synthetic 160-compartment, 185-year model
+(generalised FOI, `Lookup` mixing, table deaths, ageing sugar, ~180-name
+`OutputSet`) and records compile time, jaxpr equation counts, wall time per
+run, `vmap` over 64 parameter sets, and `OutputSet.evaluate` cost for `euler`
+and `dopri5`. See the table in `benchmarks/README.md`.
+
+For the shape of the taxonomy curves, measured live at documentation build
+time, see {doc}`performance`.
 
 ## Adding a benchmark
 

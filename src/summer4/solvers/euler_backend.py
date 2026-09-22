@@ -234,5 +234,9 @@ def euler_solve(
             )
         saved.update(part)
 
-    stats = SolverInfo(solver="euler", num_steps=steps, dense=False) if solver_stats else None
+    stats = (
+        SolverInfo(solver="euler", num_steps=steps, result_code=0, dense=False)
+        if solver_stats
+        else None
+    )
     return SolveOutput(saved=saved, stats=stats, dense=None)

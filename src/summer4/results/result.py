@@ -36,6 +36,17 @@ class SolverInfo:
     dense: bool | None = None
 
     @property
+    def ok(self) -> Any:
+        """Whether the solve finished successfully (``result_code == 0``).
+
+        Traced under ``jax.jit`` / ``vmap`` so calibration can branch on it.
+        Euler always reports success (``result_code`` 0 or absent).
+        """
+        if self.result_code is None:
+            return True
+        return self.result_code == 0
+
+    @property
     def message(self) -> str:
         """Human-readable status from ``result_code`` (host-side; not traced)."""
         if self.result_code is None:

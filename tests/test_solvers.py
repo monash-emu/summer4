@@ -104,11 +104,99 @@ def test_solver_info_populated() -> None:
     )
     assert res.solver is not None
     assert int(res.solver.result_code) == 0
+    assert bool(res.solver.ok) is True
     assert isinstance(res.solver.message, str) and len(res.solver.message) > 0
     accepted = int(res.solver.num_accepted_steps)
     rejected = int(res.solver.num_rejected_steps)
     total = int(res.solver.num_steps)
     assert accepted + rejected == total
+
+
+def test_euler_solver_info_ok() -> None:
+    cm, y0 = _simple_sir()
+    plan = SavePlan(requests={"compartments": SaveRequest(Compartments())})
+    res = cm.run({}, y0, t0=0.0, steps=10, dt=0.1, save=plan, solver="euler")
+    assert res.solver is not None
+    assert int(res.solver.result_code) == 0
+    assert bool(res.solver.ok) is True
+
+
+def test_max_steps_exhausted_sets_ok_false() -> None:
+    """A deliberately tiny ceiling must surface as SolverInfo.ok == False."""
+    cm, y0 = _simple_sir()
+    plan = SavePlan(requests={"compartments": SaveRequest(Compartments())})
+    res = cm.run(
+        {},
+        y0,
+        t0=0.0,
+        t1=20.0,
+        dt=0.1,
+        save=plan,
+        solver="dopri5",
+        rtol=1e-8,
+        atol=1e-10,
+        max_steps=2,
+    )
+    assert res.solver is not None
+    assert int(res.solver.result_code) != 0
+    assert bool(res.solver.ok) is False
+
+
+def test_throw_true_raises_on_max_steps() -> None:
+    import equinox as eqx
+
+    cm, y0 = _simple_sir()
+    plan = SavePlan(requests={"compartments": SaveRequest(Compartments())})
+    with pytest.raises(eqx.EquinoxRuntimeError, match="maximum number of solver steps"):
+        cm.run(
+            {},
+            y0,
+            t0=0.0,
+            t1=20.0,
+            dt=0.1,
+            save=plan,
+            solver="dopri5",
+            rtol=1e-8,
+            atol=1e-10,
+            max_steps=2,
+            throw=True,
+        )
+
+
+def test_default_max_steps_scales_with_span() -> None:
+    from summer4.solvers.base import default_max_steps
+
+    short = default_max_steps(0.0, 1.0, 0.1)
+    long = default_max_steps(0.0, 185.0, 1.0)
+    assert short == 4096  # floor
+    assert long == max(4096, 185 * 64)
+    assert long > short
+
+
+def test_ok_is_traced_under_jit() -> None:
+    cm, y0 = _simple_sir()
+    plan = SavePlan(requests={"compartments": SaveRequest(Compartments())})
+
+    @jax.jit
+    def run_ok(y: Any) -> Any:
+        res = cm.run(
+            {},
+            y,
+            t0=0.0,
+            t1=20.0,
+            dt=0.1,
+            save=plan,
+            solver="dopri5",
+            rtol=1e-8,
+            atol=1e-10,
+            max_steps=2,
+        )
+        assert res.solver is not None
+        return res.solver.ok
+
+    ok = run_ok(y0)
+    assert hasattr(ok, "dtype") or isinstance(ok, (bool, np.bool_))
+    assert not bool(np.asarray(ok))
 
 
 def test_jit_run_flattens_traced_solver_stats() -> None:
