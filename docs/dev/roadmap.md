@@ -74,11 +74,11 @@ Two conventions that are easy to get wrong:
 <!-- roadmap:current -->
 | Field | Value |
 | --- | --- |
-| Step | 14 |
+| Step | 15 |
 | Status | next |
-| Branch | `feat/epi-sampling` |
+| Branch | `feat/epi-posterior-runs` |
 | Cut from | `main` |
-| Last landed | `feat/epi-priors-likelihoods` |
+| Last landed | `feat/epi-sampling` |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -120,8 +120,8 @@ before step 15 lands. Each handoff below names its successor explicitly;
 | 11 | E | WP16 | `feat/tb-scale-bench` | `plans/tb-ports-feature-completeness.plan.md` | 16a | done | — |
 | 12 | E | WP16 | `feat/solver-safety` | `plans/tb-ports-feature-completeness.plan.md` | 16b | done | KI22 |
 | 13 | F | WP10 | `feat/epi-priors-likelihoods` | `plans/tb-ports-feature-completeness.plan.md` | 10.1 | done | — |
-| 14 | F | WP10 | `feat/epi-sampling` | `plans/tb-ports-feature-completeness.plan.md` | 10.2 | next | — |
-| 15 | F | WP10 | `feat/epi-posterior-runs` | `plans/tb-ports-feature-completeness.plan.md` | 10.3 | planned | KI18 KI19 KI20 KI21 TM8 |
+| 14 | F | WP10 | `feat/epi-sampling` | `plans/tb-ports-feature-completeness.plan.md` | 10.2 | done | — |
+| 15 | F | WP10 | `feat/epi-posterior-runs` | `plans/tb-ports-feature-completeness.plan.md` | 10.3 | next | KI18 KI19 KI20 KI21 TM8 |
 | 16 | G | WP17 | `feat/foi-susceptibility` | `plans/wp17-foi-susceptibility.plan.md` | Whole | planned | — |
 | 17 | G | WP9 | `feat/contact-survey-data` | `plans/wp9-contact-surveys.plan.md` | Step 17 | planned | — |
 | 18 | G | WP9 | `feat/contact-matrix-adaptation` | `plans/wp9-contact-surveys.plan.md` | Step 18 | planned | — |
@@ -955,6 +955,8 @@ Set step 13 `done`, step 14 `next`.
 
 ## Step 14 — `feat/epi-sampling`
 
+**Landed:** feat/epi-sampling, PR #33, 2026-09-24.
+
 ### Summary
 
 This step assembles the pieces into a `BayesianModel` that can be sampled: it
@@ -1030,19 +1032,48 @@ schemas those analyses already use. It closes `KI18`–`KI21` and `TM8`, taking
 both models to 100% of their capability rows, unblocks textbook chapter 20, and
 ships the calibration notebook.
 
+### What the previous worker left you
+
+- `BayesianModel` lives in `summer4.epi.calibration.model` (re-exported from
+  `summer4.epi` / `summer4.epi.calibration`). API: `log_density` (unconstrained,
+  jit-able), `find_map` → constrained dict, `sample(kind=...)` →
+  `arviz.InferenceData`. Kinds: `nuts` (default), `aies`, `ess`, `sa`. Default
+  `chain_method="vectorized"`.
+- **No `preprocess=`.** Passing it raises `TypeError` naming
+  `FlowModel.compile(prepare_fn=...)`. `futureplans/wp10-preprocess-is-prepare-fn.md`
+  is deleted; corrections table records the decision.
+- Solver failure: numpyro rejects non-finite factors, so a failed solve
+  (`result.solver.ok` false) and NaN likelihoods become a large finite penalty
+  (`-1e30`), not literal `-inf`. Likelihood dists use `validate_args=False` so
+  NaN preds do not abort before that gate.
+- Hierarchical prior scales on targets are sample sites via `_collect_priors` /
+  `prior_sites`. `arviz` is in the `calibration` extra and default pixi env.
+- Plan: `plans/epi-sampling.plan.md`. User gate: MAP claim added to
+  `17-priors-and-likelihoods.ipynb` (smoke-tested in CI; visual sign-off still
+  useful). Slow tests cover NUTS / AIES / SA 95% recovery on a small SIR.
+- `KI18`–`KI21` / `TM8` stay open for this step. No new `futureplans/` note.
+  `futureplans/tb-scale-euler-xla-simplifier.md` remains open.
+- Phase J (`plans/calibration-toolkit.plan.md`) is already on `main`: after this
+  step hands off, current position is step **24**, not 16. Correction for
+  §10.3: `posterior_runs` must keep **per-draw outputs** (not only quantiles)
+  so step 28 can spaghetti-plot; draw input should accept plain site dicts so
+  step 28 can pass `Candidates` as well as `InferenceData`.
+
 ### Read first
 
 1. `AGENTS.md`
 2. `plans/tb-ports-feature-completeness.plan.md` §10.3, §10.4
 3. `docs/evaluation/tb-ports.md` — the whole page; this step is what its verdict
    was waiting for
+4. Corrections table row for §10.3 (per-draw outputs / `Candidates`)
 
 ### Do
 
 Follow §10.3 and §10.4. Ship `examples/notebooks/18-calibration.ipynb` and port
 textbook chapter 20. Leave the hand-written loss in
 `docs/case-studies/age-stratified-seirs.ipynb` alone unless the user asks — it
-is a record of what calibration cost before WP10.
+is a record of what calibration cost before WP10. Keep per-draw outputs on the
+`posterior_runs` result (see corrections).
 
 Cut from: `main`. Merges into: `main`.
 
