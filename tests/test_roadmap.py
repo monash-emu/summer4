@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+from itertools import pairwise
 from pathlib import Path
 
 import pytest
@@ -10,6 +12,7 @@ from scripts.roadmap_check import (
     BRANCH,
     CLOSES,
     CURRENT_STATUSES,
+    PHASE,
     PLAN,
     REQUIRED_HEADINGS,
     ROADMAP,
@@ -105,3 +108,40 @@ def test_check_reports_nothing(text: str) -> None:
 
 def test_main_succeeds() -> None:
     assert main(["--check"]) == 0
+
+
+def _landing_order(text: str) -> list[int]:
+    """The fixed landing order stated under *Landing order after step 14*."""
+    match = re.search(r"\*\*Landing order after step 14\.\*\*.*?```text\n(.*?)\n```", text, re.S)
+    assert match is not None, "the Steps section must state the landing order"
+    return [int(token) for token in re.findall(r"\d+", match.group(1))]
+
+
+def test_landing_order_covers_every_unfinished_later_step(text: str) -> None:
+    order = _landing_order(text)
+    assert len(set(order)) == len(order), "a step appears twice in the landing order"
+    rows = read_roadmap_block(text, "steps")
+    pending = {
+        int(row[STEP])
+        for row in rows
+        if row[STATUS] != "done" and row[PHASE] != "H" and int(row[STEP]) >= 14
+    }
+    assert pending <= set(order), f"steps missing from the landing order: {pending - set(order)}"
+
+
+def test_handoffs_follow_the_landing_order(text: str) -> None:
+    """Each step's Handoff hands on to the step the landing order names next."""
+    sections = step_sections(text)
+    order = _landing_order(text)
+    for this, successor in pairwise(order):
+        body = sections[this]
+        handoff = re.search(r"^### Handoff\s*$(.*)", body, re.S | re.M)
+        assert handoff is not None, f"step {this} has no Handoff"
+        expected = f"step {successor} `next`"
+        assert expected in handoff.group(1), f"step {this}'s Handoff must set {expected}"
+
+
+def test_phase_j_follows_step_15(text: str) -> None:
+    order = _landing_order(text)
+    assert order[order.index(15) + 1] == 24
+    assert order.index(28) < order.index(16)

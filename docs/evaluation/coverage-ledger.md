@@ -140,6 +140,34 @@ published as written.
 | `detailed/InitialPopulationGraphobject` | `full` | None | `summer2/initial-population-graphobject.ipynb` |
 <!-- /ledger:summer2docs -->
 
+## Calibration workflow ledger
+
+The end-to-end calibration workflow that estival (the summer2 ecosystem's
+calibration library) gave the Kiribati analysis: a prior design, multi-start
+optimisation, seeded MCMC with automated run length, and sampled and scenario
+outputs. These are not summer2 symbols, so they are tallied **separately** and
+never enter the API totals above. Work package WP19 closes them; the design is
+`plans/calibration-toolkit.plan.md` and the steps are Phase J of
+{doc}`../dev/roadmap`. `Step` names the roadmap step that moves the row.
+
+Calibration workflow rows complete today: **0 of 11**
+
+<!-- ledger:workflow -->
+| ID | Capability | Status | Route today | Step |
+| --- | --- | --- | --- | --- |
+| CW1 | Latin hypercube design over the priors (M points) | `none` | — | 24 |
+| CW2 | Batched, memory-bounded scoring of a design | `none` | Loop over `BayesianModel.log_density` by hand | 24 |
+| CW3 | Keep the N best points of a scored design | `none` | — | 24 |
+| CW4 | Checkpoint a stage's points to disk and reload them | `none` | — | 24 |
+| CW5 | Multi-start gradient optimisation with a configurable optax optimiser | `none` | `BayesianModel.find_map` from one start at a time | 25 |
+| CW6 | Automated optimiser tuning, convergence detection and restarts | `none` | — | 25 |
+| CW7 | Multi-start gradient-free optimisation | `none` | — | 26 |
+| CW8 | MCMC seeded from optimised points | `none` | — | 27 |
+| CW9 | Automated MCMC run length (R-hat, ESS, divergences, budget) | `none` | — | 27 |
+| CW10 | Sampled-output spaghetti plots and quantile ribbons | `none` | — | 28 |
+| CW11 | Scenario outputs after calibration, plotted against a reference | `none` | — | 28 |
+<!-- /ledger:workflow -->
+
 ## Delivery status
 
 Where the landed work physically lives, and which of the remaining packages have
@@ -336,6 +364,17 @@ TB-scale benchmark, `SolverInfo.ok` when adaptive solves hit their step ceiling,
 a span-derived default `max_steps`, and a vmap-safe reciprocity check. Plan:
 `plans/tb-ports-feature-completeness.plan.md`.
 
+### WP19 — Calibration workflow toolkit
+
+**Closes:** *(no API rows)* · the [calibration workflow ledger](#calibration-workflow-ledger)
+
+Composable stage functions over one shared `Candidates` value, in
+`summer4.epi.calibration.workflow`: LHS design, batched scoring, keep-best,
+multi-start optax and gradient-free optimisation with automated tuning and
+restarts, MCMC seeded from optimised points with configurable stopping rules,
+and spaghetti, ribbon and scenario plots. Depends on WP10. Plan:
+`plans/calibration-toolkit.plan.md`; steps 24–28 of {doc}`../dev/roadmap`.
+
 ### WP11 — Sparse outputs and calibration targets (applied)
 
 **Closes:** *(no API rows)* · **Unblocks:** WP10 / textbook 20
@@ -369,6 +408,7 @@ table below is **computed** from these declarations by
 | WP16 | Scale and solver safety | *(no API rows; unblocks the TB ports)* |
 | WP17 | Force-of-infection susceptibility surface | *(no API rows; unblocks textbook 15)* |
 | WP18 | Rate expression dispatch and deferred callables | *(no API rows; opens the operator set and the `defer` on-ramp)* |
+| WP19 | Calibration workflow toolkit | *(no API rows; closes the calibration workflow ledger)* |
 <!-- /ledger:packages -->
 
 ## Coverage after each package
@@ -393,6 +433,7 @@ table below is **computed** from these declarations by
 | WP16 | 47 / 52 | 90% |
 | WP17 | 47 / 52 | 90% |
 | WP18 | 47 / 52 | 90% |
+| WP19 | 47 / 52 | 90% |
 <!-- /ledger:progression -->
 
 ## What never reaches `full`, and why that is fine

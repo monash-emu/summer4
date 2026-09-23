@@ -266,6 +266,35 @@ def stale_port_quotes(ports_text: str, ledger_text: str) -> list[str]:
     return missing
 
 
+WORKFLOW_STATUS_COLUMN = 2
+
+
+def read_workflow(text: str) -> list[list[str]]:
+    """Validated rows of the calibration workflow ledger (``CW`` IDs, tallied apart)."""
+    rows = read_block(text, "workflow")
+    tally(rows, WORKFLOW_STATUS_COLUMN)
+    seen: set[str] = set()
+    for row in rows:
+        if len(row) != 5:
+            raise ValueError(f"Workflow row {row[0]!r} has {len(row)} cells, expected 5.")
+        row_id, step = row[0], row[4]
+        if not re.fullmatch(r"CW\d+", row_id):
+            raise ValueError(f"Workflow row ID {row_id!r} must look like CW1.")
+        if row_id in seen:
+            raise ValueError(f"Duplicate workflow row ID {row_id!r}.")
+        seen.add(row_id)
+        if not step.isdigit():
+            raise ValueError(f"Workflow row {row_id!r} names step {step!r}, not a number.")
+    return rows
+
+
+def stale_workflow_quote(text: str) -> str | None:
+    """The expected ``rows complete today`` phrase, if the ledger does not carry it."""
+    t = tally(read_workflow(text), WORKFLOW_STATUS_COLUMN)
+    phrase = f"Calibration workflow rows complete today: **{t.full} of {t.total}**"
+    return None if phrase in text else phrase
+
+
 def render(text: str) -> str:
     """Build the human-readable report."""
     api = read_block(text, "api")
@@ -303,6 +332,10 @@ def render(text: str) -> str:
         lines.append(f"{name}: {t.total} {unit}")
         lines.append(f"  {t.full:>4} full{t.partial:>6} partial{t.none:>6} blocked")
         lines.append("")
+    t = tally(read_workflow(text), WORKFLOW_STATUS_COLUMN)
+    lines.append(f"Calibration workflow (tallied apart): {t.total} capabilities")
+    lines.append(f"  {t.full:>4} full{t.partial:>6} partial{t.none:>6} none")
+    lines.append("")
     lines.append("Path to 100% (API rows at `full`):")
     for label, count, total in progression(text):
         lines.append(f"  {label:<10}{count:>4} / {total}  ({100 * count / total:>3.0f}%)")
@@ -401,6 +434,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{PORTS} quotes stale totals; expected to find:", file=sys.stderr)
         for phrase in stale_quotes:
             print(f"  {phrase}", file=sys.stderr)
+        return 1
+
+    workflow_quote = stale_workflow_quote(text)
+    if workflow_quote is not None:
+        print(f"{LEDGER} quotes a stale workflow total; expected:", file=sys.stderr)
+        print(f"  {workflow_quote}", file=sys.stderr)
         return 1
 
     docs_root = ROOT / "docs"

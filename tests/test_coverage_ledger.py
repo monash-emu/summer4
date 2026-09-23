@@ -154,3 +154,42 @@ def test_port_quotes_are_current(ports_text: str, text: str) -> None:
     from scripts.coverage_report import stale_port_quotes
 
     assert stale_port_quotes(ports_text, text) == []
+
+
+def test_workflow_ledger_parses(text: str) -> None:
+    from scripts.coverage_report import read_workflow
+
+    rows = read_workflow(text)
+    assert [row[0] for row in rows] == [f"CW{i}" for i in range(1, len(rows) + 1)]
+
+
+def test_workflow_rejects_bad_status(text: str) -> None:
+    from scripts.coverage_report import read_workflow
+
+    broken = text.replace(
+        "| CW1 | Latin hypercube design over the priors (M points) | `none` |",
+        "| CW1 | Latin hypercube design over the priors (M points) | `nope` |",
+        1,
+    )
+    with pytest.raises(ValueError, match="Unknown status"):
+        read_workflow(broken)
+
+
+def test_workflow_rejects_duplicate_id(text: str) -> None:
+    from scripts.coverage_report import read_workflow
+
+    broken = text.replace("| CW2 |", "| CW1 |", 1)
+    with pytest.raises(ValueError, match="Duplicate workflow row ID"):
+        read_workflow(broken)
+
+
+def test_workflow_quote_is_current(text: str) -> None:
+    from scripts.coverage_report import stale_workflow_quote
+
+    assert stale_workflow_quote(text) is None
+
+
+def test_workflow_stays_out_of_api_totals(text: str) -> None:
+    """CW rows are tallied apart: they never change the summer2 API denominator."""
+    api_ids = {row[0] for row in read_block(text, "api")}
+    assert not any(row_id.startswith("CW") for row_id in api_ids)
