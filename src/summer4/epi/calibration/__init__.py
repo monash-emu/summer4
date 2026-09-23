@@ -1,8 +1,4 @@
-"""Bayesian calibration assembly: priors, likelihoods, and sampling (WP10).
-
-``numpyro`` / ``optax`` / ``arviz`` stay behind the ``calibration`` extra.
-Posterior scenario runs land in the next WP10 step.
-"""
+"""Bayesian calibration assembly: priors, likelihoods, sampling, posterior runs."""
 
 from __future__ import annotations
 
@@ -17,6 +13,7 @@ from summer4.epi.calibration.likelihoods import (
 )
 from summer4.epi.calibration.likelihoods import Normal as NormalLikelihood
 from summer4.epi.calibration.model import BayesianModel, SampleKind
+from summer4.epi.calibration.posterior_runs import PosteriorRuns, Scenario
 from summer4.epi.calibration.priors import (
     Beta,
     Gamma,
@@ -37,7 +34,9 @@ __all__ = [
     "NormalLikelihood",
     "NormalPrior",
     "Poisson",
+    "PosteriorRuns",
     "SampleKind",
+    "Scenario",
     "TruncatedNormal",
     "Uniform",
     "likelihoods",

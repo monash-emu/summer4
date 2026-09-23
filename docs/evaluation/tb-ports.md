@@ -38,9 +38,11 @@ original analyses re-run on numpyro.
 
 ## Verdict
 
-- **tb_macro** — tb_macro rows complete today: **8 of 9**, and every other row is `partial`. The force of infection is `ForceOfInfection(kind=FOIKind.GENERALISED)`; calibration is still a hand-written numpyro model (the original hand-writes that too).
-- **Kiribati** — Kiribati rows complete today: **19 of 23**. Remaining blockers:
-  1. **Calibration workflow** — `KI18`–`KI21`. No priors, likelihoods, gradient-free sampler or posterior-run tooling. A MAP fit is still a hand-written optax loop (`KI20`).
+- **tb_macro** — tb_macro rows complete today: **9 of 9**. Calibration uses
+  `BayesianModel` with Uniform / Poisson (or Normal) targets and NUTS.
+- **Kiribati** — Kiribati rows complete today: **23 of 23**. Calibration is
+  `BayesianModel` (priors, hierarchical Normal scales, AIES/ESS/SA, MAP) plus
+  `posterior_runs` for scenario quantiles and averted differences.
 
 ## Ports ledger
 
@@ -64,10 +66,10 @@ original analyses re-run on numpyro.
 | KI15 | Kiribati | Cumulative output from a start year | `full` | `outputs.ref(name).cumulative(start=)` in an `OutputSet`; `start` must be a save time | — |
 | KI16 | Kiribati | summer2 midpoint flow-output convention (parity) | `full` | `FlowMass(...).midpoint()` as an `OutputSet` post-op (`out[0] = f[0]`, then the average with the previous sample) | — |
 | KI17 | Kiribati | Named output set to a frame / parquet | `full` | `OutputSet.evaluate` then `Result.to_frame(shape="wide" or "long")`; a polars frame writes parquet | — |
-| KI18 | Kiribati | Priors and Normal targets, including a prior-distributed sd | `none` | Priors / likelihoods / `TargetSet.log_likelihood` / `BayesianModel` exist; posterior scenario runs are step 15 | WP10 |
-| KI19 | Kiribati | Gradient-free posterior sampling (replacing `DEMetropolisZ`) | `none` | `BayesianModel.sample(kind="aies", "ess", or "sa")` via numpyro; closes with step 15 | WP10 |
-| KI20 | Kiribati | MAP fit (replacing nevergrad) | `partial` | `BayesianModel.find_map` (optax); case-study hand loop remains as history | WP10 |
-| KI21 | Kiribati | Posterior full runs × scenarios, quantiles, averted differences | `none` | — | WP10 |
+| KI18 | Kiribati | Priors and Normal targets, including a prior-distributed sd | `full` | `Uniform` / `NormalLikelihood(sd=Prior(...))` on `Target`; `BayesianModel` | — |
+| KI19 | Kiribati | Gradient-free posterior sampling (replacing `DEMetropolisZ`) | `full` | `BayesianModel.sample(kind="aies", "ess", or "sa")` | — |
+| KI20 | Kiribati | MAP fit (replacing nevergrad) | `full` | `BayesianModel.find_map` (optax) | — |
+| KI21 | Kiribati | Posterior full runs × scenarios, quantiles, averted differences | `full` | `BayesianModel.posterior_runs` → `quantiles` / `differences` (Kiribati frame schemas) | — |
 | KI22 | Kiribati | Verified compile time, step cost and solver safety at TB scale | `full` | `benchmarks/tb_scale.py`; `SolverInfo.ok` when `max_steps` is exhausted; `MixingMatrix.validate` / vmap-safe reciprocity | — |
 | KI23 | Kiribati | summer4 installable from a tagged GitHub release | `full` | Pin `tag = "v0.2.0a4"` | — |
 | TM1 | tb_macro | Ragged map: clinical × infectious only on `active` | `full` | `stratify(prop, where=state["active"])` | — |
@@ -77,7 +79,7 @@ original analyses re-run on numpyro.
 | TM5 | tb_macro | Per-age FOI `I / N**exp` with rel_sus per source compartment | `full` | `kind=FOIKind.GENERALISED` plus `adjust=(Multiply(Param("rel_sus"), where=source),)` on the infection flow | — |
 | TM6 | tb_macro | Initial population with even split over ragged strata | `full` | `InitialPopulation` | — |
 | TM7 | tb_macro | Rolling-sum flow target queried at times | `full` | `FlowMass` → `rolling(7, how="sum")` → `at_times` (window indexes are host-side; jaxpr size does not grow with trajectory length) | — |
-| TM8 | tb_macro | Poisson likelihood, uniform prior, NUTS | `partial` | Hand-written numpyro model over `run` | WP10 |
+| TM8 | tb_macro | Poisson likelihood, uniform prior, NUTS | `full` | `BayesianModel` with `Poisson` / `Uniform` and `sample(kind="nuts")` | — |
 | TM9 | tb_macro | summer4 installable from a tagged GitHub release | `full` | Pin `tag = "v0.2.0a4"` | — |
 <!-- /ledger:ports -->
 
@@ -105,13 +107,13 @@ Computed by `scripts/coverage_report.py`; do not edit by hand.
 <!-- ledger:port-readiness -->
 | After | Kiribati | tb_macro |
 | --- | --- | --- |
-| today | 19 / 23 | 8 / 9 |
-| WP12 | 19 / 23 | 8 / 9 |
-| WP13 | 19 / 23 | 8 / 9 |
-| WP3 | 19 / 23 | 8 / 9 |
-| WP14 | 19 / 23 | 8 / 9 |
-| WP15 | 19 / 23 | 8 / 9 |
-| WP16 | 19 / 23 | 8 / 9 |
+| today | 23 / 23 | 9 / 9 |
+| WP12 | 23 / 23 | 9 / 9 |
+| WP13 | 23 / 23 | 9 / 9 |
+| WP3 | 23 / 23 | 9 / 9 |
+| WP14 | 23 / 23 | 9 / 9 |
+| WP15 | 23 / 23 | 9 / 9 |
+| WP16 | 23 / 23 | 9 / 9 |
 | WP10 | 23 / 23 | 9 / 9 |
 <!-- /ledger:port-readiness -->
 

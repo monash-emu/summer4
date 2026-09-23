@@ -320,6 +320,34 @@ class BayesianModel:
         """Names of every sampled site (top-level priors and hierarchical scales)."""
         return tuple(p.name for p in self._sites)
 
+    def posterior_runs(
+        self,
+        draws: Any,
+        *,
+        n: int | None = 1000,
+        burn_in: int = 0,
+        seed: int = 0,
+        scenarios: Mapping[str, Any] | None = None,
+        batch_size: int = 64,
+    ) -> Any:
+        """Batched forward runs under scenarios; see :class:`PosteriorRuns`.
+
+        ``draws`` is an ``arviz.InferenceData``, a mapping of constrained site
+        arrays with leading axis ``n``, or (later) ``Candidates`` via ``.params``.
+        ``scenarios`` maps names to ``None`` (baseline) or :class:`Scenario`.
+        """
+        from summer4.epi.calibration.posterior_runs import run_posterior
+
+        return run_posterior(
+            self,
+            draws,
+            n=n,
+            burn_in=burn_in,
+            seed=seed,
+            scenarios=scenarios,
+            batch_size=batch_size,
+        )
+
 
 __all__ = [
     "BayesianModel",

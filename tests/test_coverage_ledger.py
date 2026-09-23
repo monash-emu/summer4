@@ -111,8 +111,8 @@ def test_ports_reject_bad_status(ports_text: str, text: str) -> None:
     from scripts.coverage_report import read_ports
 
     broken = ports_text.replace(
-        "| `partial` | `BayesianModel.find_map` (optax); case-study hand loop remains as history |",
-        "| `mostly` | `BayesianModel.find_map` (optax); case-study hand loop remains as history |",
+        "| KI1 | Kiribati | State × 8 uneven age bands × reachability map | `full` |",
+        "| KI1 | Kiribati | State × 8 uneven age bands × reachability map | `mostly` |",
         1,
     )
     with pytest.raises(ValueError, match="Unknown status"):
@@ -122,8 +122,16 @@ def test_ports_reject_bad_status(ports_text: str, text: str) -> None:
 def test_ports_reject_undeclared_package(ports_text: str, text: str) -> None:
     from scripts.coverage_report import read_ports
 
-    needle = "`BayesianModel.find_map` (optax); case-study hand loop remains as history | WP10 |"
-    broken = ports_text.replace(needle, needle.replace("WP10", "WP99"), 1)
+    # All WP10 port rows are full/`—` after step 15; demote KI22 and point it at WP99.
+    broken = ports_text.replace(
+        "| KI22 | Kiribati | Verified compile time, step cost and solver safety at TB scale | `full` |",
+        "| KI22 | Kiribati | Verified compile time, step cost and solver safety at TB scale | `none` |",
+        1,
+    ).replace(
+        "`MixingMatrix.validate` / vmap-safe reciprocity | — |",
+        "`MixingMatrix.validate` / vmap-safe reciprocity | WP99 |",
+        1,
+    )
     with pytest.raises(ValueError, match="undeclared package"):
         read_ports(broken, text)
 
