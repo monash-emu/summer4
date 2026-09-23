@@ -49,3 +49,7 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
 - [`tb-scale-euler-xla-simplifier.md`](tb-scale-euler-xla-simplifier.md) —
   TB-scale euler `run` hits an XLA algebraic-simplifier stuck loop (~1 s/run
   even when warm); dopri5 does not.
+- [`vf-gather-and-mul-followups.md`](vf-gather-and-mul-followups.md) — after
+  fused compartment scatters: src-gather fusion tried and reverted (AD
+  slice→pad); remaining rate-alignment / FOI gathers; mul bucket is not a
+  missing matmul.

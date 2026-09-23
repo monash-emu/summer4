@@ -198,7 +198,7 @@ def _build_outputs(
     return outputs
 
 
-def build_tb_scale_model() -> TbScaleModel:
+def build_tb_scale_model(*, fuse_compartment_updates: bool = True) -> TbScaleModel:
     """Construct, compile, and attach the ~150-output set."""
     state = Property("state", STATES)
     age = Property("age", AGE_BREAKS)
@@ -366,7 +366,7 @@ def build_tb_scale_model() -> TbScaleModel:
     )
     model.set_initial_population(pop)
 
-    compiled = model.compile()
+    compiled = model.compile(fuse_compartment_updates=fuse_compartment_updates)
     names = tuple(flow_names)
     outputs = _build_outputs(state, age, reach, names)
     save = outputs.plan(SavePlan(ts=SAVE_TIMES))
