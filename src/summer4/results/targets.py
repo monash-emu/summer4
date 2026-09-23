@@ -1,8 +1,9 @@
 """Declarative calibration targets that merge observation times into a save plan.
 
-This module ships gathering and residuals only. Probabilistic likelihoods and
-the priors that :attr:`Target.dispersion` feeds are WP10; the field is declared
-here and consumed there.
+Gathering and residuals live here. Probabilistic likelihoods are attached via
+:attr:`Target.likelihood` (built in :mod:`summer4.epi.calibration`) and scored
+with :meth:`TargetSet.log_likelihood`. :attr:`Target.dispersion` remains for
+older call sites; prefer a likelihood object's own scale field.
 
 User-facing code is the same under both solvers:
 
@@ -105,11 +106,13 @@ def _reduce_prediction(pred: Any, how: ReduceHow | Callable[..., Any]) -> Any:
 class Target:
     """One observed series aligned to a named save-plan key.
 
-    ``dispersion`` names a nuisance parameter for WP10; unused here.
-    ``reduce`` collapses a wider prediction onto the observation before the
-    subtraction: ``"sum"`` or ``"mean"`` over every axis after time, or a
-    callable. Without it, a ``(time, age)`` save still has to match
-    ``values`` by reshape.
+    ``likelihood`` is a :mod:`summer4.epi.calibration.likelihoods` object
+    (``Normal``, ``Poisson``, ``NegativeBinomial``); :meth:`TargetSet.log_likelihood`
+    calls its ``log_prob``. ``dispersion`` is retained for older call sites and
+    is unused by ``log_likelihood``. ``reduce`` collapses a wider prediction onto
+    the observation before the residual or likelihood: ``"sum"`` or ``"mean"``
+    over every axis after time, or a callable. Without it, a ``(time, age)``
+    save still has to match ``values`` by reshape.
     """
 
     key: str
@@ -118,6 +121,7 @@ class Target:
     quantity: Quantity | None = None
     dispersion: str | None = None
     reduce: ReduceHow | str | Callable[..., Any] | None = None
+    likelihood: Any | None = None
 
     def __post_init__(self) -> None:
         times = _as_float64(self.times)
@@ -140,6 +144,7 @@ class Target:
         quantity: Quantity | None = None,
         dispersion: str | None = None,
         reduce: ReduceHow | str | Callable[..., Any] | None = None,
+        likelihood: Any | None = None,
     ) -> Target:
         """Build a target from a pandas Series with a ``DatetimeIndex``.
 
@@ -161,6 +166,7 @@ class Target:
             quantity=quantity,
             dispersion=dispersion,
             reduce=reduce,
+            likelihood=likelihood,
         )
 
     def contribute(self, plan: SavePlan) -> SavePlan:
@@ -219,25 +225,53 @@ class TargetSet:
         """
         out: dict[str, Any] = {}
         for target in self.targets:
-            pred = _output_array(result[target.key].at_times(target.times))
-            how = target.reduce
-            if isinstance(how, str):
-                how = coerce_strenum(ReduceHow, how, what="Target.reduce")
-            if how is not None:
-                pred = _reduce_prediction(pred, how)
-            # Prefer reshape to the observation shape; fall back to flat.
-            try:
-                aligned = pred.reshape(target.values.shape)
-            except Exception:
-                aligned = pred.reshape(-1)
-                if aligned.shape != target.values.shape:
-                    reduced = "" if target.reduce is None else f" after reduce={target.reduce!r}"
-                    raise ValueError(
-                        f"Target {target.key!r}: prediction shape {np.shape(pred)} "
-                        f"incompatible with values shape {target.values.shape}{reduced}."
-                    ) from None
+            aligned = self._aligned_prediction(result, target)
             out[target.key] = aligned - target.values
         return out
+
+    def log_likelihood(self, result: Result, params: Any = None) -> Any:
+        """Sum each target's ``likelihood.log_prob`` into one scalar.
+
+        Traceable under ``jax.jit`` when each target's likelihood is. ``params``
+        supplies values for ``Param`` / prior-valued scales (hierarchical sd).
+        Every target must carry a ``likelihood``. Per-time aggregation inside
+        each likelihood defaults to a mean (estival); pass
+        ``aggregate="sum"`` on the likelihood for a sum.
+        """
+        import jax.numpy as jnp
+
+        if params is None:
+            params = {}
+        total = jnp.asarray(0.0)
+        for target in self.targets:
+            if target.likelihood is None:
+                raise ValueError(
+                    f"Target {target.key!r} has no likelihood; "
+                    "set Target(..., likelihood=...) before log_likelihood."
+                )
+            predicted = self._aligned_prediction(result, target)
+            total = total + target.likelihood.log_prob(target.values, predicted, params)
+        return total
+
+    def _aligned_prediction(self, result: Result, target: Target) -> Any:
+        """Gather, optional reduce, and reshape prediction to ``target.values``."""
+        pred = _output_array(result[target.key].at_times(target.times))
+        how = target.reduce
+        if isinstance(how, str):
+            how = coerce_strenum(ReduceHow, how, what="Target.reduce")
+        if how is not None:
+            pred = _reduce_prediction(pred, how)
+        try:
+            return pred.reshape(target.values.shape)
+        except Exception:
+            aligned = pred.reshape(-1)
+            if aligned.shape != target.values.shape:
+                reduced = "" if target.reduce is None else f" after reduce={target.reduce!r}"
+                raise ValueError(
+                    f"Target {target.key!r}: prediction shape {np.shape(pred)} "
+                    f"incompatible with values shape {target.values.shape}{reduced}."
+                ) from None
+            return aligned
 
     def keys(self) -> tuple[str, ...]:
         return tuple(t.key for t in self.targets)
