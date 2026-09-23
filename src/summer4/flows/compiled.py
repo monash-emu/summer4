@@ -660,6 +660,26 @@ def _scatter_add(target: Any, indices: NDArray[np.int32], values: Any) -> Any:
     return target.at[..., indices].add(values)
 
 
+def _fuse_scatter_add(
+    target: Any,
+    index_parts: Sequence[NDArray[np.int32]],
+    value_parts: Sequence[Any],
+) -> Any:
+    """One ``scatter-add`` over concatenated edge contributions.
+
+    Empty ``index_parts`` leaves ``target`` unchanged. Index arrays stay host
+    ``int32`` constants; values are concatenated on the last axis so batched
+    leading dimensions on ``y`` still broadcast.
+    """
+    import jax.numpy as jnp
+
+    if not index_parts:
+        return target
+    all_idx = np.concatenate([np.asarray(p, dtype=np.int32) for p in index_parts])
+    all_vals = jnp.concatenate(list(value_parts), axis=-1)
+    return _scatter_add(target, all_idx, all_vals)
+
+
 def _collect_capture_meta(expr: RateOps) -> dict[str, tuple[Property, ...]]:
     """Walk a rate tree for nodes that expose ``__capture_meta__``."""
     from summer4.flows.rates import BinOp, GaussianPulse, Interp, UnaryOp
@@ -748,6 +768,7 @@ def _model_digest(
     prepare_fn: PrepareFn | None = None,
     hoist: bool = True,
     init_plan: InitPlan | None = None,
+    fuse_compartment_updates: bool = True,
 ) -> bytes:
     hasher = hashlib.blake2b(digest_size=16)
     hasher.update(pmap.codes.tobytes())
@@ -761,6 +782,7 @@ def _model_digest(
     hasher.update(b"pf")
     hasher.update(str(id(prepare_fn) if prepare_fn is not None else 0).encode())
     hasher.update(b"hoist1" if hoist else b"hoist0")
+    hasher.update(b"fuse1" if fuse_compartment_updates else b"fuse0")
     hasher.update(init_plan.digest_bytes() if init_plan is not None else b"noinit")
     return hasher.digest()
 
@@ -805,6 +827,7 @@ class CompiledModel:
     prepare_fn: PrepareFn | None = None
     hoist_table: HoistTable | None = None
     hoist: bool = True
+    fuse_compartment_updates: bool = True
     init_plan: InitPlan | None = None
     capture_meta: Mapping[str, tuple[Property, ...]] = field(default_factory=dict)
     _digest: bytes = field(init=False, repr=False, compare=False)
@@ -823,6 +846,7 @@ class CompiledModel:
                 prepare_fn=self.prepare_fn,
                 hoist=self.hoist,
                 init_plan=self.init_plan,
+                fuse_compartment_updates=self.fuse_compartment_updates,
             ),
         )
 
@@ -948,6 +972,9 @@ class CompiledModel:
         captures: dict[str, GroupedRate] = {}
         pmap = self.pmap
         table = self.hoist_table if self.hoist else None
+        fuse = self.fuse_compartment_updates
+        idx_parts: list[NDArray[np.int32]] = []
+        val_parts: list[Any] = []
         for name in self.order:
             flow = self.flows[name]
             gather = _gather_idx(flow)
@@ -984,21 +1011,37 @@ class CompiledModel:
             match flow:
                 case EntryEdges(dest_idx=dest_idx):
                     mass = rate * weight
-                    dy = _scatter_add(dy, dest_idx, mass)
                     flow_values[name] = mass
+                    if fuse:
+                        idx_parts.append(dest_idx)
+                        val_parts.append(mass)
+                    else:
+                        dy = _scatter_add(dy, dest_idx, mass)
                 case ExitEdges(src_idx=src_idx):
                     src_y = y_arr[..., src_idx]
                     contrib = rate if flow.absolute else rate * src_y
                     mass = contrib * weight
-                    dy = _scatter_add(dy, src_idx, -mass)
                     flow_values[name] = mass
+                    if fuse:
+                        idx_parts.append(src_idx)
+                        val_parts.append(-mass)
+                    else:
+                        dy = _scatter_add(dy, src_idx, -mass)
                 case TransitionEdges(src_idx=src_idx, dest_idx=dest_idx):
                     src_y = y_arr[..., src_idx]
                     contrib = rate if flow.absolute else rate * src_y
                     mass = contrib * weight
-                    dy = _scatter_add(dy, src_idx, -mass)
-                    dy = _scatter_add(dy, dest_idx, mass)
                     flow_values[name] = mass
+                    if fuse:
+                        idx_parts.append(src_idx)
+                        val_parts.append(-mass)
+                        idx_parts.append(dest_idx)
+                        val_parts.append(mass)
+                    else:
+                        dy = _scatter_add(dy, src_idx, -mass)
+                        dy = _scatter_add(dy, dest_idx, mass)
+        if fuse:
+            dy = _fuse_scatter_add(dy, idx_parts, val_parts)
         if keep is not None:
             retain = keep | _rate_flow_deps(self.flows)
             flow_values = {k: v for k, v in flow_values.items() if k in retain}
@@ -1377,10 +1420,19 @@ class FlowModel:
         derived_fn: DerivedFn | None = None,
         prepare_fn: PrepareFn | None = None,
         hoist: bool = True,
+        fuse_compartment_updates: bool = True,
         init: InitialPopulation | None = None,
         strict_pairing: bool = True,
     ) -> CompiledModel:
-        """Actualize joins once and return a :class:`CompiledModel`."""
+        """Actualize joins once and return a :class:`CompiledModel`.
+
+        ``fuse_compartment_updates`` (default True) applies all compartment
+        updates with one sparse ``scatter-add`` after the per-flow mass loop.
+        Set False to restore the previous per-flow scatters (A/B and debugging).
+        Source-state gathers stay per-flow: concatenating them and slicing
+        adds ``slice``→``pad`` cost under ``grad`` (see
+        ``futureplans/vf-gather-and-mul-followups.md``).
+        """
         from summer4.flows.stages import HoistTable, build_hoist_table, roots_of
 
         if not self.flows:
@@ -1426,6 +1478,7 @@ class FlowModel:
             prepare_fn=prepare_fn,
             hoist_table=hoist_table,
             hoist=hoist,
+            fuse_compartment_updates=fuse_compartment_updates,
             init_plan=init_plan,
             capture_meta=capture_meta,
         )
