@@ -119,7 +119,7 @@ published as written.
 | 17 | Understanding empiric contact data | `none` | Contact-survey data | — |
 | 18 | Implementing empiric survey data | `none` | Contact-survey data | — |
 | 19 | Adapting mixing matrices | `none` | Contact-survey data, matrix scaling | — |
-| 20 | Calibration and uncertainty | `none` | Calibration workflow | — |
+| 20 | Calibration and uncertainty | `full` | — | `textbook/20-calibration.ipynb` |
 <!-- /ledger:textbook -->
 
 ## summer2 documentation ledger

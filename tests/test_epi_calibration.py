@@ -1,4 +1,4 @@
-"""WP10 §10.1–§10.2 — priors, likelihoods, TargetSet.log_likelihood, BayesianModel."""
+"""WP10 §10.1–§10.3 — priors, likelihoods, BayesianModel, posterior runs."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ import pytest
 from summer4 import (
     Compartments,
     FlowModel,
+    OutputSet,
     Param,
     Property,
     PropertyData,
@@ -33,6 +34,7 @@ from summer4.epi.calibration import (
     NormalLikelihood,
     NormalPrior,
     Poisson,
+    Scenario,
     TruncatedNormal,
     Uniform,
     prior_sites,
@@ -431,3 +433,115 @@ def test_sa_recovers_infection_in_95_interval() -> None:
     samples = np.asarray(idata.posterior["infection"]).reshape(-1)
     lo, hi = np.quantile(samples, [0.025, 0.975])
     assert lo <= 0.35 <= hi
+
+
+def _sir_with_outputs(
+    *,
+    infection: float = 0.35,
+) -> tuple[Any, Any, TargetSet, dict[str, float], OutputSet]:
+    cm, y0, targets, params, _ = _sir_fixture(infection=infection)
+    state = Property("state", ("S", "I", "R"))
+    outputs = OutputSet()
+    outputs["I"] = Compartments(where=state["I"]).total()
+    outputs["cum_I"] = outputs.ref("I").cumulative()
+    return cm, y0, targets, params, outputs
+
+
+def test_posterior_runs_quantiles_match_looped_draws() -> None:
+    cm, y0, targets, params, outputs = _sir_with_outputs()
+    bm = BayesianModel(
+        cm,
+        params,
+        priors=(Uniform("infection", 0.05, 0.8),),
+        targets=targets,
+        outputs=outputs,
+        y0=y0,
+        run_kwargs=dict(t0=0.0, t1=80.0, dt=1.0, solver="euler"),
+    )
+    infections = np.linspace(0.2, 0.5, 20)
+    draws = {"infection": infections}
+    runs = bm.posterior_runs(
+        draws,
+        n=None,
+        scenarios={"baseline": None},
+        batch_size=8,
+    )
+    assert runs.samples("baseline", "I").shape == (20, 81)
+    q = (0.1, 0.5, 0.9)
+    got = runs.quantiles(q=q)["baseline"]
+    stacked = []
+    save = outputs.plan(SavePlan())
+    for inf in infections:
+        merged = bm.merge_params({"infection": float(inf)})
+        result = cm.run(merged, y0, save=save, t0=0.0, t1=80.0, dt=1.0, solver="euler")
+        scored = outputs.evaluate(result, merged)
+        vals = scored["I"].values
+        data = vals.data if hasattr(vals, "data") else vals
+        stacked.append(np.asarray(data).reshape(-1))
+    explicit = np.stack(stacked, axis=0)
+    for qi, label in zip(q, [str(float(v)) for v in q], strict=True):
+        expected = np.quantile(explicit, qi, axis=0)
+        np.testing.assert_allclose(
+            got[("I", label)].to_numpy(),
+            expected,
+            rtol=1e-5,
+            atol=1e-5,
+        )
+
+
+def test_posterior_runs_differences_schema_and_scenario_params() -> None:
+    cm, y0, targets, params, outputs = _sir_with_outputs()
+    bm = BayesianModel(
+        cm,
+        params,
+        priors=(Uniform("infection", 0.05, 0.8),),
+        targets=targets,
+        outputs=outputs,
+        y0=y0,
+        run_kwargs=dict(t0=0.0, t1=80.0, dt=1.0, solver="euler"),
+    )
+    draws = {"infection": np.linspace(0.25, 0.45, 12)}
+    runs = bm.posterior_runs(
+        draws,
+        n=None,
+        scenarios={
+            "baseline": None,
+            "stronger": Scenario(params={"infection": 0.6}),
+        },
+        batch_size=4,
+    )
+    diffs = runs.differences(
+        ref="baseline",
+        outputs={"I_averted": "I"},
+        at=40.0,
+        relative=True,
+        q=(0.25, 0.5, 0.75),
+    )
+    assert "baseline" not in diffs
+    frame = diffs["stronger"]
+    assert list(frame.index) == ["0.25", "0.5", "0.75"]
+    assert "I_averted" in frame.columns
+    assert "I_averted_relative" in frame.columns
+    # Scenario pins infection=0.6; baseline draws stay in [0.25, 0.45] — trajectories differ.
+    assert float(np.abs(frame.loc["0.5", "I_averted"])) > 1.0
+    base = runs.samples("baseline", "I")
+    scen = runs.samples("stronger", "I")
+    assert not np.allclose(base, scen)
+
+
+def test_posterior_runs_accepts_plain_site_dict_only() -> None:
+    """Candidates-compatible path: Mapping site arrays, not only InferenceData."""
+    cm, y0, targets, params, outputs = _sir_with_outputs()
+    bm = BayesianModel(
+        cm,
+        params,
+        priors=(Uniform("infection", 0.05, 0.8),),
+        targets=targets,
+        outputs=outputs,
+        y0=y0,
+        run_kwargs=dict(t0=0.0, t1=80.0, dt=1.0, solver="euler"),
+    )
+    draws = {"infection": np.array([0.3, 0.35, 0.4])}
+    runs = bm.posterior_runs(draws, n=2, seed=0, batch_size=2)
+    assert runs.n == 2
+    assert runs.samples("baseline", "I").shape[0] == 2

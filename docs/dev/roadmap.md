@@ -74,11 +74,11 @@ Two conventions that are easy to get wrong:
 <!-- roadmap:current -->
 | Field | Value |
 | --- | --- |
-| Step | 15 |
+| Step | 24 |
 | Status | next |
-| Branch | `feat/epi-posterior-runs` |
+| Branch | `feat/calib-candidates` |
 | Cut from | `main` |
-| Last landed | `feat/epi-sampling` |
+| Last landed | `feat/epi-posterior-runs` |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -121,7 +121,7 @@ before step 15 lands. Each handoff below names its successor explicitly;
 | 12 | E | WP16 | `feat/solver-safety` | `plans/tb-ports-feature-completeness.plan.md` | 16b | done | KI22 |
 | 13 | F | WP10 | `feat/epi-priors-likelihoods` | `plans/tb-ports-feature-completeness.plan.md` | 10.1 | done | — |
 | 14 | F | WP10 | `feat/epi-sampling` | `plans/tb-ports-feature-completeness.plan.md` | 10.2 | done | — |
-| 15 | F | WP10 | `feat/epi-posterior-runs` | `plans/tb-ports-feature-completeness.plan.md` | 10.3 | next | KI18 KI19 KI20 KI21 TM8 |
+| 15 | F | WP10 | `feat/epi-posterior-runs` | `plans/tb-ports-feature-completeness.plan.md` | 10.3 | done | KI18 KI19 KI20 KI21 TM8 |
 | 16 | G | WP17 | `feat/foi-susceptibility` | `plans/wp17-foi-susceptibility.plan.md` | Whole | planned | — |
 | 17 | G | WP9 | `feat/contact-survey-data` | `plans/wp9-contact-surveys.plan.md` | Step 17 | planned | — |
 | 18 | G | WP9 | `feat/contact-matrix-adaptation` | `plans/wp9-contact-surveys.plan.md` | Step 18 | planned | — |
@@ -130,7 +130,7 @@ before step 15 lands. Each handoff below names its successor explicitly;
 | 21 | H | — | *(new repo)* | `plans/kiribati-tb-summer4-port.plan.md` | Whole | planned | — |
 | 22 | I | WP18 | `feat/rate-array-dispatch` | `plans/rate-dispatch-and-defer.plan.md` | Step 22 | done | — |
 | 23 | I | WP18 | `feat/rate-defer` | `plans/rate-dispatch-and-defer.plan.md` | Step 23 | done | — |
-| 24 | J | WP19 | `feat/calib-candidates` | `plans/calibration-toolkit.plan.md` | Step 24 | planned | CW1 CW2 CW3 CW4 |
+| 24 | J | WP19 | `feat/calib-candidates` | `plans/calibration-toolkit.plan.md` | Step 24 | next | CW1 CW2 CW3 CW4 |
 | 25 | J | WP19 | `feat/calib-multistart` | `plans/calibration-toolkit.plan.md` | Step 25 | planned | CW5 CW6 |
 | 26 | J | WP19 | `feat/calib-gradient-free` | `plans/calibration-toolkit.plan.md` | Step 26 | planned | CW7 |
 | 27 | J | WP19 | `feat/calib-seeded-mcmc` | `plans/calibration-toolkit.plan.md` | Step 27 | planned | CW8 CW9 |
@@ -1022,6 +1022,8 @@ overlap was resolved.
 
 ## Step 15 — `feat/epi-posterior-runs`
 
+**Landed:** feat/epi-posterior-runs, PR #34, 2026-09-24.
+
 ### Summary
 
 A calibrated model is only useful once you can run the posterior forward under
@@ -1526,6 +1528,25 @@ design over the priors, batched memory-bounded scoring, and keep-the-N-best. It
 lands on `feat/calib-candidates` and closes `CW1`–`CW4` of the calibration
 workflow ledger. It runs after step 15 has landed (the fixed landing order in
 *Steps*); technically it depends only on step 14's `BayesianModel`.
+
+### What the previous worker left you
+
+- Phase F (WP10) is finished. Kiribati **23/23**, tb_macro **9/9**; readiness
+  `today` equals the WP10 row. `KI18`–`KI21` and `TM8` are `full`.
+- `BayesianModel.posterior_runs(draws, n=, burn_in=, seed=, scenarios=, batch_size=)`
+  returns `PosteriorRuns` with `samples(scenario, output) → (n, t)`,
+  `quantiles()` (time index, MultiIndex `(output, quantile)` string labels),
+  and `differences(ref=, outputs={name: src}, at=, relative=)`.
+- Draw input is `InferenceData`, a mapping of constrained site arrays, or any
+  object with `.params` (ready for `Candidates`). Scenarios are
+  `None` (baseline) or `Scenario(params=, model=, outputs=)`.
+- Forward saves use the `OutputSet` alone (not target observation times) so
+  trajectories stay on the dense grid.
+- User gates: `examples/notebooks/18-calibration.ipynb`,
+  `docs/textbook/20-calibration.ipynb`. Plan: `plans/epi-posterior-runs.plan.md`.
+- Docs env now includes `numpyro` / `arviz` so chapter 20 executes at build.
+- No new `futureplans/` note. `futureplans/tb-scale-euler-xla-simplifier.md`
+  remains open.
 
 ### Read first
 
