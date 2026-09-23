@@ -74,11 +74,11 @@ Two conventions that are easy to get wrong:
 <!-- roadmap:current -->
 | Field | Value |
 | --- | --- |
-| Step | 13 |
+| Step | 14 |
 | Status | next |
-| Branch | `feat/epi-priors-likelihoods` |
+| Branch | `feat/epi-sampling` |
 | Cut from | `main` |
-| Last landed | `feat/solver-safety` |
+| Last landed | `feat/epi-priors-likelihoods` |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -104,8 +104,8 @@ run at any time from `main`.
 | 10 | D | WP15 | `feat/output-sets` | `plans/tb-ports-feature-completeness.plan.md` | 15c | done | KI13 KI14 KI15 KI16 KI17 |
 | 11 | E | WP16 | `feat/tb-scale-bench` | `plans/tb-ports-feature-completeness.plan.md` | 16a | done | — |
 | 12 | E | WP16 | `feat/solver-safety` | `plans/tb-ports-feature-completeness.plan.md` | 16b | done | KI22 |
-| 13 | F | WP10 | `feat/epi-priors-likelihoods` | `plans/tb-ports-feature-completeness.plan.md` | 10.1 | next | — |
-| 14 | F | WP10 | `feat/epi-sampling` | `plans/tb-ports-feature-completeness.plan.md` | 10.2 | planned | — |
+| 13 | F | WP10 | `feat/epi-priors-likelihoods` | `plans/tb-ports-feature-completeness.plan.md` | 10.1 | done | — |
+| 14 | F | WP10 | `feat/epi-sampling` | `plans/tb-ports-feature-completeness.plan.md` | 10.2 | next | — |
 | 15 | F | WP10 | `feat/epi-posterior-runs` | `plans/tb-ports-feature-completeness.plan.md` | 10.3 | planned | KI18 KI19 KI20 KI21 TM8 |
 | 16 | G | WP17 | `feat/foi-susceptibility` | `plans/wp17-foi-susceptibility.plan.md` | Whole | planned | — |
 | 17 | G | WP9 | `feat/contact-survey-data` | `plans/wp9-contact-surveys.plan.md` | Step 17 | planned | — |
@@ -136,6 +136,7 @@ changed about them is recorded here instead, and overrides them.
 | `tb-ports-feature-completeness` | §15a | Step 4 landed scalar/array `Output` arithmetic, unary ops on an `Output` (`tanh(output)`), and `eval_closed` so a parameter transform can scale an `Output`. Name-aligned `Output` ∘ `Output`, `cumulative(start=)`, `midpoint` and multi-flow `FlowMass` remain step 9. Clear the `D5` note in step 10 |
 | `wp12-release` | Step 2b | JAX has native Windows x86_64 CPU support; the Windows `jaxlib` wheel is experimental. Native Windows GPU is unsupported. WSL2 is the Windows GPU route, and that support is experimental. This repository's pixi platforms stay `osx-arm64` and `linux-64` |
 | `rate-dispatch-and-defer` | §22.8, §23.8 | Notebook `14` is taken by `14-custom-rate-nodes.ipynb`. Step 22 uses `examples/notebooks/15-array-dispatch.ipynb`. Step 23 uses `examples/notebooks/16-deferred-functions.ipynb` |
+| `tb-ports-feature-completeness` | §10.4 | Notebook `12-calibration` / step-15 `14-calibration` are taken. Step 13 ships `examples/notebooks/17-priors-and-likelihoods.ipynb`. Step 15 uses the next free `18-calibration.ipynb` |
 
 ---
 
@@ -869,6 +870,8 @@ Set step 12 `done`, step 13 `next`. Phase E is finished.
 
 ## Step 13 — `feat/epi-priors-likelihoods`
 
+**Landed:** feat/epi-priors-likelihoods, PR #32, 2026-09-23.
+
 ### Summary
 
 Calibration targets already exist and already merge their observation times into
@@ -911,12 +914,15 @@ three steps that together close WP10.
 
 Follow §10.1. Calibration is epidemiological assembly, so it lives in
 `summer4.epi`, and numpyro and optax stay in the `calibration` extra.
+Ship `examples/notebooks/17-priors-and-likelihoods.ipynb` (user gate for this
+step). Full sampling notebook is step 15 (`18-calibration.ipynb`).
 
 Cut from: `main`. Merges into: `main`.
 
 ### Exit checks
 
-The [standard checks](#exit-checks-every-step).
+The [standard checks](#exit-checks-every-step). **User gate:**
+`17-priors-and-likelihoods.ipynb`.
 
 ### Handoff
 
@@ -935,6 +941,33 @@ and numpyro's gradient-free ensemble samplers as the replacement for the pymc
 sampler the Kiribati analysis used, plus a MAP fit through optax. Solver failure
 from step 12 becomes an infinitely negative log density, so a diverged run can
 never be mistaken for a good fit.
+
+### What the previous worker left you
+
+- Priors and likelihoods live in `summer4.epi.calibration` (also re-exported from
+  `summer4.epi`). Named priors: `Uniform`, `Normal`, `LogNormal`,
+  `TruncatedNormal`, `Beta`, `Gamma` — each has `.to_numpyro()` and `.bounds()`.
+  `priors_from_frame` accepts a mapping or pandas/polars-like frame.
+- Likelihoods on `Target(..., likelihood=...)`: `Normal(sd=)`, `Poisson()`,
+  `NegativeBinomial(dispersion=)`. Scale may be a float, `Param`/`FieldRef`, or
+  a prior (hierarchical). Default per-time aggregate is **mean** (estival);
+  pass `aggregate="sum"` for a sum. `Normal.from_tolerance(data, tol_pct)` sets
+  `sd = (tol_pct/100) * mean(|data|) / 1.96`.
+- `TargetSet.log_likelihood(result, params)` is jittable. `prior_sites(lik)`
+  returns nested prior scales for sampling sites. `Target.dispersion` is unused
+  by `log_likelihood` — prefer the likelihood's own scale field.
+- Import aliases: `NormalPrior` / `NormalLikelihood` from
+  `summer4.epi.calibration` (both modules export `Normal`).
+- Plan pointer: `plans/epi-priors-likelihoods.plan.md`. User gate signed off:
+  `examples/notebooks/17-priors-and-likelihoods.ipynb` (Uniform bounds density,
+  true vs wrong SIR score, hierarchical `sd`).
+- `KI18` route-today names the density pieces; status stays `none` until
+  `BayesianModel` lands (this step + 15). No API-ledger row moved. No new
+  `futureplans/` note. `futureplans/tb-scale-euler-xla-simplifier.md` and
+  `futureplans/wp10-preprocess-is-prepare-fn.md` remain open — read the latter
+  before designing `preprocess=`.
+- Branch was rebased onto `main` (after PR #31 fuse-incidence-scatter) before
+  the PR; no stack dependency left.
 
 ### Read first
 
@@ -985,7 +1018,7 @@ ships the calibration notebook.
 
 ### Do
 
-Follow §10.3 and §10.4. Ship `examples/notebooks/14-calibration.ipynb` and port
+Follow §10.3 and §10.4. Ship `examples/notebooks/18-calibration.ipynb` and port
 textbook chapter 20. Leave the hand-written loss in
 `docs/case-studies/age-stratified-seirs.ipynb` alone unless the user asks — it
 is a record of what calibration cost before WP10.
@@ -997,7 +1030,7 @@ Cut from: `main`. Merges into: `main`.
 The [standard checks](#exit-checks-every-step), plus `KI18`–`KI21` and `TM8`
 moved. `docs/evaluation/tb-ports.md` must then read 23 of 23 and 9 of 9, with
 the readiness table's `today` row equal to its `WP10` row. **User gate:**
-`14-calibration.ipynb` and the chapter 20 port.
+`18-calibration.ipynb` and the chapter 20 port.
 
 ### Handoff
 
