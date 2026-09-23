@@ -87,7 +87,11 @@ Phases A–F are sequential. Track G is independent of them and may run at any
 time after step 1. Phase H is downstream work in other repositories and needs
 only step 2's tag. **Phase I** (steps 22–23) is rate-expression ergonomics: it
 is independent of every other phase and of its own two steps' ordering, and may
-run at any time from `main`.
+run at any time from `main`. **Phase J** (steps 24–28) is the composable
+calibration workflow toolkit (WP19, `plans/calibration-toolkit.plan.md`).
+Steps 24–27 need only step 14; step 28 needs step 15. By default Phase J runs
+after Phase F. Its rows close the `CW` block of the
+{doc}`../evaluation/coverage-ledger`, not tb-ports rows.
 
 <!-- roadmap:steps -->
 | Step | Phase | WP | Branch | Plan | Section | Status | Closes |
@@ -115,10 +119,16 @@ run at any time from `main`.
 | 21 | H | — | *(new repo)* | `plans/kiribati-tb-summer4-port.plan.md` | Whole | planned | — |
 | 22 | I | WP18 | `feat/rate-array-dispatch` | `plans/rate-dispatch-and-defer.plan.md` | Step 22 | done | — |
 | 23 | I | WP18 | `feat/rate-defer` | `plans/rate-dispatch-and-defer.plan.md` | Step 23 | done | — |
+| 24 | J | WP19 | `feat/calib-candidates` | `plans/calibration-toolkit.plan.md` | Step 24 | planned | CW1 CW2 CW3 CW4 |
+| 25 | J | WP19 | `feat/calib-multistart` | `plans/calibration-toolkit.plan.md` | Step 25 | planned | CW5 CW6 |
+| 26 | J | WP19 | `feat/calib-gradient-free` | `plans/calibration-toolkit.plan.md` | Step 26 | planned | CW7 |
+| 27 | J | WP19 | `feat/calib-seeded-mcmc` | `plans/calibration-toolkit.plan.md` | Step 27 | planned | CW8 CW9 |
+| 28 | J | WP19 | `feat/calib-outputs` | `plans/calibration-toolkit.plan.md` | Step 28 | planned | CW10 CW11 |
 <!-- /roadmap:steps -->
 
 `Closes` lists row IDs of {doc}`../evaluation/tb-ports` (and, where a step moves
-one, {doc}`../evaluation/coverage-ledger`). A step with `—` closes no ledger row
+one, {doc}`../evaluation/coverage-ledger`, including its `CW` calibration
+workflow block). A step with `—` closes no ledger row
 but is still required by the steps after it.
 
 ## Corrections to committed plans
@@ -136,6 +146,7 @@ changed about them is recorded here instead, and overrides them.
 | `tb-ports-feature-completeness` | §15a | Step 4 landed scalar/array `Output` arithmetic, unary ops on an `Output` (`tanh(output)`), and `eval_closed` so a parameter transform can scale an `Output`. Name-aligned `Output` ∘ `Output`, `cumulative(start=)`, `midpoint` and multi-flow `FlowMass` remain step 9. Clear the `D5` note in step 10 |
 | `wp12-release` | Step 2b | JAX has native Windows x86_64 CPU support; the Windows `jaxlib` wheel is experimental. Native Windows GPU is unsupported. WSL2 is the Windows GPU route, and that support is experimental. This repository's pixi platforms stay `osx-arm64` and `linux-64` |
 | `rate-dispatch-and-defer` | §22.8, §23.8 | Notebook `14` is taken by `14-custom-rate-nodes.ipynb`. Step 22 uses `examples/notebooks/15-array-dispatch.ipynb`. Step 23 uses `examples/notebooks/16-deferred-functions.ipynb` |
+| `tb-ports-feature-completeness` | §10.3 | The object `posterior_runs` returns must keep **per-draw outputs** (for example `runs.samples(scenario, output)` → shape `(n, t)`), not only quantiles, so step 28 can draw spaghetti plots from it. Keep its draw input a plain unconstrained/constrained site dict internally so step 28 can pass `Candidates` as well as `InferenceData` |
 | `tb-ports-feature-completeness` | §10.4 | Notebook `12-calibration` / step-15 `14-calibration` are taken. Step 13 ships `examples/notebooks/17-priors-and-likelihoods.ipynb`. Step 15 uses the next free `18-calibration.ipynb` |
 
 ---
@@ -1458,6 +1469,225 @@ without a new rule (plan §23.6 predicts it will), and whether the
 `__rate_children__` hook should be generalised into the `__children__`
 refactor that `docs/dev/rate-expressions.md` recommends as item 3.
 
+
+---
+
+## Step 24 — `feat/calib-candidates`
+
+### Summary
+
+This step opens Phase J, the composable calibration workflow toolkit. It ships
+the shared value every later stage passes along — `Candidates`, a batch of
+parameter points held in both unconstrained and constrained form with their
+scores and a provenance record — plus the first three stages: a Latin hypercube
+design over the priors, batched memory-bounded scoring, and keep-the-N-best. It
+lands on `feat/calib-candidates` and closes `CW1`–`CW4` of the calibration
+workflow ledger. It needs step 14 (`BayesianModel`) merged; it does not need
+step 15.
+
+### Read first
+
+1. `AGENTS.md`
+2. `plans/calibration-toolkit.plan.md` — *Context*, *Design* (all of it), then
+   *Step 24*
+3. `src/summer4/epi/calibration/model.py` and `priors.py` — what
+   `BayesianModel` and `Prior` offer today
+4. `docs/dev/run-stages.md`
+5. `docs/evaluation/coverage-ledger.md` — *Calibration workflow ledger*
+
+### Do
+
+Follow the plan's *Step 24*. Create `src/summer4/epi/calibration/workflow/`
+(re-exported as `from summer4.epi.calibration import workflow`). Add
+`Prior.icdf` (host-side, `scipy.stats`; declare `scipy` in the `calibration`
+extra), `BayesianModel.constrain` / `unconstrain`, `Candidates` with
+`best`/`take`/`concat`/`to_frame`/`save`/`load`, `wf.lhs`, `wf.prior_draws`
+and `wf.evaluate` (`jax.lax.map(..., batch_size=)`). Ship
+`examples/notebooks/19-calibration-design.ipynb` (next free number if taken).
+
+Cut from: `main`. Merges into: `main`.
+
+### Exit checks
+
+The [standard checks](#exit-checks-every-step), plus `CW1`–`CW4` moved to
+`full` with the ledger's quoted *rows complete today* updated, and a
+`jax.make_jaxpr` test showing `evaluate`'s program does not grow with M.
+**User gate:** `19-calibration-design.ipynb` — the best 16 of the design
+bracket the true parameter.
+
+### Handoff
+
+Set step 24 `done` with its *Landed* line; set the next `planned` step `next`
+and rewrite the *Current position* block. Record the final `Candidates` field
+names and anything in the plan's *Design* that changed, because steps 25–28
+build on it.
+
+---
+
+## Step 25 — `feat/calib-multistart`
+
+### Summary
+
+This step optimises from many starting points at once. `wf.optimize` runs every
+start as one lane of a single compiled program — a `lax.scan` of optimiser
+steps, vmapped over starts — in chunks, and between chunks it detects
+convergence, freezes converged starts, restarts failed ones from a reserve of
+design points, and (with `AutoTune`) probes a learning-rate grid before the main
+run. The optimiser is any optax transformation; the default is Adam with
+plateau reduction. It lands on `feat/calib-multistart` and closes `CW5`–`CW6`.
+
+### Read first
+
+1. `AGENTS.md` — especially *JAX is the primary runtime target*
+2. `plans/calibration-toolkit.plan.md` — *Design*, *Optimisation driver*, then
+   *Step 25*
+3. Step 24's *What the previous worker left you*
+4. `src/summer4/epi/calibration/model.py` — `find_map` and `_ensure_potential`
+
+### Do
+
+Follow the plan's *Step 25*. Promote the potential to a public
+`bm.potential_fn`. Build the internal `_Method` protocol so step 26 can add a
+backend without touching the driver. Ship
+`examples/notebooks/20-calibration-multistart.ipynb` (loss traces per start).
+
+Cut from: `main`. Merges into: `main`.
+
+### Exit checks
+
+The [standard checks](#exit-checks-every-step), plus `CW5`–`CW6` moved and a
+jaxpr test showing the chunk program is independent of `max_steps` and of the
+number of starts. **User gate:** `20-calibration-multistart.ipynb`.
+
+### Handoff
+
+Set step 25 `done`, the next `planned` step `next`. Record the `_Method`
+protocol as shipped, and any optax version constraint found (for example
+`optax.contrib.reduce_on_plateau` availability in the `jax06` env).
+
+---
+
+## Step 26 — `feat/calib-gradient-free`
+
+### Summary
+
+This step adds a gradient-free backend to the same multi-start driver: CMA-ES
+through evosax, a JAX-native library, so each generation's population is scored
+with `vmap` inside the compiled program. It is for models whose gradients are
+unavailable or unreliable, and it stays behind a new `gradient-free` extra so
+the `calibration` extra stays light. It lands on `feat/calib-gradient-free`
+and closes `CW7`.
+
+**Open question to check before starting:** whether evosax resolves in the
+`jax06` pixi env. If not, gate its tests with `importorskip` there and write a
+`futureplans/` note — do not pin jax.
+
+### Read first
+
+1. `AGENTS.md`
+2. `plans/calibration-toolkit.plan.md` — *Optimisation driver*, then *Step 26*
+3. Step 25's *What the previous worker left you* and
+   `src/summer4/epi/calibration/workflow/optimize.py`
+
+### Do
+
+Follow the plan's *Step 26*. Wrap evosax's ask/tell in the `_Method` adapter
+only; nothing else may import evosax. Ship
+`examples/notebooks/21-calibration-gradient-free.ipynb` comparing Optax and
+CMA-ES loss against the number of model solves.
+
+Cut from: `main`. Merges into: `main`.
+
+### Exit checks
+
+The [standard checks](#exit-checks-every-step), plus `CW7` moved. **User
+gate:** `21-calibration-gradient-free.ipynb`.
+
+### Handoff
+
+Set step 26 `done`, the next `planned` step `next`. Record the evosax version
+pinned and how the `jax06` env was handled.
+
+---
+
+## Step 27 — `feat/calib-seeded-mcmc`
+
+### Summary
+
+This step starts MCMC from the points the earlier stages found and decides how
+long to run it. `wf.run_mcmc` seeds each chain from a `Candidates` value, then
+samples in chunks until a configurable `StopRule` is met — by default split
+R-hat below 1.05 and bulk ESS of at least 100, with optional divergence retry
+(NUTS) and sample or wall-clock budgets. Non-convergence warns rather than
+raises. It lands on `feat/calib-seeded-mcmc` and closes `CW8`–`CW9`.
+
+### Read first
+
+1. `AGENTS.md`
+2. `plans/calibration-toolkit.plan.md` — *Seeded MCMC with automated run
+   length*, then *Step 27*, then *Risks*
+3. `src/summer4/epi/calibration/model.py` — `numpyro_model` and `sample`
+
+### Do
+
+Follow the plan's *Step 27*. Build `numpyro.infer.MCMC` inside the stage;
+do not change `BayesianModel.sample`. Use `numpyro.diagnostics` for R-hat and
+ESS, not arviz. Ship `examples/notebooks/22-calibration-seeded-mcmc.ipynb`.
+
+Cut from: `main`. Merges into: `main`.
+
+### Exit checks
+
+The [standard checks](#exit-checks-every-step), plus `CW8`–`CW9` moved.
+**User gate:** `22-calibration-seeded-mcmc.ipynb` — seeded chains converge in
+fewer chunks than prior-seeded ones.
+
+### Handoff
+
+Set step 27 `done`, the next `planned` step `next`. Record the `StopRule`
+defaults as shipped and whether R-hat is meaningful for the ensemble kernels
+(AIES/ESS) in practice.
+
+---
+
+## Step 28 — `feat/calib-outputs`
+
+### Summary
+
+This step closes Phase J with what a modeller looks at after calibrating:
+sampled outputs as spaghetti plots and quantile ribbons with the targets
+overlaid, and scenario outputs plotted against a reference. `posterior_runs`
+(step 15) learns to take a `Candidates` value, so the same plots work for a
+design's best points or optimised points, not only a posterior. An end-to-end
+notebook composes every stage, plus two shorter compositions. It lands on
+`feat/calib-outputs`, closes `CW10`–`CW11`, and needs step 15 merged.
+
+### Read first
+
+1. `AGENTS.md`
+2. `plans/calibration-toolkit.plan.md` — *Post-calibration outputs*, then
+   *Step 28*
+3. `docs/dev/plotting.md` and `futureplans/trace-plot-backend-coupling.md`
+4. Step 15's section and the `posterior_runs` source it shipped
+
+### Do
+
+Follow the plan's *Step 28*. Plotly, imported lazily, added to the
+`calibration` extra. Do not touch `Output.plot`. Ship
+`examples/notebooks/23-calibration-workflow.ipynb`.
+
+Cut from: `main`. Merges into: `main`.
+
+### Exit checks
+
+The [standard checks](#exit-checks-every-step), plus `CW10`–`CW11` moved; the
+ledger must then read *Calibration workflow rows complete today: **11 of
+11***. **User gate:** `23-calibration-workflow.ipynb`, run in both pixi envs.
+
+### Handoff
+
+Set step 28 `done`. Phase J is finished; set the next `planned` step `next`
+if one remains, and record which stages users should reach for first.
 
 ---
 

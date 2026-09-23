@@ -79,9 +79,11 @@ def read_current(text: str) -> dict[str, str]:
 
 def known_ids() -> set[str]:
     """Every row ID a step may claim to close."""
-    api = read_ledger_block(LEDGER.read_text(encoding="utf-8"), "api")
+    ledger_text = LEDGER.read_text(encoding="utf-8")
+    api = read_ledger_block(ledger_text, "api")
+    workflow = read_ledger_block(ledger_text, "workflow")
     ports = read_ledger_block(PORTS.read_text(encoding="utf-8"), "ports", PORTS)
-    return {row[0] for row in api} | {row[0] for row in ports}
+    return {row[0] for row in api} | {row[0] for row in workflow} | {row[0] for row in ports}
 
 
 def step_sections(text: str) -> dict[int, str]:
