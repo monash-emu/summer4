@@ -51,8 +51,10 @@ and `.differences()`. Neither step has LHS, batched evaluation, multi-start runs
 seeding, convergence-driven stopping or plots.
 
 **Sequencing (user decision):** land step 14 as it is and step 15 as planned.
-Then new **Phase J, steps 24–28**, on the existing roadmap. Steps 24–27 need
-only step 14. Step 28 needs step 15.
+Then new **Phase J, steps 24–28**, on the existing roadmap — **directly after
+step 15 and before Track G (step 16)**. The landing order is
+14 → 15 → 24 → … → 28 → 16. Steps 24–27 depend technically only on step 14,
+but are not started before step 15 lands.
 
 ## Design
 
@@ -252,8 +254,8 @@ is not disturbed. That branch adds:
   `plans/calibration-toolkit.plan.md`, Section `Step N`, Closes `CW…`), plus a
   full `## Step N` section for each, with Summary, Read first, Do, Exit checks
   and Handoff;
-- a Phase J line under *Steps*: J needs step 14; step 28 needs step 15; by
-  default it runs after step 15;
+- a Phase J line under *Steps* fixing the landing order 14 → 15 → 24–28 → 16,
+  with step 15's handoff naming step 24 and step 28's naming step 16;
 - a Corrections-table row for step 15's per-draw outputs;
 - the ledger block, the checker support and the test.
 

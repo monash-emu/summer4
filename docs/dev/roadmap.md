@@ -88,10 +88,21 @@ time after step 1. Phase H is downstream work in other repositories and needs
 only step 2's tag. **Phase I** (steps 22–23) is rate-expression ergonomics: it
 is independent of every other phase and of its own two steps' ordering, and may
 run at any time from `main`. **Phase J** (steps 24–28) is the composable
-calibration workflow toolkit (WP19, `plans/calibration-toolkit.plan.md`).
-Steps 24–27 need only step 14; step 28 needs step 15. By default Phase J runs
-after Phase F. Its rows close the `CW` block of the
-{doc}`../evaluation/coverage-ledger`, not tb-ports rows.
+calibration workflow toolkit (WP19, `plans/calibration-toolkit.plan.md`). Its
+rows close the `CW` block of the {doc}`../evaluation/coverage-ledger`, not
+tb-ports rows.
+
+**Landing order after step 14.** Step numbers are not the landing order here.
+The order is fixed as:
+
+```text
+14 → 15 → 24 → 25 → 26 → 27 → 28 → 16 → 17 → 18 → 19
+```
+
+Phase J comes **directly after step 15** and before Track G resumes at step 16.
+Steps 24–27 would technically run on step 14 alone, but they are not started
+before step 15 lands. Each handoff below names its successor explicitly;
+`tests/test_roadmap.py` checks that they agree with this line.
 
 <!-- roadmap:steps -->
 | Step | Phase | WP | Branch | Plan | Section | Status | Closes |
@@ -1045,8 +1056,9 @@ the readiness table's `today` row equal to its `WP10` row. **User gate:**
 
 ### Handoff
 
-Set step 15 `done`, step 16 `next`. Phase F is finished; both port repositories
-are now unblocked end to end.
+Set step 15 `done`, step 24 `next` (Phase J follows Phase F directly — see
+*Landing order after step 14*; step 16 waits until step 28 lands). Phase F is
+finished; both port repositories are now unblocked end to end.
 
 ---
 
@@ -1482,8 +1494,8 @@ parameter points held in both unconstrained and constrained form with their
 scores and a provenance record — plus the first three stages: a Latin hypercube
 design over the priors, batched memory-bounded scoring, and keep-the-N-best. It
 lands on `feat/calib-candidates` and closes `CW1`–`CW4` of the calibration
-workflow ledger. It needs step 14 (`BayesianModel`) merged; it does not need
-step 15.
+workflow ledger. It runs after step 15 has landed (the fixed landing order in
+*Steps*); technically it depends only on step 14's `BayesianModel`.
 
 ### Read first
 
@@ -1517,7 +1529,7 @@ bracket the true parameter.
 
 ### Handoff
 
-Set step 24 `done` with its *Landed* line; set the next `planned` step `next`
+Set step 24 `done` with its *Landed* line; set step 25 `next`
 and rewrite the *Current position* block. Record the final `Candidates` field
 names and anything in the plan's *Design* that changed, because steps 25–28
 build on it.
@@ -1561,7 +1573,7 @@ number of starts. **User gate:** `20-calibration-multistart.ipynb`.
 
 ### Handoff
 
-Set step 25 `done`, the next `planned` step `next`. Record the `_Method`
+Set step 25 `done`, step 26 `next`. Record the `_Method`
 protocol as shipped, and any optax version constraint found (for example
 `optax.contrib.reduce_on_plateau` availability in the `jax06` env).
 
@@ -1605,7 +1617,7 @@ gate:** `21-calibration-gradient-free.ipynb`.
 
 ### Handoff
 
-Set step 26 `done`, the next `planned` step `next`. Record the evosax version
+Set step 26 `done`, step 27 `next`. Record the evosax version
 pinned and how the `jax06` env was handled.
 
 ---
@@ -1644,7 +1656,7 @@ fewer chunks than prior-seeded ones.
 
 ### Handoff
 
-Set step 27 `done`, the next `planned` step `next`. Record the `StopRule`
+Set step 27 `done`, step 28 `next`. Record the `StopRule`
 defaults as shipped and whether R-hat is meaningful for the ensemble kernels
 (AIES/ESS) in practice.
 
@@ -1686,8 +1698,9 @@ ledger must then read *Calibration workflow rows complete today: **11 of
 
 ### Handoff
 
-Set step 28 `done`. Phase J is finished; set the next `planned` step `next`
-if one remains, and record which stages users should reach for first.
+Set step 28 `done`, step 16 `next` (Track G resumes — see *Landing order
+after step 14*). Phase J is finished; record which stages users should reach
+for first.
 
 ---
 
