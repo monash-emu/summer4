@@ -2,6 +2,7 @@
 
 from summer4.epi.calibration import (
     AggregateHow,
+    BayesianModel,
     Beta,
     Gamma,
     LogNormal,
@@ -9,6 +10,7 @@ from summer4.epi.calibration import (
     NormalLikelihood,
     NormalPrior,
     Poisson,
+    SampleKind,
     TruncatedNormal,
     Uniform,
     priors_from_frame,
@@ -25,6 +27,7 @@ from summer4.flows.rates import Param
 
 __all__ = [
     "AggregateHow",
+    "BayesianModel",
     "Beta",
     "FOIKind",
     "ForceOfInfection",
@@ -38,6 +41,7 @@ __all__ = [
     "NormalPrior",
     "Param",
     "Poisson",
+    "SampleKind",
     "TruncatedNormal",
     "Uniform",
     "apply_compartment_weights",

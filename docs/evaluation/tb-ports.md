@@ -64,9 +64,9 @@ original analyses re-run on numpyro.
 | KI15 | Kiribati | Cumulative output from a start year | `full` | `outputs.ref(name).cumulative(start=)` in an `OutputSet`; `start` must be a save time | — |
 | KI16 | Kiribati | summer2 midpoint flow-output convention (parity) | `full` | `FlowMass(...).midpoint()` as an `OutputSet` post-op (`out[0] = f[0]`, then the average with the previous sample) | — |
 | KI17 | Kiribati | Named output set to a frame / parquet | `full` | `OutputSet.evaluate` then `Result.to_frame(shape="wide" or "long")`; a polars frame writes parquet | — |
-| KI18 | Kiribati | Priors and Normal targets, including a prior-distributed sd | `none` | Priors / likelihoods / `TargetSet.log_likelihood` exist; `BayesianModel` sampling is steps 14–15 | WP10 |
-| KI19 | Kiribati | Gradient-free posterior sampling (replacing `DEMetropolisZ`) | `none` | — | WP10 |
-| KI20 | Kiribati | MAP fit (replacing nevergrad) | `partial` | Hand-written optax loop, as in the case study | WP10 |
+| KI18 | Kiribati | Priors and Normal targets, including a prior-distributed sd | `none` | Priors / likelihoods / `TargetSet.log_likelihood` / `BayesianModel` exist; posterior scenario runs are step 15 | WP10 |
+| KI19 | Kiribati | Gradient-free posterior sampling (replacing `DEMetropolisZ`) | `none` | `BayesianModel.sample(kind="aies", "ess", or "sa")` via numpyro; closes with step 15 | WP10 |
+| KI20 | Kiribati | MAP fit (replacing nevergrad) | `partial` | `BayesianModel.find_map` (optax); case-study hand loop remains as history | WP10 |
 | KI21 | Kiribati | Posterior full runs × scenarios, quantiles, averted differences | `none` | — | WP10 |
 | KI22 | Kiribati | Verified compile time, step cost and solver safety at TB scale | `full` | `benchmarks/tb_scale.py`; `SolverInfo.ok` when `max_steps` is exhausted; `MixingMatrix.validate` / vmap-safe reciprocity | — |
 | KI23 | Kiribati | summer4 installable from a tagged GitHub release | `full` | Pin `tag = "v0.2.0a4"` | — |

@@ -276,19 +276,26 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/wcwidth-0.8.3-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/widgetsnbextension-4.0.16-pyhd8ed1ab_0.conda
       - pypi: ./
+      - pypi: https://files.pythonhosted.org/packages/14/de/958207b63243f38fca2b7bbb977b6ac0ba2556c77c8900a6ae93b7397381/arviz_stats-1.3.2-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/23/93/4e45e37f26c820216704b36b8e67cc55c490a7abd287a78a26a2c0e21386/lazy_loader-0.6-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/23/cd/066e86230ae37ed0be70aae89aabf03ca8d9f39c8aea0dec8029455b5540/opt_einsum-3.4.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/30/7b/34a9ce89f7a1e78423ca5a66492341c4f7daf6d0e9668af427fc2a7bc099/xarray_einstats-0.11.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/31/a8/97ef0cbb7a17143ace2643d600a7b80d6705b2266fc31078229e406bdef2/jax-0.6.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/34/16/e93f0184b80a4e1ad38c6998aa3a2f7569c0b0152cbae39f7572393eda04/jaxlib-0.6.2-cp313-cp313-manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/41/48/6450ed9243315322bbc19ac57b9b70d66a20bf1d38d124c96bc4bf6af9ea/scipy-1.18.1-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/51/c0/00c9809d8b9346eb238a6bbd5f83e846a4ce4503da94a4c08cb7284c325b/multipledispatch-1.0.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/57/5b/28365212062939d213802e5e5fe855cdb231e1c2a93254ba1690066504e3/xarray-2026.7.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/58/0a/a10b45aab35b175aded078a462dc8d0c698f5b13946e7cb0869097b78bb6/absl_py-2.5.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/63/53/6a81a6ebb1739f19c32002139719d4ee021a349d5bdbe066910feed327a1/optimistix-0.1.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/67/b7/f37610512b621cda1153dd82ff61678b787545a2914eaa2b8daacaeee924/arviz-1.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/6c/48/c42f657f3d6b4d9d9674c9bc48e763d024511ea4cc1d6e0c68c7b4380c43/diffrax-0.7.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/80/0c/2ed47112fc1958a0a81c9b015d4e1861953a1ec3a17b081c0180a25ce82c/lineax-0.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/89/a5/da8ae6c6f1babe4b68e3e55d43d39b529e29774f10e0910671a6b8c86eb8/ml_dtypes-0.6.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/8a/69/6a93d8600c339d7687a05857c7907bd4dd8cf88691a5ea106d7a50af90a1/optax-0.2.8-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8b/38/c66bbdc5047f4776c2bd3e47e5295a350e3fa44d5b8942105e71c2a876a0/jaxtyping-0.3.11-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8d/96/04e7b441807b26b794da5b11e59ed7f83b2cf8af202bd7eba8ad2fa6046e/wadler_lindig-0.1.7-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/92/c2/9e82a644471d34e4e0d6a46046e48409a30fce58e5e1205cf714a2a00e99/arviz_plots-1.3.1-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/a6/16/fec3fa651558bfc9d619f548b5cd55054950a4c7baf86d81be77725e5126/arviz_base-1.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ae/d6/69a76c8ccdef14af687c497040292a46e59fc7a0ab24724b60e50ca61030/equinox-0.13.8-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ea/8b/ae9187460b6fc8f0a01074f84b7edcbba605a7c70aebecf345ce9bc2b43c/numpyro-0.16.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f9/1c/01bfd571a64e7f270e6bab5e33777debe0edc56759233ce84f27dec92d14/tqdm-4.70.0-py3-none-any.whl
@@ -498,18 +505,25 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/zlib-ng-2.3.3-h31dac16_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/zstd-1.5.7-hf451053_7.conda
       - pypi: ./
+      - pypi: https://files.pythonhosted.org/packages/14/de/958207b63243f38fca2b7bbb977b6ac0ba2556c77c8900a6ae93b7397381/arviz_stats-1.3.2-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/23/93/4e45e37f26c820216704b36b8e67cc55c490a7abd287a78a26a2c0e21386/lazy_loader-0.6-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/23/cd/066e86230ae37ed0be70aae89aabf03ca8d9f39c8aea0dec8029455b5540/opt_einsum-3.4.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/2a/f5/769f36d14922b8071a43e95d24d18b6bdafad10d7f5cf647867e1ac052bc/scipy-1.18.1-cp313-cp313-macosx_12_0_arm64.whl
+      - pypi: https://files.pythonhosted.org/packages/30/7b/34a9ce89f7a1e78423ca5a66492341c4f7daf6d0e9668af427fc2a7bc099/xarray_einstats-0.11.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/31/a8/97ef0cbb7a17143ace2643d600a7b80d6705b2266fc31078229e406bdef2/jax-0.6.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/50/51/fd1582b8f5ed8a9e7be0e161a6ea0dff70cb280479a12178df0b3a72700e/ml_dtypes-0.6.0-cp313-cp313-macosx_10_13_universal2.whl
       - pypi: https://files.pythonhosted.org/packages/51/c0/00c9809d8b9346eb238a6bbd5f83e846a4ce4503da94a4c08cb7284c325b/multipledispatch-1.0.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/57/5b/28365212062939d213802e5e5fe855cdb231e1c2a93254ba1690066504e3/xarray-2026.7.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/58/0a/a10b45aab35b175aded078a462dc8d0c698f5b13946e7cb0869097b78bb6/absl_py-2.5.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/63/53/6a81a6ebb1739f19c32002139719d4ee021a349d5bdbe066910feed327a1/optimistix-0.1.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/67/b7/f37610512b621cda1153dd82ff61678b787545a2914eaa2b8daacaeee924/arviz-1.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/6c/48/c42f657f3d6b4d9d9674c9bc48e763d024511ea4cc1d6e0c68c7b4380c43/diffrax-0.7.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/80/0c/2ed47112fc1958a0a81c9b015d4e1861953a1ec3a17b081c0180a25ce82c/lineax-0.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8a/69/6a93d8600c339d7687a05857c7907bd4dd8cf88691a5ea106d7a50af90a1/optax-0.2.8-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8b/38/c66bbdc5047f4776c2bd3e47e5295a350e3fa44d5b8942105e71c2a876a0/jaxtyping-0.3.11-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8d/96/04e7b441807b26b794da5b11e59ed7f83b2cf8af202bd7eba8ad2fa6046e/wadler_lindig-0.1.7-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/92/c2/9e82a644471d34e4e0d6a46046e48409a30fce58e5e1205cf714a2a00e99/arviz_plots-1.3.1-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/a6/16/fec3fa651558bfc9d619f548b5cd55054950a4c7baf86d81be77725e5126/arviz_base-1.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ae/d6/69a76c8ccdef14af687c497040292a46e59fc7a0ab24724b60e50ca61030/equinox-0.13.8-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/af/38/bed4279c2a3407820ed8bcd72dbad43c330ada35f88fafe9952b35abf785/jaxlib-0.6.2-cp313-cp313-macosx_11_0_arm64.whl
       - pypi: https://files.pythonhosted.org/packages/ea/8b/ae9187460b6fc8f0a01074f84b7edcbba605a7c70aebecf345ce9bc2b43c/numpyro-0.16.1-py3-none-any.whl
@@ -555,13 +569,16 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/0f/88/7c548de1f6c2ade7c931a3282da73f9274fa6a1531091be682f89c85efb9/jupyter_client-8.10.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/10/bd/c038d7cc38edc1aa5bf91ab8068b63d4308c66c4c8bb3cbba7dfbc049f9c/pyparsing-3.3.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/13/d4/1152d1c7ab42d8b908be64fd200ddc870dc9d4925e951198702084aa1a7d/linkify_it_py-2.2.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/14/de/958207b63243f38fca2b7bbb977b6ac0ba2556c77c8900a6ae93b7397381/arviz_stats-1.3.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1a/69/ee613f74085ca7103f79cd08d579c4f3177d1d26e5d3d9528d2d6536a707/nbformat-5.11.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/22/a6/858897256d0deac81a172289110f31629fc4cee19b6f01283303e18c8db3/ptyprocess-0.7.0-py2.py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/23/93/4e45e37f26c820216704b36b8e67cc55c490a7abd287a78a26a2c0e21386/lazy_loader-0.6-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/23/cd/066e86230ae37ed0be70aae89aabf03ca8d9f39c8aea0dec8029455b5540/opt_einsum-3.4.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/27/2c/daca29684cbe9fd4bc711f8246da3c10adca1ccc4d24436b17572eb2590e/roman_numerals_py-4.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/27/83/859ecdd180cacc13b1f7e857abf8582a64552ea7a061057a6c716e790fce/sphinxcontrib_qthelp-2.0.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/2c/58/ca301544e1fa93ed4f80d724bf5b194f6e4b945841c5bfd555878eea9fcb/referencing-0.37.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/2d/1e/65b59cf518c106aa755e7f7da3099027738687a862ec785060702a481320/ipython-9.17.1-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/30/7b/34a9ce89f7a1e78423ca5a66492341c4f7daf6d0e9668af427fc2a7bc099/xarray_einstats-0.11.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/30/cf/45dd359f6ca0c3762ce0490f681da242f0530c49c81050c035c016bfdd3a/sphinx_design-0.7.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/31/53/136e9eca6e0b9dc0e1962e2c908fbea2e5ac000c2a2fbd9a35797958c48b/sphinx-8.2.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/31/a8/97ef0cbb7a17143ace2643d600a7b80d6705b2266fc31078229e406bdef2/jax-0.6.2-py3-none-any.whl
@@ -582,6 +599,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/51/6d/3014112c7f717d1253223faa13b6db3ac3a64ed00ab2a3bc1b942bc9cdd4/polars-1.44.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/52/a7/d2782e4e3f77c8450f727ba74a8f12756d5ba823d81b941f1b04da9d033a/sphinxcontrib_serializinghtml-2.0.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/54/6f/84908cad2d6aa5144abcf7b42709fe4fdb459bc640ec7ac5786e7693dabc/prompt_toolkit-3.0.53-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/57/5b/28365212062939d213802e5e5fe855cdb231e1c2a93254ba1690066504e3/xarray-2026.7.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/57/b0/0e52c878c53f245edd3a11020f20979b3f490f245af532c7cae3027754b5/idna-3.19-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/57/d7/fe978efc2ae50abe48eb7464668ea99f53c010c60aeebb7b35ad27f23661/rpds_py-2026.6.3-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/58/0a/a10b45aab35b175aded078a462dc8d0c698f5b13946e7cb0869097b78bb6/absl_py-2.5.0-py3-none-any.whl
@@ -594,6 +612,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/63/53/6a81a6ebb1739f19c32002139719d4ee021a349d5bdbe066910feed327a1/optimistix-0.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/64/6b/67b87da9d36bff9df7d0efbd1a325fa372a43be7158effaf43ed7b22341d/jupyter_cache-1.0.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/64/b4/17d4b0b2a2dc85a6df63d1157e028ed19f90d4cd97c36717afef2bc2f395/attrs-26.1.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/67/b7/f37610512b621cda1153dd82ff61678b787545a2914eaa2b8daacaeee924/arviz-1.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/68/77/8f93ecbde1a4d11dfd460cd19a0c159f5487352e751fa87f5d78cc9db08e/contourpy-1.4.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/69/90/f63fb5873511e014207a475e2bb4e8b2e570d655b00ac19a9a0ca0a385ee/jsonschema-4.26.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/6c/48/c42f657f3d6b4d9d9674c9bc48e763d024511ea4cc1d6e0c68c7b4380c43/diffrax-0.7.2-py3-none-any.whl
@@ -613,6 +632,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/8d/3f/95338030883d8c8b91223b4e21744b04d11b161a3ef117295d8241f50ab4/accessible_pygments-0.0.5-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8d/96/04e7b441807b26b794da5b11e59ed7f83b2cf8af202bd7eba8ad2fa6046e/wadler_lindig-0.1.7-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8f/d7/9322c609343d929e75e7e5e6255e614fcc67572cfd083959cdef3b7aad79/docutils-0.21.2-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/92/c2/9e82a644471d34e4e0d6a46046e48409a30fce58e5e1205cf714a2a00e99/arviz_plots-1.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/94/93/0a378b48488879a1d925b42a804edfc6e0cd0ef854220f2dce738a46e7e9/myst_nb-1.4.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/95/51/67e7cf11a53e40694f720457d5b3a1cdaaa3d5a9a633e482f225456b93ff/debugpy-1.8.21-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/98/d6/33a411115b61dbfc16ad6ad73e71730f6fea654ee3667673bc53ab0e2fe7/pyarrow-25.0.1-cp313-cp313-manylinux_2_28_x86_64.whl
@@ -623,6 +643,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/9e/c3/059298687310d527a58bb01f3b1965787ee3b40dce76752eda8b44e9a2c5/pexpect-4.9.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/a0/f4/c67b0b3f1b9245e8d266f0f112c500d50e5b4e83cb6f3b71b6528104182a/requests-2.34.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/a5/69/6da5581c6a7fede7dc261bf4e67d6adca4196f176b43288b55b3db395b6e/mdit_py_plugins-0.6.1-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/a6/16/fec3fa651558bfc9d619f548b5cd55054950a4c7baf86d81be77725e5126/arviz_base-1.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/a9/21/9b05698b46f218fc0e118e1f8168395c65c8a2c750ae2bab54fc4bd4e0e8/markupsafe-3.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/a9/df/e7c10292f348cf55178a5b3c0092a38ea68891a3945f199ae8b7b8ac9dc1/matplotlib-3.11.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/ab/43/86aacc027959108b4c66eeae8b73cedb057dfa6eb3a335d05ad65197081c/kiwisolver-1.5.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
@@ -683,8 +704,10 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/10/76/8803c13605b763d33d156c4678fc77f8443389c0c51c8aef707bb02015f4/pillow-12.3.0-cp313-cp313-macosx_11_0_arm64.whl
       - pypi: https://files.pythonhosted.org/packages/10/bd/c038d7cc38edc1aa5bf91ab8068b63d4308c66c4c8bb3cbba7dfbc049f9c/pyparsing-3.3.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/13/d4/1152d1c7ab42d8b908be64fd200ddc870dc9d4925e951198702084aa1a7d/linkify_it_py-2.2.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/14/de/958207b63243f38fca2b7bbb977b6ac0ba2556c77c8900a6ae93b7397381/arviz_stats-1.3.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1a/69/ee613f74085ca7103f79cd08d579c4f3177d1d26e5d3d9528d2d6536a707/nbformat-5.11.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/22/a6/858897256d0deac81a172289110f31629fc4cee19b6f01283303e18c8db3/ptyprocess-0.7.0-py2.py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/23/93/4e45e37f26c820216704b36b8e67cc55c490a7abd287a78a26a2c0e21386/lazy_loader-0.6-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/23/cd/066e86230ae37ed0be70aae89aabf03ca8d9f39c8aea0dec8029455b5540/opt_einsum-3.4.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/27/2c/daca29684cbe9fd4bc711f8246da3c10adca1ccc4d24436b17572eb2590e/roman_numerals_py-4.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/27/83/859ecdd180cacc13b1f7e857abf8582a64552ea7a061057a6c716e790fce/sphinxcontrib_qthelp-2.0.0-py3-none-any.whl
@@ -692,6 +715,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/2c/58/ca301544e1fa93ed4f80d724bf5b194f6e4b945841c5bfd555878eea9fcb/referencing-0.37.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/2d/1e/65b59cf518c106aa755e7f7da3099027738687a862ec785060702a481320/ipython-9.17.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/2f/06/9dc9e48b5e5e941c8b10350c5ff2d721da42a20517d911d15544246775ff/numpy-2.5.3-cp313-cp313-macosx_11_0_arm64.whl
+      - pypi: https://files.pythonhosted.org/packages/30/7b/34a9ce89f7a1e78423ca5a66492341c4f7daf6d0e9668af427fc2a7bc099/xarray_einstats-0.11.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/30/cf/45dd359f6ca0c3762ce0490f681da242f0530c49c81050c035c016bfdd3a/sphinx_design-0.7.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/31/53/136e9eca6e0b9dc0e1962e2c908fbea2e5ac000c2a2fbd9a35797958c48b/sphinx-8.2.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/31/a8/97ef0cbb7a17143ace2643d600a7b80d6705b2266fc31078229e406bdef2/jax-0.6.2-py3-none-any.whl
@@ -713,6 +737,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/51/6d/3014112c7f717d1253223faa13b6db3ac3a64ed00ab2a3bc1b942bc9cdd4/polars-1.44.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/52/a7/d2782e4e3f77c8450f727ba74a8f12756d5ba823d81b941f1b04da9d033a/sphinxcontrib_serializinghtml-2.0.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/54/6f/84908cad2d6aa5144abcf7b42709fe4fdb459bc640ec7ac5786e7693dabc/prompt_toolkit-3.0.53-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/57/5b/28365212062939d213802e5e5fe855cdb231e1c2a93254ba1690066504e3/xarray-2026.7.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/57/8a/153532fa53db30e116118164f3af269a1f3966b3e2ba32c89b12fe864bd8/pyzmq-27.2.0-cp312-abi3-macosx_10_15_universal2.whl
       - pypi: https://files.pythonhosted.org/packages/57/b0/0e52c878c53f245edd3a11020f20979b3f490f245af532c7cae3027754b5/idna-3.19-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/58/0a/a10b45aab35b175aded078a462dc8d0c698f5b13946e7cb0869097b78bb6/absl_py-2.5.0-py3-none-any.whl
@@ -724,6 +749,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/63/53/6a81a6ebb1739f19c32002139719d4ee021a349d5bdbe066910feed327a1/optimistix-0.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/64/6b/67b87da9d36bff9df7d0efbd1a325fa372a43be7158effaf43ed7b22341d/jupyter_cache-1.0.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/64/b4/17d4b0b2a2dc85a6df63d1157e028ed19f90d4cd97c36717afef2bc2f395/attrs-26.1.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/67/b7/f37610512b621cda1153dd82ff61678b787545a2914eaa2b8daacaeee924/arviz-1.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/69/90/f63fb5873511e014207a475e2bb4e8b2e570d655b00ac19a9a0ca0a385ee/jsonschema-4.26.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/6c/48/c42f657f3d6b4d9d9674c9bc48e763d024511ea4cc1d6e0c68c7b4380c43/diffrax-0.7.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/6d/18/83376915176eb058cb86470eb7396388a13350b09a8f233a79303bbcbc5b/pure_eval-0.2.4-py3-none-any.whl
@@ -741,6 +767,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/8d/3f/95338030883d8c8b91223b4e21744b04d11b161a3ef117295d8241f50ab4/accessible_pygments-0.0.5-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8d/96/04e7b441807b26b794da5b11e59ed7f83b2cf8af202bd7eba8ad2fa6046e/wadler_lindig-0.1.7-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8f/d7/9322c609343d929e75e7e5e6255e614fcc67572cfd083959cdef3b7aad79/docutils-0.21.2-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/92/c2/9e82a644471d34e4e0d6a46046e48409a30fce58e5e1205cf714a2a00e99/arviz_plots-1.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/94/93/0a378b48488879a1d925b42a804edfc6e0cd0ef854220f2dce738a46e7e9/myst_nb-1.4.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/95/51/67e7cf11a53e40694f720457d5b3a1cdaaa3d5a9a633e482f225456b93ff/debugpy-1.8.21-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/99/55/db07de81b5c630da5cbf5c7df646580ca26dfaefa593667fc6f2fe016d2e/tabulate-0.10.0-py3-none-any.whl
@@ -752,6 +779,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/a0/f4/c67b0b3f1b9245e8d266f0f112c500d50e5b4e83cb6f3b71b6528104182a/requests-2.34.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/a4/a0/562247944386f7d4ef94467e84876600cc1e0f1b93239aaa9213d2bc3cbd/charset_normalizer-3.5.1-cp313-cp313-macosx_10_13_universal2.whl
       - pypi: https://files.pythonhosted.org/packages/a5/69/6da5581c6a7fede7dc261bf4e67d6adca4196f176b43288b55b3db395b6e/mdit_py_plugins-0.6.1-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/a6/16/fec3fa651558bfc9d619f548b5cd55054950a4c7baf86d81be77725e5126/arviz_base-1.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/a9/29/2a47b700545aca050e0ed73c89ba21e08407e11f5f42a567421b220de6c1/matplotlib-3.11.2-cp313-cp313-macosx_11_0_arm64.whl
       - pypi: https://files.pythonhosted.org/packages/ad/66/0d785f0bc5e4315a96c989bb476d0fc07ea4f85132550c7b156ca2035d52/traitlets-5.16.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ae/d6/69a76c8ccdef14af687c497040292a46e59fc7a0ab24724b60e50ca61030/equinox-0.13.8-py3-none-any.whl
@@ -1044,11 +1072,16 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/wcwidth-0.8.3-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/widgetsnbextension-4.0.16-pyhd8ed1ab_0.conda
       - pypi: ./
+      - pypi: https://files.pythonhosted.org/packages/14/de/958207b63243f38fca2b7bbb977b6ac0ba2556c77c8900a6ae93b7397381/arviz_stats-1.3.2-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/23/93/4e45e37f26c820216704b36b8e67cc55c490a7abd287a78a26a2c0e21386/lazy_loader-0.6-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/23/cd/066e86230ae37ed0be70aae89aabf03ca8d9f39c8aea0dec8029455b5540/opt_einsum-3.4.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/30/7b/34a9ce89f7a1e78423ca5a66492341c4f7daf6d0e9668af427fc2a7bc099/xarray_einstats-0.11.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/41/48/6450ed9243315322bbc19ac57b9b70d66a20bf1d38d124c96bc4bf6af9ea/scipy-1.18.1-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/51/c0/00c9809d8b9346eb238a6bbd5f83e846a4ce4503da94a4c08cb7284c325b/multipledispatch-1.0.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/57/5b/28365212062939d213802e5e5fe855cdb231e1c2a93254ba1690066504e3/xarray-2026.7.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/58/0a/a10b45aab35b175aded078a462dc8d0c698f5b13946e7cb0869097b78bb6/absl_py-2.5.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/63/53/6a81a6ebb1739f19c32002139719d4ee021a349d5bdbe066910feed327a1/optimistix-0.1.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/67/b7/f37610512b621cda1153dd82ff61678b787545a2914eaa2b8daacaeee924/arviz-1.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/6c/48/c42f657f3d6b4d9d9674c9bc48e763d024511ea4cc1d6e0c68c7b4380c43/diffrax-0.7.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/89/a5/da8ae6c6f1babe4b68e3e55d43d39b529e29774f10e0910671a6b8c86eb8/ml_dtypes-0.6.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/8a/69/6a93d8600c339d7687a05857c7907bd4dd8cf88691a5ea106d7a50af90a1/optax-0.2.8-py3-none-any.whl
@@ -1056,7 +1089,9 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/8d/96/04e7b441807b26b794da5b11e59ed7f83b2cf8af202bd7eba8ad2fa6046e/wadler_lindig-0.1.7-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8d/f8/0d32243c6b8e5dbee9097cf0c95bbdf8681ba4463c927c2e3445f3775814/lineax-0.1.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8f/f4/5f9a286e1eeca9faa8b83885edccf63ab2f1b22e17f6a5ea66ac86b1afe4/jax-0.11.1-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/92/c2/9e82a644471d34e4e0d6a46046e48409a30fce58e5e1205cf714a2a00e99/arviz_plots-1.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/a4/03/f338093d5384e4f97cfdc8cd6f015ef8b4694dedb6f7a42ff4f7c7ff20aa/numpyro-0.21.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/a6/16/fec3fa651558bfc9d619f548b5cd55054950a4c7baf86d81be77725e5126/arviz_base-1.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ae/d6/69a76c8ccdef14af687c497040292a46e59fc7a0ab24724b60e50ca61030/equinox-0.13.8-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f5/28/ef1371618e784880e68c2ab5277d5ccbaf518a2a5ec9ec05ef90a9ee7d1b/jaxlib-0.11.1-cp313-cp313-manylinux_2_27_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/f9/1c/01bfd571a64e7f270e6bab5e33777debe0edc56759233ce84f27dec92d14/tqdm-4.70.0-py3-none-any.whl
@@ -1266,20 +1301,27 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/zlib-ng-2.3.3-h31dac16_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/zstd-1.5.7-hf451053_7.conda
       - pypi: ./
+      - pypi: https://files.pythonhosted.org/packages/14/de/958207b63243f38fca2b7bbb977b6ac0ba2556c77c8900a6ae93b7397381/arviz_stats-1.3.2-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/23/93/4e45e37f26c820216704b36b8e67cc55c490a7abd287a78a26a2c0e21386/lazy_loader-0.6-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/23/cd/066e86230ae37ed0be70aae89aabf03ca8d9f39c8aea0dec8029455b5540/opt_einsum-3.4.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/2a/f5/769f36d14922b8071a43e95d24d18b6bdafad10d7f5cf647867e1ac052bc/scipy-1.18.1-cp313-cp313-macosx_12_0_arm64.whl
+      - pypi: https://files.pythonhosted.org/packages/30/7b/34a9ce89f7a1e78423ca5a66492341c4f7daf6d0e9668af427fc2a7bc099/xarray_einstats-0.11.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/50/51/fd1582b8f5ed8a9e7be0e161a6ea0dff70cb280479a12178df0b3a72700e/ml_dtypes-0.6.0-cp313-cp313-macosx_10_13_universal2.whl
       - pypi: https://files.pythonhosted.org/packages/51/c0/00c9809d8b9346eb238a6bbd5f83e846a4ce4503da94a4c08cb7284c325b/multipledispatch-1.0.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/57/5b/28365212062939d213802e5e5fe855cdb231e1c2a93254ba1690066504e3/xarray-2026.7.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/58/0a/a10b45aab35b175aded078a462dc8d0c698f5b13946e7cb0869097b78bb6/absl_py-2.5.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/63/53/6a81a6ebb1739f19c32002139719d4ee021a349d5bdbe066910feed327a1/optimistix-0.1.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/67/b7/f37610512b621cda1153dd82ff61678b787545a2914eaa2b8daacaeee924/arviz-1.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/6c/48/c42f657f3d6b4d9d9674c9bc48e763d024511ea4cc1d6e0c68c7b4380c43/diffrax-0.7.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8a/69/6a93d8600c339d7687a05857c7907bd4dd8cf88691a5ea106d7a50af90a1/optax-0.2.8-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8b/38/c66bbdc5047f4776c2bd3e47e5295a350e3fa44d5b8942105e71c2a876a0/jaxtyping-0.3.11-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8d/96/04e7b441807b26b794da5b11e59ed7f83b2cf8af202bd7eba8ad2fa6046e/wadler_lindig-0.1.7-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8d/f8/0d32243c6b8e5dbee9097cf0c95bbdf8681ba4463c927c2e3445f3775814/lineax-0.1.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8f/f4/5f9a286e1eeca9faa8b83885edccf63ab2f1b22e17f6a5ea66ac86b1afe4/jax-0.11.1-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/92/c2/9e82a644471d34e4e0d6a46046e48409a30fce58e5e1205cf714a2a00e99/arviz_plots-1.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/a0/22/d076bf545853d1f60ef906cb6d69751f9b149f857f4390de989d5165ed80/jaxlib-0.11.1-cp313-cp313-macosx_11_0_arm64.whl
       - pypi: https://files.pythonhosted.org/packages/a4/03/f338093d5384e4f97cfdc8cd6f015ef8b4694dedb6f7a42ff4f7c7ff20aa/numpyro-0.21.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/a6/16/fec3fa651558bfc9d619f548b5cd55054950a4c7baf86d81be77725e5126/arviz_base-1.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ae/d6/69a76c8ccdef14af687c497040292a46e59fc7a0ab24724b60e50ca61030/equinox-0.13.8-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f9/1c/01bfd571a64e7f270e6bab5e33777debe0edc56759233ce84f27dec92d14/tqdm-4.70.0-py3-none-any.whl
   nb:
@@ -1617,19 +1659,26 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/widgetsnbextension-4.0.16-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/zipp-4.1.0-pyhcf101f3_0.conda
       - pypi: ./
+      - pypi: https://files.pythonhosted.org/packages/14/de/958207b63243f38fca2b7bbb977b6ac0ba2556c77c8900a6ae93b7397381/arviz_stats-1.3.2-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/23/93/4e45e37f26c820216704b36b8e67cc55c490a7abd287a78a26a2c0e21386/lazy_loader-0.6-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/23/cd/066e86230ae37ed0be70aae89aabf03ca8d9f39c8aea0dec8029455b5540/opt_einsum-3.4.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/30/7b/34a9ce89f7a1e78423ca5a66492341c4f7daf6d0e9668af427fc2a7bc099/xarray_einstats-0.11.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/31/a8/97ef0cbb7a17143ace2643d600a7b80d6705b2266fc31078229e406bdef2/jax-0.6.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/34/16/e93f0184b80a4e1ad38c6998aa3a2f7569c0b0152cbae39f7572393eda04/jaxlib-0.6.2-cp313-cp313-manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/41/48/6450ed9243315322bbc19ac57b9b70d66a20bf1d38d124c96bc4bf6af9ea/scipy-1.18.1-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/51/c0/00c9809d8b9346eb238a6bbd5f83e846a4ce4503da94a4c08cb7284c325b/multipledispatch-1.0.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/57/5b/28365212062939d213802e5e5fe855cdb231e1c2a93254ba1690066504e3/xarray-2026.7.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/58/0a/a10b45aab35b175aded078a462dc8d0c698f5b13946e7cb0869097b78bb6/absl_py-2.5.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/63/53/6a81a6ebb1739f19c32002139719d4ee021a349d5bdbe066910feed327a1/optimistix-0.1.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/67/b7/f37610512b621cda1153dd82ff61678b787545a2914eaa2b8daacaeee924/arviz-1.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/6c/48/c42f657f3d6b4d9d9674c9bc48e763d024511ea4cc1d6e0c68c7b4380c43/diffrax-0.7.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/80/0c/2ed47112fc1958a0a81c9b015d4e1861953a1ec3a17b081c0180a25ce82c/lineax-0.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/89/a5/da8ae6c6f1babe4b68e3e55d43d39b529e29774f10e0910671a6b8c86eb8/ml_dtypes-0.6.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/8a/69/6a93d8600c339d7687a05857c7907bd4dd8cf88691a5ea106d7a50af90a1/optax-0.2.8-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8b/38/c66bbdc5047f4776c2bd3e47e5295a350e3fa44d5b8942105e71c2a876a0/jaxtyping-0.3.11-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8d/96/04e7b441807b26b794da5b11e59ed7f83b2cf8af202bd7eba8ad2fa6046e/wadler_lindig-0.1.7-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/92/c2/9e82a644471d34e4e0d6a46046e48409a30fce58e5e1205cf714a2a00e99/arviz_plots-1.3.1-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/a6/16/fec3fa651558bfc9d619f548b5cd55054950a4c7baf86d81be77725e5126/arviz_base-1.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ae/d6/69a76c8ccdef14af687c497040292a46e59fc7a0ab24724b60e50ca61030/equinox-0.13.8-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ea/8b/ae9187460b6fc8f0a01074f84b7edcbba605a7c70aebecf345ce9bc2b43c/numpyro-0.16.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f9/1c/01bfd571a64e7f270e6bab5e33777debe0edc56759233ce84f27dec92d14/tqdm-4.70.0-py3-none-any.whl
@@ -1913,18 +1962,25 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/zlib-ng-2.3.3-h31dac16_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/zstd-1.5.7-hf451053_7.conda
       - pypi: ./
+      - pypi: https://files.pythonhosted.org/packages/14/de/958207b63243f38fca2b7bbb977b6ac0ba2556c77c8900a6ae93b7397381/arviz_stats-1.3.2-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/23/93/4e45e37f26c820216704b36b8e67cc55c490a7abd287a78a26a2c0e21386/lazy_loader-0.6-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/23/cd/066e86230ae37ed0be70aae89aabf03ca8d9f39c8aea0dec8029455b5540/opt_einsum-3.4.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/2a/f5/769f36d14922b8071a43e95d24d18b6bdafad10d7f5cf647867e1ac052bc/scipy-1.18.1-cp313-cp313-macosx_12_0_arm64.whl
+      - pypi: https://files.pythonhosted.org/packages/30/7b/34a9ce89f7a1e78423ca5a66492341c4f7daf6d0e9668af427fc2a7bc099/xarray_einstats-0.11.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/31/a8/97ef0cbb7a17143ace2643d600a7b80d6705b2266fc31078229e406bdef2/jax-0.6.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/50/51/fd1582b8f5ed8a9e7be0e161a6ea0dff70cb280479a12178df0b3a72700e/ml_dtypes-0.6.0-cp313-cp313-macosx_10_13_universal2.whl
       - pypi: https://files.pythonhosted.org/packages/51/c0/00c9809d8b9346eb238a6bbd5f83e846a4ce4503da94a4c08cb7284c325b/multipledispatch-1.0.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/57/5b/28365212062939d213802e5e5fe855cdb231e1c2a93254ba1690066504e3/xarray-2026.7.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/58/0a/a10b45aab35b175aded078a462dc8d0c698f5b13946e7cb0869097b78bb6/absl_py-2.5.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/63/53/6a81a6ebb1739f19c32002139719d4ee021a349d5bdbe066910feed327a1/optimistix-0.1.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/67/b7/f37610512b621cda1153dd82ff61678b787545a2914eaa2b8daacaeee924/arviz-1.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/6c/48/c42f657f3d6b4d9d9674c9bc48e763d024511ea4cc1d6e0c68c7b4380c43/diffrax-0.7.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/80/0c/2ed47112fc1958a0a81c9b015d4e1861953a1ec3a17b081c0180a25ce82c/lineax-0.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8a/69/6a93d8600c339d7687a05857c7907bd4dd8cf88691a5ea106d7a50af90a1/optax-0.2.8-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8b/38/c66bbdc5047f4776c2bd3e47e5295a350e3fa44d5b8942105e71c2a876a0/jaxtyping-0.3.11-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8d/96/04e7b441807b26b794da5b11e59ed7f83b2cf8af202bd7eba8ad2fa6046e/wadler_lindig-0.1.7-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/92/c2/9e82a644471d34e4e0d6a46046e48409a30fce58e5e1205cf714a2a00e99/arviz_plots-1.3.1-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/a6/16/fec3fa651558bfc9d619f548b5cd55054950a4c7baf86d81be77725e5126/arviz_base-1.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ae/d6/69a76c8ccdef14af687c497040292a46e59fc7a0ab24724b60e50ca61030/equinox-0.13.8-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/af/38/bed4279c2a3407820ed8bcd72dbad43c330ada35f88fafe9952b35abf785/jaxlib-0.6.2-cp313-cp313-macosx_11_0_arm64.whl
       - pypi: https://files.pythonhosted.org/packages/ea/8b/ae9187460b6fc8f0a01074f84b7edcbba605a7c70aebecf345ce9bc2b43c/numpyro-0.16.1-py3-none-any.whl
@@ -9673,6 +9729,7 @@ packages:
   - equinox ; extra == 'jax'
   - numpyro>=0.16.0 ; extra == 'calibration'
   - optax>=0.2.0 ; extra == 'calibration'
+  - arviz>=0.20.0 ; extra == 'calibration'
   - pandas>=2.0 ; extra == 'pandas'
   - polars>=1.0 ; extra == 'frames'
   - pyarrow>=17.0 ; extra == 'frames'
@@ -9847,6 +9904,35 @@ packages:
   - sphinx-book-theme ; extra == 'doc'
   - myst-parser ; extra == 'doc'
   requires_python: '>=3.10'
+- pypi: https://files.pythonhosted.org/packages/14/de/958207b63243f38fca2b7bbb977b6ac0ba2556c77c8900a6ae93b7397381/arviz_stats-1.3.2-py3-none-any.whl
+  name: arviz-stats
+  version: 1.3.2
+  sha256: bf186dc22ff6fd2a5e6897c640b55f846dd39aa1f22f8e7e08cc515d09a1ad16
+  requires_dist:
+  - numpy>=2
+  - scipy>=1.13
+  - sphinx-book-theme ; extra == 'doc'
+  - myst-parser[linkify] ; extra == 'doc'
+  - myst-nb ; extra == 'doc'
+  - sphinx-copybutton ; extra == 'doc'
+  - numpydoc ; extra == 'doc'
+  - sphinx<9 ; extra == 'doc'
+  - sphinx-design ; extra == 'doc'
+  - jupyter-sphinx ; extra == 'doc'
+  - h5netcdf[h5py] ; extra == 'doc'
+  - sphinx-autosummary-accessors ; extra == 'doc'
+  - numba ; extra == 'numba'
+  - xarray-einstats[einops,numba] ; extra == 'numba'
+  - pytest ; extra == 'test'
+  - pytest-cov ; extra == 'test'
+  - pytest ; extra == 'test-xarray'
+  - pytest-cov ; extra == 'test-xarray'
+  - h5netcdf[h5py] ; extra == 'test-xarray'
+  - jinja2 ; extra == 'test-xarray'
+  - arviz-base>=1.3.0,<1.4.0 ; extra == 'xarray'
+  - xarray-einstats ; extra == 'xarray'
+  - xarray>=2024.11.0 ; extra == 'xarray'
+  requires_python: '>=3.12'
 - pypi: https://files.pythonhosted.org/packages/1a/69/ee613f74085ca7103f79cd08d579c4f3177d1d26e5d3d9528d2d6536a707/nbformat-5.11.1-py3-none-any.whl
   name: nbformat
   version: 5.11.1
@@ -9871,6 +9957,19 @@ packages:
   name: ptyprocess
   version: 0.7.0
   sha256: 4b41f3967fce3af57cc7e94b888626c18bf37a083e3651ca8feeb66d492fef35
+- pypi: https://files.pythonhosted.org/packages/23/93/4e45e37f26c820216704b36b8e67cc55c490a7abd287a78a26a2c0e21386/lazy_loader-0.6-py3-none-any.whl
+  name: lazy-loader
+  version: '0.6'
+  sha256: 77253be3391b06124a0e16105bd663b6c54470af1a9ca8e1cf026f38d58ed056
+  requires_dist:
+  - packaging
+  - pytest>=8.0 ; extra == 'test'
+  - pytest-cov>=5.0 ; extra == 'test'
+  - coverage[toml]>=7.2 ; extra == 'test'
+  - pre-commit==4.3.0 ; extra == 'lint'
+  - changelist==0.5 ; extra == 'dev'
+  - spin==0.15 ; extra == 'dev'
+  requires_python: '>=3.9'
 - pypi: https://files.pythonhosted.org/packages/23/cd/066e86230ae37ed0be70aae89aabf03ca8d9f39c8aea0dec8029455b5540/opt_einsum-3.4.0-py3-none-any.whl
   name: opt-einsum
   version: 3.4.0
@@ -10000,6 +10099,34 @@ packages:
   name: numpy
   version: 2.5.3
   sha256: 92f30e89b8ee0ecf363033576c422b2f58fed6a80bed0aa48dff6d14c654663e
+  requires_python: '>=3.12'
+- pypi: https://files.pythonhosted.org/packages/30/7b/34a9ce89f7a1e78423ca5a66492341c4f7daf6d0e9668af427fc2a7bc099/xarray_einstats-0.11.0-py3-none-any.whl
+  name: xarray-einstats
+  version: 0.11.0
+  sha256: 9dc8372aeb5db233054ddde4e57cbbcd1eee6c2e1b6bbe85863881c09b4421b3
+  requires_dist:
+  - numpy>=2.0
+  - scipy>=1.14
+  - xarray>=2024.7.0
+  - furo ; extra == 'doc'
+  - myst-parser[linkify] ; extra == 'doc'
+  - myst-nb ; extra == 'doc'
+  - sphinx-copybutton ; extra == 'doc'
+  - numpydoc ; extra == 'doc'
+  - sphinx>=5 ; extra == 'doc'
+  - jupyter-sphinx ; extra == 'doc'
+  - sphinx-design ; extra == 'doc'
+  - watermark ; extra == 'doc'
+  - matplotlib ; extra == 'doc'
+  - sphinx-togglebutton ; extra == 'doc'
+  - einops ; extra == 'einops'
+  - numba>=0.55 ; extra == 'numba'
+  - hypothesis ; extra == 'test'
+  - pytest ; extra == 'test'
+  - pytest-cov ; extra == 'test'
+  - packaging ; extra == 'test'
+  - scipy>=1.15 ; extra == 'test'
+  - preliz>=0.19 ; extra == 'test'
   requires_python: '>=3.12'
 - pypi: https://files.pythonhosted.org/packages/30/cf/45dd359f6ca0c3762ce0490f681da242f0530c49c81050c035c016bfdd3a/sphinx_design-0.7.0-py3-none-any.whl
   name: sphinx-design
@@ -10456,6 +10583,54 @@ packages:
   requires_dist:
   - wcwidth>=0.1.4
   requires_python: '>=3.10'
+- pypi: https://files.pythonhosted.org/packages/57/5b/28365212062939d213802e5e5fe855cdb231e1c2a93254ba1690066504e3/xarray-2026.7.0-py3-none-any.whl
+  name: xarray
+  version: 2026.7.0
+  sha256: bf9dd130b93806dc78e90c1b7ac24851b31557b888674c53622235691cf21824
+  requires_dist:
+  - numpy>=1.26
+  - packaging>=24.2
+  - pandas>=2.2
+  - scipy>=1.15 ; extra == 'accel'
+  - bottleneck ; extra == 'accel'
+  - numbagg>=0.9 ; extra == 'accel'
+  - numba>=0.62 ; extra == 'accel'
+  - flox>=0.10 ; extra == 'accel'
+  - opt-einsum ; extra == 'accel'
+  - xarray[accel,etc,io,parallel,viz] ; extra == 'complete'
+  - netcdf4>=1.6.0 ; extra == 'io'
+  - h5netcdf[h5py]>=1.5.0 ; extra == 'io'
+  - pydap ; extra == 'io'
+  - scipy>=1.15 ; extra == 'io'
+  - zarr>=3.0 ; extra == 'io'
+  - fsspec ; extra == 'io'
+  - cftime ; extra == 'io'
+  - pooch ; extra == 'io'
+  - sparse>=0.15 ; extra == 'etc'
+  - dask[complete] ; extra == 'parallel'
+  - cartopy>=0.24 ; extra == 'viz'
+  - matplotlib>=3.10 ; extra == 'viz'
+  - nc-time-axis ; extra == 'viz'
+  - seaborn ; extra == 'viz'
+  - pandas-stubs ; extra == 'types'
+  - scipy-stubs ; extra == 'types'
+  - types-colorama ; extra == 'types'
+  - types-decorator ; extra == 'types'
+  - types-defusedxml ; extra == 'types'
+  - types-docutils ; extra == 'types'
+  - types-networkx ; extra == 'types'
+  - types-openpyxl ; extra == 'types'
+  - types-pexpect ; extra == 'types'
+  - types-psutil ; extra == 'types'
+  - types-pycurl ; extra == 'types'
+  - types-pygments ; extra == 'types'
+  - types-python-dateutil ; extra == 'types'
+  - types-pytz ; extra == 'types'
+  - types-pyyaml ; extra == 'types'
+  - types-requests ; extra == 'types'
+  - types-setuptools ; extra == 'types'
+  - types-xlrd ; extra == 'types'
+  requires_python: '>=3.11'
 - pypi: https://files.pythonhosted.org/packages/57/8a/153532fa53db30e116118164f3af269a1f3966b3e2ba32c89b12fe864bd8/pyzmq-27.2.0-cp312-abi3-macosx_10_15_universal2.whl
   name: pyzmq
   version: 27.2.0
@@ -10596,6 +10771,38 @@ packages:
   version: 26.1.0
   sha256: c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309
   requires_python: '>=3.9'
+- pypi: https://files.pythonhosted.org/packages/67/b7/f37610512b621cda1153dd82ff61678b787545a2914eaa2b8daacaeee924/arviz-1.3.0-py3-none-any.whl
+  name: arviz
+  version: 1.3.0
+  sha256: 16ab348e94c80295d205ea65e695d835b66daef8b31eddf71b88fd9b48490a85
+  requires_dist:
+  - arviz-base>=1.3.0,<1.4.0
+  - arviz-stats[xarray]>=1.3.0,<1.4.0
+  - arviz-plots>=1.3.0,<1.4.0
+  - arviz-plots[bokeh] ; extra == 'bokeh'
+  - build ; extra == 'check'
+  - pre-commit ; extra == 'check'
+  - h5netcdf ; extra == 'doc'
+  - h5py ; extra == 'doc'
+  - jupyter-sphinx ; extra == 'doc'
+  - matplotlib ; extra == 'doc'
+  - myst-parser[linkify] ; extra == 'doc'
+  - myst-nb ; extra == 'doc'
+  - pydata-sphinx-theme>=0.13 ; extra == 'doc'
+  - sphinx>=5 ; extra == 'doc'
+  - sphinx-copybutton ; extra == 'doc'
+  - sphinx-design ; extra == 'doc'
+  - sphinx-notfound-page ; extra == 'doc'
+  - sphinxcontrib-youtube ; extra == 'doc'
+  - sphinx-togglebutton ; extra == 'doc'
+  - sphobjinv ; extra == 'doc'
+  - arviz-base[h5netcdf] ; extra == 'h5netcdf'
+  - arviz-plots[matplotlib] ; extra == 'matplotlib'
+  - arviz-base[netcdf4] ; extra == 'netcdf4'
+  - arviz-plots[plotly] ; extra == 'plotly'
+  - pytest ; extra == 'test'
+  - arviz-base[zarr] ; extra == 'zarr'
+  requires_python: '>=3.12'
 - pypi: https://files.pythonhosted.org/packages/68/77/8f93ecbde1a4d11dfd460cd19a0c159f5487352e751fa87f5d78cc9db08e/contourpy-1.4.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
   name: contourpy
   version: 1.4.0
@@ -11078,6 +11285,33 @@ packages:
   - kubernetes ; extra == 'k8s'
   - xprof ; extra == 'xprof'
   requires_python: '>=3.12'
+- pypi: https://files.pythonhosted.org/packages/92/c2/9e82a644471d34e4e0d6a46046e48409a30fce58e5e1205cf714a2a00e99/arviz_plots-1.3.1-py3-none-any.whl
+  name: arviz-plots
+  version: 1.3.1
+  sha256: 78bfca8c87c71dad467e2790aa0c1dd6e505907c1376d9f4abbf39dc1212b983
+  requires_dist:
+  - arviz-base>=1.3.0,<1.4.0
+  - arviz-stats[xarray]>=1.3.0,<1.4.0
+  - bokeh>=3.4 ; extra == 'bokeh'
+  - sphinx-book-theme ; extra == 'doc'
+  - myst-parser[linkify] ; extra == 'doc'
+  - myst-nb ; extra == 'doc'
+  - sphinx-copybutton ; extra == 'doc'
+  - numpydoc ; extra == 'doc'
+  - sphinx>=6 ; extra == 'doc'
+  - sphinx-design ; extra == 'doc'
+  - jupyter-sphinx ; extra == 'doc'
+  - h5netcdf[h5py] ; extra == 'doc'
+  - plotly<6 ; extra == 'doc'
+  - matplotlib>=3.9 ; extra == 'matplotlib'
+  - plotly>=5.19 ; extra == 'plotly'
+  - webcolors ; extra == 'plotly'
+  - hypothesis ; extra == 'test'
+  - pytest ; extra == 'test'
+  - pytest-cov ; extra == 'test'
+  - h5netcdf[h5py] ; extra == 'test'
+  - kaleido ; extra == 'test'
+  requires_python: '>=3.12'
 - pypi: https://files.pythonhosted.org/packages/94/93/0a378b48488879a1d925b42a804edfc6e0cd0ef854220f2dce738a46e7e9/myst_nb-1.4.0-py3-none-any.whl
   name: myst-nb
   version: 1.4.0
@@ -11279,6 +11513,41 @@ packages:
   - pytest-regressions ; extra == 'testing'
   - pytest-timeout ; extra == 'testing'
   requires_python: '>=3.10'
+- pypi: https://files.pythonhosted.org/packages/a6/16/fec3fa651558bfc9d619f548b5cd55054950a4c7baf86d81be77725e5126/arviz_base-1.3.0-py3-none-any.whl
+  name: arviz-base
+  version: 1.3.0
+  sha256: 9f3d66353434ee81db78cb54fe00efd74ae2fc5519d20c593dd2dceae8f247b7
+  requires_dist:
+  - numpy>=2
+  - xarray>=2024.11.0
+  - typing-extensions>=3.10
+  - lazy-loader>=0.4
+  - build ; extra == 'check'
+  - pre-commit ; extra == 'check'
+  - docstub==0.6 ; extra == 'check'
+  - mypy ; extra == 'check'
+  - pylint ; extra == 'check'
+  - pre-commit ; extra == 'ci'
+  - cloudpickle ; extra == 'ci'
+  - pylint ; extra == 'ci'
+  - sphinx-book-theme ; extra == 'doc'
+  - myst-parser[linkify] ; extra == 'doc'
+  - myst-nb ; extra == 'doc'
+  - sphinx-copybutton ; extra == 'doc'
+  - numpydoc ; extra == 'doc'
+  - sphinx>=5 ; extra == 'doc'
+  - sphinx-design ; extra == 'doc'
+  - jupyter-sphinx ; extra == 'doc'
+  - h5netcdf[h5py] ; extra == 'doc'
+  - watermark ; extra == 'doc'
+  - h5netcdf[h5py] ; extra == 'h5netcdf'
+  - netcdf4 ; extra == 'netcdf4'
+  - xarray!=2025.8.0 ; extra == 'test'
+  - pytest ; extra == 'test'
+  - pytest-cov ; extra == 'test'
+  - scipy ; extra == 'test'
+  - zarr ; extra == 'zarr'
+  requires_python: '>=3.12'
 - pypi: https://files.pythonhosted.org/packages/a9/21/9b05698b46f218fc0e118e1f8168395c65c8a2c750ae2bab54fc4bd4e0e8/markupsafe-3.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
   name: markupsafe
   version: 3.0.3

@@ -11,7 +11,8 @@ static or prepare-time matrices.
 so a param-only matrix is hoisted, or the yearly/static stack is built in
 `prepare_fn` and referenced as a constant array.
 
-Related: `futureplans/wp10-preprocess-is-prepare-fn.md` for Kiribati's yearly
+Related: yearly mixing stacks for Kiribati belong in `prepare_fn` (WP10
+`BayesianModel` has no separate `preprocess=`).
 mixing stack.
 
 **After step 5:** `Lookup` gathers one row of a parameter stack inside the

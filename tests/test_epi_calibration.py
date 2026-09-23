@@ -1,4 +1,4 @@
-"""WP10 §10.1 — priors, likelihoods, and TargetSet.log_likelihood."""
+"""WP10 §10.1–§10.2 — priors, likelihoods, TargetSet.log_likelihood, BayesianModel."""
 
 from __future__ import annotations
 
@@ -25,6 +25,7 @@ from summer4 import (
     derived_refs,
 )
 from summer4.epi.calibration import (
+    BayesianModel,
     Beta,
     Gamma,
     LogNormal,
@@ -45,12 +46,14 @@ class _Rates(NamedTuple):
     recovery: float
 
 
-def _sir_run(
+def _sir_fixture(
     *,
-    infection: float = 0.3,
+    infection: float = 0.35,
     recovery: float = 0.1,
     times: np.ndarray | None = None,
-) -> tuple[Any, TargetSet, Any]:
+    sd: float = 5.0,
+) -> tuple[Any, Any, TargetSet, Any, np.ndarray]:
+    """Compiled SIR, y0, targets at synthetic truth, and fixed-param dict."""
     state = Property("state", ("S", "I", "R"))
     pmap = PropertyMap.from_property(state)
     refs = derived_refs(_Rates)
@@ -60,14 +63,14 @@ def _sir_run(
     cm = model.compile()
     y0 = PropertyData.wrap(pmap, np.array([999.0, 1.0, 0.0]))
     if times is None:
-        times = np.array([0.0, 10.0, 20.0, 40.0])
+        times = np.array([0.0, 20.0, 40.0, 60.0])
     qty = Compartments(where=state["I"])
-    params = _Rates(infection=infection, recovery=recovery)
+    params = {"infection": infection, "recovery": recovery}
     truth = cm.run(
         params,
         y0,
         t0=0.0,
-        t1=40.0,
+        t1=80.0,
         dt=1.0,
         save=SavePlan(requests={"I": SaveRequest(qty, ts=times)}),
         solver="euler",
@@ -81,15 +84,29 @@ def _sir_run(
                 times=times,
                 values=values,
                 quantity=qty,
-                likelihood=NormalLikelihood(sd=1.0),
+                likelihood=NormalLikelihood(sd=sd),
             ),
         )
+    )
+    return cm, y0, targets, params, values
+
+
+def _sir_run(
+    *,
+    infection: float = 0.3,
+    recovery: float = 0.1,
+    times: np.ndarray | None = None,
+) -> tuple[Any, TargetSet, Any]:
+    if times is None:
+        times = np.array([0.0, 10.0, 20.0, 40.0])
+    cm, y0, targets, params, _values = _sir_fixture(
+        infection=infection, recovery=recovery, times=times, sd=1.0
     )
     result = cm.run(
         params,
         y0,
         t0=0.0,
-        t1=40.0,
+        t1=float(np.max(times)),
         dt=1.0,
         save=targets.plan(SavePlan()),
         solver="euler",
@@ -109,7 +126,6 @@ def test_prior_to_numpyro_and_bounds() -> None:
     for prior, expected_bounds in cases:
         assert prior.bounds() == expected_bounds
         d = prior.to_numpyro()
-        # Smoke: log_prob at a feasible point is finite.
         x = 0.5 if expected_bounds[0] == 0.0 or expected_bounds[0] is None else 0.0
         if isinstance(prior, Uniform):
             x = 1.0
@@ -158,7 +174,6 @@ def test_likelihood_log_prob_matches_numpyro() -> None:
     predicted = jnp.asarray([1.1, 1.9, 3.2])
     params: dict[str, float] = {}
 
-    # Default aggregate is mean (estival).
     normal = NormalLikelihood(sd=0.5)
     expected = jnp.mean(dist.Normal(predicted, 0.5).log_prob(observed))
     np.testing.assert_allclose(
@@ -211,7 +226,6 @@ def test_hierarchical_sd_resolves_from_params() -> None:
     assert prior_sites(lik) == (prior,)
     params = {"mixing_dist_sd": 12.0}
     assert float(resolve_scale(lik.sd, params)) == 12.0
-    # Param-valued scale
     lik_param = NormalLikelihood(sd=Param("sigma"))
     assert float(resolve_scale(lik_param.sd, {"sigma": 0.25})) == 0.25
 
@@ -254,3 +268,166 @@ def test_log_likelihood_requires_likelihood() -> None:
     )
     with pytest.raises(ValueError, match="no likelihood"):
         bare.log_likelihood(result, {})
+
+
+def test_bayesian_model_rejects_preprocess() -> None:
+    cm, y0, targets, params, _ = _sir_fixture()
+    with pytest.raises(TypeError, match="prepare_fn"):
+        BayesianModel(
+            cm,
+            params,
+            priors=(Uniform("infection", 0.05, 0.8),),
+            targets=targets,
+            y0=y0,
+            preprocess=lambda p: p,
+            run_kwargs=dict(t0=0.0, t1=80.0, dt=1.0, solver="euler"),
+        )
+
+
+def test_hierarchical_sd_is_a_sample_site() -> None:
+    cm, y0, _targets, params, values = _sir_fixture()
+    times = np.array([0.0, 20.0, 40.0, 60.0])
+    sd_prior = Uniform("obs_sd", 5.0, 20.0)
+    state = Property("state", ("S", "I", "R"))
+    targets = TargetSet(
+        targets=(
+            Target(
+                key="I",
+                times=times,
+                values=values,
+                quantity=Compartments(where=state["I"]),
+                likelihood=NormalLikelihood(sd=sd_prior),
+            ),
+        )
+    )
+    bm = BayesianModel(
+        cm,
+        params,
+        priors=(Uniform("infection", 0.05, 0.8),),
+        targets=targets,
+        y0=y0,
+        run_kwargs=dict(t0=0.0, t1=80.0, dt=1.0, solver="euler"),
+    )
+    assert bm.prior_names() == ("infection", "obs_sd")
+
+
+def test_log_density_jittable_and_map_near_truth() -> None:
+    cm, y0, targets, params, _ = _sir_fixture(infection=0.35)
+    bm = BayesianModel(
+        cm,
+        params,
+        priors=(Uniform("infection", 0.05, 0.8),),
+        targets=targets,
+        y0=y0,
+        run_kwargs=dict(t0=0.0, t1=80.0, dt=1.0, solver="euler"),
+    )
+    _pot, _post, z = bm._ensure_potential()
+    jitted = jax.jit(bm.log_density)
+    np.testing.assert_allclose(float(jitted(z)), float(bm.log_density(z)), rtol=1e-5)
+    mapped = bm.find_map(steps=80, seed=0)
+    assert abs(float(mapped["infection"]) - 0.35) < 0.05
+
+
+def test_solver_failure_penalises_log_density() -> None:
+    cm, y0, targets, params, _ = _sir_fixture()
+    healthy = BayesianModel(
+        cm,
+        params,
+        priors=(Uniform("infection", 0.05, 0.8),),
+        targets=targets,
+        y0=y0,
+        run_kwargs=dict(t0=0.0, t1=80.0, dt=1.0, solver="euler"),
+    )
+    failed = BayesianModel(
+        cm,
+        params,
+        priors=(Uniform("infection", 0.05, 0.8),),
+        targets=targets,
+        y0=y0,
+        run_kwargs=dict(
+            t0=0.0,
+            t1=80.0,
+            dt=1.0,
+            solver="dopri5",
+            max_steps=2,
+            rtol=1e-6,
+            atol=1e-6,
+        ),
+    )
+    z_h = healthy._ensure_potential()[2]
+    z_f = failed._ensure_potential()[2]
+    assert float(failed.log_density(z_f)) < float(healthy.log_density(z_h)) - 1e20
+    assert not bool(failed._run(failed.merge_params({"infection": 0.35})).solver.ok)
+
+
+@pytest.mark.slow
+def test_nuts_recovers_infection_in_95_interval() -> None:
+    cm, y0, targets, params, _ = _sir_fixture(infection=0.35)
+    bm = BayesianModel(
+        cm,
+        params,
+        priors=(Uniform("infection", 0.05, 0.8),),
+        targets=targets,
+        y0=y0,
+        run_kwargs=dict(t0=0.0, t1=80.0, dt=1.0, solver="euler"),
+    )
+    idata = bm.sample(
+        kind="nuts",
+        num_warmup=80,
+        num_samples=80,
+        num_chains=1,
+        seed=0,
+        progress_bar=False,
+    )
+    samples = np.asarray(idata.posterior["infection"]).reshape(-1)
+    lo, hi = np.quantile(samples, [0.025, 0.975])
+    assert lo <= 0.35 <= hi
+
+
+@pytest.mark.slow
+def test_aies_recovers_infection_in_95_interval() -> None:
+    cm, y0, targets, params, _ = _sir_fixture(infection=0.35)
+    bm = BayesianModel(
+        cm,
+        params,
+        priors=(Uniform("infection", 0.05, 0.8),),
+        targets=targets,
+        y0=y0,
+        run_kwargs=dict(t0=0.0, t1=80.0, dt=1.0, solver="euler"),
+    )
+    idata = bm.sample(
+        kind="aies",
+        num_warmup=40,
+        num_samples=40,
+        num_chains=4,
+        seed=1,
+        progress_bar=False,
+    )
+    samples = np.asarray(idata.posterior["infection"]).reshape(-1)
+    lo, hi = np.quantile(samples, [0.025, 0.975])
+    assert lo <= 0.35 <= hi
+
+
+@pytest.mark.slow
+def test_sa_recovers_infection_in_95_interval() -> None:
+    cm, y0, targets, params, _ = _sir_fixture(infection=0.35)
+    bm = BayesianModel(
+        cm,
+        params,
+        priors=(Uniform("infection", 0.05, 0.8),),
+        targets=targets,
+        y0=y0,
+        run_kwargs=dict(t0=0.0, t1=80.0, dt=1.0, solver="euler"),
+    )
+    # SA wants a long warmup relative to NUTS; 500 is enough on this SIR.
+    idata = bm.sample(
+        kind="sa",
+        num_warmup=500,
+        num_samples=100,
+        num_chains=1,
+        seed=2,
+        progress_bar=False,
+    )
+    samples = np.asarray(idata.posterior["infection"]).reshape(-1)
+    lo, hi = np.quantile(samples, [0.025, 0.975])
+    assert lo <= 0.35 <= hi

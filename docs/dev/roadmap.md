@@ -159,6 +159,7 @@ changed about them is recorded here instead, and overrides them.
 | `rate-dispatch-and-defer` | §22.8, §23.8 | Notebook `14` is taken by `14-custom-rate-nodes.ipynb`. Step 22 uses `examples/notebooks/15-array-dispatch.ipynb`. Step 23 uses `examples/notebooks/16-deferred-functions.ipynb` |
 | `tb-ports-feature-completeness` | §10.3 | The object `posterior_runs` returns must keep **per-draw outputs** (for example `runs.samples(scenario, output)` → shape `(n, t)`), not only quantiles, so step 28 can draw spaghetti plots from it. Keep its draw input a plain unconstrained/constrained site dict internally so step 28 can pass `Candidates` as well as `InferenceData` |
 | `tb-ports-feature-completeness` | §10.4 | Notebook `12-calibration` / step-15 `14-calibration` are taken. Step 13 ships `examples/notebooks/17-priors-and-likelihoods.ipynb`. Step 15 uses the next free `18-calibration.ipynb` |
+| `tb-ports-feature-completeness` | §10.2 | No `preprocess=` on `BayesianModel`. Run-start work uses `FlowModel.compile(prepare_fn=...)`. `futureplans/wp10-preprocess-is-prepare-fn.md` is deleted |
 
 ---
 
@@ -985,9 +986,8 @@ never be mistaken for a good fit.
   true vs wrong SIR score, hierarchical `sd`).
 - `KI18` route-today names the density pieces; status stays `none` until
   `BayesianModel` lands (this step + 15). No API-ledger row moved. No new
-  `futureplans/` note. `futureplans/tb-scale-euler-xla-simplifier.md` and
-  `futureplans/wp10-preprocess-is-prepare-fn.md` remain open — read the latter
-  before designing `preprocess=`.
+  `futureplans/` note. `futureplans/tb-scale-euler-xla-simplifier.md` remains
+  open. Resolve `preprocess=` vs `prepare_fn` by using prepare_fn only.
 - Branch was rebased onto `main` (after PR #31 fuse-incidence-scatter) before
   the PR; no stack dependency left.
 
@@ -995,16 +995,15 @@ never be mistaken for a good fit.
 
 1. `AGENTS.md`
 2. `plans/tb-ports-feature-completeness.plan.md` §10.2
-3. `futureplans/wp10-preprocess-is-prepare-fn.md` — read before designing
-   `preprocess=`
-4. `docs/dev/run-stages.md`
+3. `docs/dev/run-stages.md` — `prepare_fn` is the run-start hook (no separate
+   `preprocess=`)
 
 ### Do
 
 Follow §10.2. Chains run vectorised by default so one compiled program serves
-them all. The `preprocess` hook and the existing run-start `prepare_fn` overlap;
-the futureplans note says how — resolve it explicitly rather than shipping two
-ways to do the same thing.
+them all. **Do not add `preprocess=`** — use `FlowModel.compile(prepare_fn=...)`
+for run-start transforms (yearly mixing stacks). Delete
+`futureplans/wp10-preprocess-is-prepare-fn.md` when this lands.
 
 Cut from: `main`. Merges into: `main`.
 
