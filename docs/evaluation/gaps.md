@@ -149,8 +149,7 @@ The next leverage is **WP15** (output algebra), then WP16 and WP10. WP12
 `KI10` `KI11` `TM3` `TM4`) and WP14 (generalised FOI and compartment × age
 infectiousness — `KI4` `KI5` `TM5`) are applied. See
 `plans/tb-ports-feature-completeness.plan.md` and the notes in `futureplans/`
-(`derived-fn-blocks-hoisting`, `mixing-matrix-per-call-normalisation`,
-`wp10-preprocess-is-prepare-fn`).
+(`derived-fn-blocks-hoisting`, `mixing-matrix-per-call-normalisation`).
 
 `Present` / `Absent` binding is **settled**: they are non-binding in flow
 pairing.

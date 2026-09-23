@@ -248,9 +248,9 @@ That file sequences every remaining package into numbered steps — one branch
 each — names the next one, and tells a session with no other context how to run
 it. This ledger stays the authority on *capability*; the roadmap is the
 authority on *position*. Track
-`futureplans/derived-fn-blocks-hoisting.md`,
-`futureplans/mixing-matrix-per-call-normalisation.md`, and
-`futureplans/wp10-preprocess-is-prepare-fn.md` when planning WP10 / mixing work.
+`futureplans/derived-fn-blocks-hoisting.md` and
+`futureplans/mixing-matrix-per-call-normalisation.md` when planning WP10 /
+mixing work.
 
 ## The path to 100%
 

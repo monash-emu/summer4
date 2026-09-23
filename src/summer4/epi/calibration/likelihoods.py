@@ -117,7 +117,11 @@ class Normal:
         sd = resolve_scale(self.sd, params)
         obs = jnp.asarray(observed)
         pred = jnp.asarray(predicted)
-        return _aggregate_ll(dist.Normal(pred, sd).log_prob(obs), self.aggregate)
+        # validate_args=False: a failed solve can hand NaNs here; BayesianModel
+        # replaces the scalar with -inf when result.solver.ok is false.
+        return _aggregate_ll(
+            dist.Normal(pred, sd, validate_args=False).log_prob(obs), self.aggregate
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -136,7 +140,7 @@ class Poisson:
 
         obs = jnp.asarray(observed)
         pred = jnp.asarray(predicted)
-        return _aggregate_ll(dist.Poisson(pred).log_prob(obs), self.aggregate)
+        return _aggregate_ll(dist.Poisson(pred, validate_args=False).log_prob(obs), self.aggregate)
 
 
 @dataclass(frozen=True, slots=True)
@@ -162,7 +166,7 @@ class NegativeBinomial:
         obs = jnp.asarray(observed)
         pred = jnp.asarray(predicted)
         return _aggregate_ll(
-            dist.NegativeBinomial2(pred, concentration).log_prob(obs),
+            dist.NegativeBinomial2(pred, concentration, validate_args=False).log_prob(obs),
             self.aggregate,
         )
 

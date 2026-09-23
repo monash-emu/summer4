@@ -111,8 +111,8 @@ def test_ports_reject_bad_status(ports_text: str, text: str) -> None:
     from scripts.coverage_report import read_ports
 
     broken = ports_text.replace(
-        "| `partial` | Hand-written optax loop, as in the case study |",
-        "| `mostly` | Hand-written optax loop, as in the case study |",
+        "| `partial` | `BayesianModel.find_map` (optax); case-study hand loop remains as history |",
+        "| `mostly` | `BayesianModel.find_map` (optax); case-study hand loop remains as history |",
         1,
     )
     with pytest.raises(ValueError, match="Unknown status"):
@@ -122,7 +122,7 @@ def test_ports_reject_bad_status(ports_text: str, text: str) -> None:
 def test_ports_reject_undeclared_package(ports_text: str, text: str) -> None:
     from scripts.coverage_report import read_ports
 
-    needle = "Hand-written optax loop, as in the case study | WP10 |"
+    needle = "`BayesianModel.find_map` (optax); case-study hand loop remains as history | WP10 |"
     broken = ports_text.replace(needle, needle.replace("WP10", "WP99"), 1)
     with pytest.raises(ValueError, match="undeclared package"):
         read_ports(broken, text)

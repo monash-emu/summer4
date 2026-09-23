@@ -1,7 +1,7 @@
-"""Bayesian calibration assembly: priors and target likelihoods (WP10).
+"""Bayesian calibration assembly: priors, likelihoods, and sampling (WP10).
 
-Sampling (``BayesianModel``), MAP, and posterior runs land in later WP10 steps.
-``numpyro`` / ``optax`` stay behind the ``calibration`` extra.
+``numpyro`` / ``optax`` / ``arviz`` stay behind the ``calibration`` extra.
+Posterior scenario runs land in the next WP10 step.
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ from summer4.epi.calibration.likelihoods import (
     resolve_scale,
 )
 from summer4.epi.calibration.likelihoods import Normal as NormalLikelihood
+from summer4.epi.calibration.model import BayesianModel, SampleKind
 from summer4.epi.calibration.priors import (
     Beta,
     Gamma,
@@ -28,6 +29,7 @@ from summer4.epi.calibration.priors import Normal as NormalPrior
 
 __all__ = [
     "AggregateHow",
+    "BayesianModel",
     "Beta",
     "Gamma",
     "LogNormal",
@@ -35,6 +37,7 @@ __all__ = [
     "NormalLikelihood",
     "NormalPrior",
     "Poisson",
+    "SampleKind",
     "TruncatedNormal",
     "Uniform",
     "likelihoods",
