@@ -74,11 +74,11 @@ Two conventions that are easy to get wrong:
 <!-- roadmap:current -->
 | Field | Value |
 | --- | --- |
-| Step | 26 |
+| Step | 27 |
 | Status | next |
-| Branch | `feat/calib-gradient-free` |
+| Branch | `feat/calib-seeded-mcmc` |
 | Cut from | `main` |
-| Last landed | `feat/calib-multistart` |
+| Last landed | `feat/calib-gradient-free` |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -132,8 +132,8 @@ before step 15 lands. Each handoff below names its successor explicitly;
 | 23 | I | WP18 | `feat/rate-defer` | `plans/rate-dispatch-and-defer.plan.md` | Step 23 | done | — |
 | 24 | J | WP19 | `feat/calib-candidates` | `plans/calibration-toolkit.plan.md` | Step 24 | done | CW1 CW2 CW3 CW4 |
 | 25 | J | WP19 | `feat/calib-multistart` | `plans/calibration-toolkit.plan.md` | Step 25 | done | CW5 CW6 |
-| 26 | J | WP19 | `feat/calib-gradient-free` | `plans/calibration-toolkit.plan.md` | Step 26 | next | CW7 |
-| 27 | J | WP19 | `feat/calib-seeded-mcmc` | `plans/calibration-toolkit.plan.md` | Step 27 | planned | CW8 CW9 |
+| 26 | J | WP19 | `feat/calib-gradient-free` | `plans/calibration-toolkit.plan.md` | Step 26 | done | CW7 |
+| 27 | J | WP19 | `feat/calib-seeded-mcmc` | `plans/calibration-toolkit.plan.md` | Step 27 | next | CW8 CW9 |
 | 28 | J | WP19 | `feat/calib-outputs` | `plans/calibration-toolkit.plan.md` | Step 28 | planned | CW10 CW11 |
 <!-- /roadmap:steps -->
 
@@ -1653,6 +1653,8 @@ protocol as shipped, and any optax version constraint found (for example
 ---
 
 ## Step 26 — `feat/calib-gradient-free`
+
+**Landed:** feat/calib-gradient-free, PR #38, 2026-09-24.
 
 ### Summary
 
