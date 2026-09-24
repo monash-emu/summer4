@@ -1591,7 +1591,7 @@ build on it.
 
 ## Step 25 — `feat/calib-multistart`
 
-**Landed:** feat/calib-multistart, PR #36, 2026-09-24.
+**Landed:** feat/calib-multistart, PR #37, 2026-09-24.
 
 ### Summary
 
