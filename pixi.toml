@@ -19,6 +19,7 @@ numpyro = ">=0.16.0,<0.17"
 optax = ">=0.2.0"
 arviz = ">=0.20.0"
 equinox = "*"
+evosax = ">=0.3.1, <0.4"
 
 [feature.jaxlatest.dependencies]
 python = "3.13.*"
@@ -31,6 +32,7 @@ numpyro = "*"
 optax = "*"
 arviz = "*"
 equinox = "*"
+evosax = ">=0.3.1, <0.4"
 
 [feature.docs.dependencies]
 python = "3.13.*"

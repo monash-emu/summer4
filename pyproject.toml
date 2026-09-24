@@ -29,6 +29,9 @@ calibration = [
     "arviz>=0.20.0",
     "scipy>=1.11",
 ]
+gradient-free = [
+    "evosax>=0.3.1,<0.4",
+]
 pandas = [
     "pandas>=2.0",
 ]

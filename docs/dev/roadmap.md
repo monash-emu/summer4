@@ -74,11 +74,11 @@ Two conventions that are easy to get wrong:
 <!-- roadmap:current -->
 | Field | Value |
 | --- | --- |
-| Step | 26 |
+| Step | 27 |
 | Status | next |
-| Branch | `feat/calib-gradient-free` |
+| Branch | `feat/calib-seeded-mcmc` |
 | Cut from | `main` |
-| Last landed | `feat/calib-multistart` |
+| Last landed | `feat/calib-gradient-free` |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -132,8 +132,8 @@ before step 15 lands. Each handoff below names its successor explicitly;
 | 23 | I | WP18 | `feat/rate-defer` | `plans/rate-dispatch-and-defer.plan.md` | Step 23 | done | — |
 | 24 | J | WP19 | `feat/calib-candidates` | `plans/calibration-toolkit.plan.md` | Step 24 | done | CW1 CW2 CW3 CW4 |
 | 25 | J | WP19 | `feat/calib-multistart` | `plans/calibration-toolkit.plan.md` | Step 25 | done | CW5 CW6 |
-| 26 | J | WP19 | `feat/calib-gradient-free` | `plans/calibration-toolkit.plan.md` | Step 26 | next | CW7 |
-| 27 | J | WP19 | `feat/calib-seeded-mcmc` | `plans/calibration-toolkit.plan.md` | Step 27 | planned | CW8 CW9 |
+| 26 | J | WP19 | `feat/calib-gradient-free` | `plans/calibration-toolkit.plan.md` | Step 26 | done | CW7 |
+| 27 | J | WP19 | `feat/calib-seeded-mcmc` | `plans/calibration-toolkit.plan.md` | Step 27 | next | CW8 CW9 |
 | 28 | J | WP19 | `feat/calib-outputs` | `plans/calibration-toolkit.plan.md` | Step 28 | planned | CW10 CW11 |
 <!-- /roadmap:steps -->
 
@@ -1654,6 +1654,8 @@ protocol as shipped, and any optax version constraint found (for example
 
 ## Step 26 — `feat/calib-gradient-free`
 
+**Landed:** feat/calib-gradient-free, PR #38, 2026-09-24.
+
 ### Summary
 
 This step adds a gradient-free backend to the same multi-start driver: CMA-ES
@@ -1727,6 +1729,18 @@ samples in chunks until a configurable `StopRule` is met — by default split
 R-hat below 1.05 and bulk ESS of at least 100, with optional divergence retry
 (NUTS) and sample or wall-clock budgets. Non-convergence warns rather than
 raises. It lands on `feat/calib-seeded-mcmc` and closes `CW8`–`CW9`.
+
+### What the previous worker left you
+
+- `wf.CMAES(sigma0=, population=)` implements `_Method` via evosax
+  `CMA_ES` ask/tell (lazy import). Each step is one generation; cost is
+  `population × starts` solves. Wired into `wf.optimize` alongside `Optax`.
+- Extra: `summer4[gradient-free]` / pixi `evosax >=0.3.1,<0.4` on jax06 and
+  jaxlatest — resolves without pinning jax. No `futureplans/` note.
+- Plan: `plans/calib-gradient-free.plan.md`. User gate signed off:
+  `21-calibration-gradient-free.ipynb`. CW7 is `full` (7 of 11).
+- `_Method` protocol unchanged; CMAES state keys are `z`, `es_state`, `key`,
+  `best_z`, `best_loss` (Optax uses `opt_state` instead of `es_state`/`key`).
 
 ### Read first
 
