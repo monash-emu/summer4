@@ -9736,6 +9736,7 @@ packages:
   - numpyro>=0.16.0 ; extra == 'calibration'
   - optax>=0.2.0 ; extra == 'calibration'
   - arviz>=0.20.0 ; extra == 'calibration'
+  - scipy>=1.11 ; extra == 'calibration'
   - pandas>=2.0 ; extra == 'pandas'
   - polars>=1.0 ; extra == 'frames'
   - pyarrow>=17.0 ; extra == 'frames'

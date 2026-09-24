@@ -27,6 +27,7 @@ calibration = [
     "numpyro>=0.16.0",
     "optax>=0.2.0",
     "arviz>=0.20.0",
+    "scipy>=1.11",
 ]
 pandas = [
     "pandas>=2.0",

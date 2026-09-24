@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from summer4.epi.calibration import likelihoods as likelihoods
 from summer4.epi.calibration import priors as priors
+from summer4.epi.calibration import workflow as workflow
 from summer4.epi.calibration.likelihoods import (
     AggregateHow,
     NegativeBinomial,
@@ -44,4 +45,5 @@ __all__ = [
     "priors",
     "priors_from_frame",
     "resolve_scale",
+    "workflow",
 ]

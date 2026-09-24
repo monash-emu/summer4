@@ -124,8 +124,10 @@ def test_ports_reject_undeclared_package(ports_text: str, text: str) -> None:
 
     # All WP10 port rows are full/`—` after step 15; demote KI22 and point it at WP99.
     broken = ports_text.replace(
-        "| KI22 | Kiribati | Verified compile time, step cost and solver safety at TB scale | `full` |",
-        "| KI22 | Kiribati | Verified compile time, step cost and solver safety at TB scale | `none` |",
+        "| KI22 | Kiribati | Verified compile time, step cost and solver safety"
+        " at TB scale | `full` |",
+        "| KI22 | Kiribati | Verified compile time, step cost and solver safety"
+        " at TB scale | `none` |",
         1,
     ).replace(
         "`MixingMatrix.validate` / vmap-safe reciprocity | — |",
@@ -174,7 +176,12 @@ def test_workflow_ledger_parses(text: str) -> None:
 def test_workflow_rejects_bad_status(text: str) -> None:
     from scripts.coverage_report import read_workflow
 
+    # Force an illegal status on CW1 regardless of its current Status cell.
     broken = text.replace(
+        "| CW1 | Latin hypercube design over the priors (M points) | `full` |",
+        "| CW1 | Latin hypercube design over the priors (M points) | `nope` |",
+        1,
+    ).replace(
         "| CW1 | Latin hypercube design over the priors (M points) | `none` |",
         "| CW1 | Latin hypercube design over the priors (M points) | `nope` |",
         1,

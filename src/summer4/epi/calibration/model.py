@@ -226,6 +226,44 @@ class BayesianModel:
         potential_fn, _post, _z = self._ensure_potential()
         return -potential_fn(dict(unconstrained))
 
+    def _site_transforms(self) -> dict[str, Any]:
+        """Per-site bijectors from unconstrained space onto prior support."""
+        from numpyro.distributions.transforms import biject_to  # type: ignore[import-untyped]
+
+        _require_numpyro()
+        return {p.name: biject_to(p.to_numpyro().support) for p in self._sites}
+
+    def constrain(self, z: Mapping[str, Any]) -> dict[str, Any]:
+        """Map unconstrained site values to constrained parameters.
+
+        Elementwise on array leaves, so a leading batch axis is fine under
+        ``jax.vmap`` / ``jax.lax.map``.
+        """
+        import jax.numpy as jnp
+
+        transforms = self._site_transforms()
+        out: dict[str, Any] = {}
+        for name, transform in transforms.items():
+            if name not in z:
+                raise KeyError(f"constrain missing site {name!r}.")
+            out[name] = transform(jnp.asarray(z[name]))
+        return out
+
+    def unconstrain(self, params: Mapping[str, Any]) -> dict[str, Any]:
+        """Map constrained parameters to unconstrained site values.
+
+        Elementwise on array leaves (batch axis allowed).
+        """
+        import jax.numpy as jnp
+
+        transforms = self._site_transforms()
+        out: dict[str, Any] = {}
+        for name, transform in transforms.items():
+            if name not in params:
+                raise KeyError(f"unconstrain missing site {name!r}.")
+            out[name] = transform.inv(jnp.asarray(params[name]))
+        return out
+
     def find_map(
         self,
         init: Mapping[str, Any] | None = None,
@@ -319,6 +357,10 @@ class BayesianModel:
     def prior_names(self) -> tuple[str, ...]:
         """Names of every sampled site (top-level priors and hierarchical scales)."""
         return tuple(p.name for p in self._sites)
+
+    def site_priors(self) -> tuple[Prior, ...]:
+        """Prior objects for every sampled site (same order as :meth:`prior_names`)."""
+        return self._sites
 
     def posterior_runs(
         self,
