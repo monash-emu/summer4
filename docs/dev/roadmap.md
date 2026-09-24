@@ -74,11 +74,11 @@ Two conventions that are easy to get wrong:
 <!-- roadmap:current -->
 | Field | Value |
 | --- | --- |
-| Step | 24 |
+| Step | 25 |
 | Status | next |
-| Branch | `feat/calib-candidates` |
+| Branch | `feat/calib-multistart` |
 | Cut from | `main` |
-| Last landed | `feat/epi-posterior-runs` |
+| Last landed | `feat/calib-candidates` |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -130,8 +130,8 @@ before step 15 lands. Each handoff below names its successor explicitly;
 | 21 | H | — | *(new repo)* | `plans/kiribati-tb-summer4-port.plan.md` | Whole | planned | — |
 | 22 | I | WP18 | `feat/rate-array-dispatch` | `plans/rate-dispatch-and-defer.plan.md` | Step 22 | done | — |
 | 23 | I | WP18 | `feat/rate-defer` | `plans/rate-dispatch-and-defer.plan.md` | Step 23 | done | — |
-| 24 | J | WP19 | `feat/calib-candidates` | `plans/calibration-toolkit.plan.md` | Step 24 | next | CW1 CW2 CW3 CW4 |
-| 25 | J | WP19 | `feat/calib-multistart` | `plans/calibration-toolkit.plan.md` | Step 25 | planned | CW5 CW6 |
+| 24 | J | WP19 | `feat/calib-candidates` | `plans/calibration-toolkit.plan.md` | Step 24 | done | CW1 CW2 CW3 CW4 |
+| 25 | J | WP19 | `feat/calib-multistart` | `plans/calibration-toolkit.plan.md` | Step 25 | next | CW5 CW6 |
 | 26 | J | WP19 | `feat/calib-gradient-free` | `plans/calibration-toolkit.plan.md` | Step 26 | planned | CW7 |
 | 27 | J | WP19 | `feat/calib-seeded-mcmc` | `plans/calibration-toolkit.plan.md` | Step 27 | planned | CW8 CW9 |
 | 28 | J | WP19 | `feat/calib-outputs` | `plans/calibration-toolkit.plan.md` | Step 28 | planned | CW10 CW11 |
@@ -1518,6 +1518,8 @@ refactor that `docs/dev/rate-expressions.md` recommends as item 3.
 
 ## Step 24 — `feat/calib-candidates`
 
+**Landed:** feat/calib-candidates, PR #35, 2026-09-24.
+
 ### Summary
 
 This step opens Phase J, the composable calibration workflow toolkit. It ships
@@ -1598,6 +1600,24 @@ convergence, freezes converged starts, restarts failed ones from a reserve of
 design points, and (with `AutoTune`) probes a learning-rate grid before the main
 run. The optimiser is any optax transformation; the default is Adam with
 plateau reduction. It lands on `feat/calib-multistart` and closes `CW5`–`CW6`.
+
+### What the previous worker left you
+
+- `from summer4.epi.calibration import workflow as wf` re-exports `Candidates`,
+  `StageRecord`, `lhs`, `prior_draws`, `evaluate`.
+- `Candidates` fields: `sites`, `z` (unconstrained), `params` (constrained),
+  `log_density`, `ok`, `history` (`StageRecord(stage, settings, seconds)`).
+  Methods: `take`, `best`, `concat`, `to_frame`, `save`/`load`,
+  `from_params`, `from_idata`. Failed solves: `ok = log_density > -1e29`.
+- `Prior.icdf` is host-side (`scipy.stats`); `scipy>=1.11` is in the
+  `calibration` extra. `bm.constrain` / `unconstrain` use
+  `biject_to(prior.support)`; `bm.site_priors()` returns the Prior objects.
+- `wf.evaluate` warms the potential then `jax.lax.map(bm.log_density, z,
+  batch_size=)`; jaxpr size is independent of M.
+- Plan pointer: `plans/calib-candidates.plan.md`. User gate:
+  `19-calibration-design.ipynb` (best 16 bracket truth). CW1–CW4 are `full`.
+- No new `futureplans/` note. Design section of the toolkit plan is unchanged
+  for Candidates field names.
 
 ### Read first
 

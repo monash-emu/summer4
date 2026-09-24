@@ -150,15 +150,15 @@ never enter the API totals above. Work package WP19 closes them; the design is
 `plans/calibration-toolkit.plan.md` and the steps are Phase J of
 {doc}`../dev/roadmap`. `Step` names the roadmap step that moves the row.
 
-Calibration workflow rows complete today: **0 of 11**
+Calibration workflow rows complete today: **4 of 11**
 
 <!-- ledger:workflow -->
 | ID | Capability | Status | Route today | Step |
 | --- | --- | --- | --- | --- |
-| CW1 | Latin hypercube design over the priors (M points) | `none` | — | 24 |
-| CW2 | Batched, memory-bounded scoring of a design | `none` | Loop over `BayesianModel.log_density` by hand | 24 |
-| CW3 | Keep the N best points of a scored design | `none` | — | 24 |
-| CW4 | Checkpoint a stage's points to disk and reload them | `none` | — | 24 |
+| CW1 | Latin hypercube design over the priors (M points) | `full` | `workflow.lhs` | 24 |
+| CW2 | Batched, memory-bounded scoring of a design | `full` | `workflow.evaluate` (`jax.lax.map`, `batch_size=`) | 24 |
+| CW3 | Keep the N best points of a scored design | `full` | `Candidates.best` | 24 |
+| CW4 | Checkpoint a stage's points to disk and reload them | `full` | `Candidates.save` / `Candidates.load` | 24 |
 | CW5 | Multi-start gradient optimisation with a configurable optax optimiser | `none` | `BayesianModel.find_map` from one start at a time | 25 |
 | CW6 | Automated optimiser tuning, convergence detection and restarts | `none` | — | 25 |
 | CW7 | Multi-start gradient-free optimisation | `none` | — | 26 |

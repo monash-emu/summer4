@@ -2,7 +2,8 @@
 
 Requires the ``calibration`` extra (``numpyro``). Each prior is a frozen
 dataclass naming a parameter, with :meth:`to_numpyro` for sampling sites and
-:meth:`bounds` for unconstrained transforms.
+:meth:`bounds` for unconstrained transforms. :meth:`icdf` is host-side
+(``scipy.stats``) for Latin-hypercube and prior designs.
 """
 
 from __future__ import annotations
@@ -24,6 +25,23 @@ def _require_numpyro() -> Any:
     return dist
 
 
+def _require_scipy_stats() -> Any:
+    try:
+        from scipy import stats  # type: ignore[import-untyped]
+    except ImportError as exc:  # pragma: no cover - optional extra
+        raise ImportError(
+            "Prior.icdf requires scipy (calibration extra): pip install summer4[calibration]"
+        ) from exc
+    return stats
+
+
+def _as_unit_array(u: np.ndarray | float) -> np.ndarray:
+    arr = np.asarray(u, dtype=np.float64)
+    if np.any((arr < 0.0) | (arr > 1.0)):
+        raise ValueError("icdf expects probabilities in [0, 1].")
+    return arr
+
+
 @runtime_checkable
 class Prior(Protocol):
     """Named distribution that can become a numpyro sample site."""
@@ -36,6 +54,10 @@ class Prior(Protocol):
 
     def bounds(self) -> tuple[float | None, float | None]:
         """``(low, high)`` support bounds; ``None`` means unbounded on that side."""
+        ...
+
+    def icdf(self, u: np.ndarray | float) -> np.ndarray:
+        """Inverse CDF (quantile function) on the host; ``u`` in ``[0, 1]``."""
         ...
 
 
@@ -54,6 +76,13 @@ class Uniform:
     def bounds(self) -> tuple[float | None, float | None]:
         return (float(self.lo), float(self.hi))
 
+    def icdf(self, u: np.ndarray | float) -> np.ndarray:
+        stats = _require_scipy_stats()
+        return np.asarray(
+            stats.uniform(loc=self.lo, scale=self.hi - self.lo).ppf(_as_unit_array(u)),
+            dtype=np.float64,
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class Normal:
@@ -70,6 +99,13 @@ class Normal:
     def bounds(self) -> tuple[float | None, float | None]:
         return (None, None)
 
+    def icdf(self, u: np.ndarray | float) -> np.ndarray:
+        stats = _require_scipy_stats()
+        return np.asarray(
+            stats.norm(loc=self.loc, scale=self.scale).ppf(_as_unit_array(u)),
+            dtype=np.float64,
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class LogNormal:
@@ -85,6 +121,14 @@ class LogNormal:
 
     def bounds(self) -> tuple[float | None, float | None]:
         return (0.0, None)
+
+    def icdf(self, u: np.ndarray | float) -> np.ndarray:
+        stats = _require_scipy_stats()
+        # scipy: shape=s (log-scale σ), scale=exp(μ)
+        return np.asarray(
+            stats.lognorm(s=self.scale, scale=float(np.exp(self.loc))).ppf(_as_unit_array(u)),
+            dtype=np.float64,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,6 +150,15 @@ class TruncatedNormal:
     def bounds(self) -> tuple[float | None, float | None]:
         return (self.low, self.high)
 
+    def icdf(self, u: np.ndarray | float) -> np.ndarray:
+        stats = _require_scipy_stats()
+        a = -np.inf if self.low is None else (self.low - self.loc) / self.scale
+        b = np.inf if self.high is None else (self.high - self.loc) / self.scale
+        return np.asarray(
+            stats.truncnorm(a=a, b=b, loc=self.loc, scale=self.scale).ppf(_as_unit_array(u)),
+            dtype=np.float64,
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class Beta:
@@ -122,6 +175,13 @@ class Beta:
     def bounds(self) -> tuple[float | None, float | None]:
         return (0.0, 1.0)
 
+    def icdf(self, u: np.ndarray | float) -> np.ndarray:
+        stats = _require_scipy_stats()
+        return np.asarray(
+            stats.beta(a=self.concentration1, b=self.concentration0).ppf(_as_unit_array(u)),
+            dtype=np.float64,
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class Gamma:
@@ -137,6 +197,14 @@ class Gamma:
 
     def bounds(self) -> tuple[float | None, float | None]:
         return (0.0, None)
+
+    def icdf(self, u: np.ndarray | float) -> np.ndarray:
+        stats = _require_scipy_stats()
+        # scipy uses scale = 1/rate
+        return np.asarray(
+            stats.gamma(a=self.concentration, scale=1.0 / self.rate).ppf(_as_unit_array(u)),
+            dtype=np.float64,
+        )
 
 
 _DIST_BUILDERS: dict[str, Any] = {
