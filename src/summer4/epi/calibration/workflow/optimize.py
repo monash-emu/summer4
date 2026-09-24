@@ -32,6 +32,16 @@ def _require_optax() -> Any:
     return optax
 
 
+def _require_evosax_cma() -> Any:
+    try:
+        from evosax.algorithms import CMA_ES  # type: ignore[import-untyped]
+    except ImportError as exc:  # pragma: no cover - optional extra
+        raise ImportError(
+            "wf.CMAES requires the gradient-free extra: pip install summer4[gradient-free]"
+        ) from exc
+    return CMA_ES
+
+
 def _batch_where(active: Any, new: Any, old: Any) -> Any:
     """Select ``new`` or ``old`` per leading-axis lane from a boolean mask."""
 
@@ -70,7 +80,15 @@ class Optax:
     learning_rate: float = 0.05
     plateau: bool = True
 
-    def make(self, potential_fn: Any, *, learning_rate: float | None = None) -> _Method:
+    def make(
+        self,
+        potential_fn: Any,
+        *,
+        learning_rate: float | None = None,
+        sites: tuple[str, ...] | None = None,
+        template_z: Mapping[str, Any] | None = None,
+    ) -> _Method:
+        del sites, template_z  # Optax works on the z pytree directly
         optax = _require_optax()
         lr = float(self.learning_rate if learning_rate is None else learning_rate)
         if self.optimizer is None:
@@ -138,6 +156,118 @@ class _OptaxMethod:
 
 
 @dataclass(frozen=True, slots=True)
+class CMAES:
+    """Gradient-free CMA-ES backend via evosax (``gradient-free`` extra).
+
+    Each ``step`` is one CMA-ES generation: the population is scored under
+    ``vmap``, so cost is ``population × starts`` model solves per generation.
+    Centred on each start's unconstrained ``z``.
+    """
+
+    sigma0: float = 0.1
+    population: int | None = None
+
+    def make(
+        self,
+        potential_fn: Any,
+        *,
+        learning_rate: float | None = None,
+        sites: tuple[str, ...] | None = None,
+        template_z: Mapping[str, Any] | None = None,
+    ) -> _Method:
+        del learning_rate  # unused; CMA-ES has no LR probe
+        if sites is None:
+            raise ValueError("CMAES.make requires sites= (parameter name order).")
+        if template_z is None:
+            raise ValueError("CMAES.make requires template_z= (shapes per site).")
+        return _CMAESMethod(
+            potential_fn=potential_fn,
+            sites=sites,
+            sigma0=float(self.sigma0),
+            population=self.population,
+            template_z=template_z,
+        )
+
+
+def _pack_z(z: Mapping[str, Any], sites: tuple[str, ...]) -> Any:
+    parts = [jnp.ravel(jnp.asarray(z[name])) for name in sites]
+    return jnp.concatenate(parts)
+
+
+def _unpack_z(vec: Any, sites: tuple[str, ...], template: Mapping[str, Any]) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    offset = 0
+    for name in sites:
+        shape = jnp.asarray(template[name]).shape
+        size = int(np.prod(shape)) if shape else 1
+        out[name] = jnp.reshape(vec[offset : offset + size], shape)
+        offset += size
+    return out
+
+
+@dataclass
+class _CMAESMethod:
+    potential_fn: Any
+    sites: tuple[str, ...]
+    sigma0: float
+    population: int | None
+    template_z: Mapping[str, Any]
+    _es: Any = None
+    _params: Any = None
+    _template: dict[str, Any] | None = None
+
+    def __post_init__(self) -> None:
+        CMA_ES = _require_evosax_cma()
+        self._template = {k: jnp.asarray(self.template_z[k]) for k in self.sites}
+        dummy = _pack_z(self._template, self.sites)
+        n_dims = int(dummy.size)
+        pop = self.population
+        if pop is None:
+            pop = max(4, int(4 + 3 * np.log(max(n_dims, 1))))
+        self._es = CMA_ES(population_size=int(pop), solution=dummy)
+        self._params = self._es.default_params.replace(std_init=jnp.asarray(self.sigma0))
+
+    def init(self, z0: Mapping[str, Any], key: Any) -> dict[str, Any]:
+        assert self._es is not None and self._params is not None and self._template is not None
+        z0 = {k: jnp.asarray(z0[k]) for k in self.sites}
+        mean = _pack_z(z0, self.sites)
+        es_state = self._es.init(key, mean, self._params)
+        es_state = es_state.replace(mean=mean, best_solution=mean)
+        loss = self.potential_fn(z0)
+        es_state = es_state.replace(best_fitness=jnp.asarray(loss))
+        return {
+            "z": z0,
+            "es_state": es_state,
+            "key": key,
+            "best_z": z0,
+            "best_loss": jnp.asarray(loss),
+        }
+
+    def step(self, state: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], Any]:
+        assert self._es is not None and self._params is not None and self._template is not None
+        template = self._template
+        key, k_ask, k_tell = random.split(state["key"], 3)
+        population, es_state = self._es.ask(k_ask, state["es_state"], self._params)
+
+        def _loss_vec(vec: Any) -> Any:
+            return self.potential_fn(_unpack_z(vec, self.sites, template))
+
+        fitness = jax.vmap(_loss_vec)(population)
+        es_state, _metrics = self._es.tell(k_tell, population, fitness, es_state, self._params)
+        best_z = _unpack_z(es_state.best_solution, self.sites, template)
+        best_loss = jnp.asarray(es_state.best_fitness)
+        z_mean = _unpack_z(es_state.mean, self.sites, template)
+        new_state = {
+            "z": z_mean,
+            "es_state": es_state,
+            "key": key,
+            "best_z": best_z,
+            "best_loss": best_loss,
+        }
+        return new_state, best_z, best_loss
+
+
+@dataclass(frozen=True, slots=True)
 class AutoTune:
     """Automated LR probe, chunk-wise convergence, and failed-start restarts."""
 
@@ -201,7 +331,12 @@ def _probe_learning_rate(
     best_drop = float("-inf")
 
     for lr in tuning.lr_grid:
-        backend = method_factory.make(potential_fn, learning_rate=float(lr))
+        backend = method_factory.make(
+            potential_fn,
+            learning_rate=float(lr),
+            sites=tuple(z_probe.keys()),
+            template_z={k: v[0] for k, v in z_probe.items()},
+        )
         states = jax.vmap(backend.init)(z0, keys)
         loss0 = states["best_loss"]
         states, _zs, losses = _run_chunk_vmap(backend, states, int(tuning.probe_steps))
@@ -231,7 +366,7 @@ def optimize(
     bm: Any,
     candidates: Candidates,
     *,
-    method: Optax | None = None,
+    method: Optax | CMAES | None = None,
     tuning: AutoTune | None = None,
     reserve: Candidates | None = None,
     chunk_steps: int = 50,
@@ -245,7 +380,8 @@ def optimize(
     Diffrax solve runs every lane to the slowest lane's step count.
 
     The jaxpr of one chunk does not grow with ``max_steps`` (host loop) or with
-    the number of starts (``vmap``).
+    the number of starts (``vmap``). With :class:`CMAES`, each step is one
+    generation and costs ``population × starts`` model solves.
     """
     if len(candidates) == 0:
         raise ValueError("optimize() got an empty Candidates batch.")
@@ -253,11 +389,8 @@ def optimize(
         method = Optax()
     if tuning is None:
         tuning = AutoTune()
-    if not isinstance(method, Optax):
-        raise TypeError(
-            f"optimize method must be Optax (CMA-ES arrives in step 26); "
-            f"got {type(method).__name__}."
-        )
+    if not isinstance(method, (Optax, CMAES)):
+        raise TypeError(f"optimize method must be Optax or CMAES; got {type(method).__name__}.")
 
     t0 = time.perf_counter()
     potential_fn = bm.potential_fn
@@ -270,14 +403,21 @@ def optimize(
     # Warm potential
     _ = potential_fn({k: v[0] for k, v in z_batch.items()})
 
-    probe_backend = method.make(potential_fn)
-    sample_state = probe_backend.init({k: v[0] for k, v in z_batch.items()}, random.PRNGKey(0))
-    use_probe = _state_supports_lr(sample_state) and method.optimizer is None
-    lr = float(method.learning_rate)
-    if use_probe:
-        lr = _probe_learning_rate(method, potential_fn, z_batch, tuning, seed)
+    lr = float("nan")
+    template = {k: v[0] for k, v in z_batch.items()}
+    if isinstance(method, Optax):
+        probe_backend = method.make(potential_fn, sites=sites, template_z=template)
+        sample_state = probe_backend.init({k: v[0] for k, v in z_batch.items()}, random.PRNGKey(0))
+        use_probe = _state_supports_lr(sample_state) and method.optimizer is None
+        lr = float(method.learning_rate)
+        if use_probe:
+            lr = _probe_learning_rate(method, potential_fn, z_batch, tuning, seed)
+        backend = method.make(potential_fn, learning_rate=lr, sites=sites, template_z=template)
+        method_name = "optax"
+    else:
+        backend = method.make(potential_fn, sites=sites, template_z=template)
+        method_name = "cmaes"
 
-    backend = method.make(potential_fn, learning_rate=lr)
     keys = random.split(random.PRNGKey(int(seed)), n)
     states = jax.vmap(backend.init)(z_batch, keys)
 
@@ -355,9 +495,9 @@ def optimize(
         settings={
             "chunk_steps": chunk_steps,
             "max_steps": max_steps,
-            "learning_rate": lr,
+            "learning_rate": lr if method_name == "optax" else None,
             "n": n,
-            "method": "optax",
+            "method": method_name,
         },
         seconds=seconds,
     )
@@ -387,6 +527,7 @@ def _chunk_program(backend: _Method, chunk_steps: int) -> Any:
 
 __all__ = [
     "AutoTune",
+    "CMAES",
     "Optax",
     "OptimizeResult",
     "optimize",
