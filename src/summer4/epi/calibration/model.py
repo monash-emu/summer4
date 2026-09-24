@@ -218,13 +218,22 @@ class BayesianModel:
         self._init_z = params_info.z
         return potential_fn, postprocess_fn, params_info.z
 
+    @property
+    def potential_fn(self) -> Any:
+        """Unconstrained potential ``-log_density`` (for optax / multi-start).
+
+        Traceable under ``jax.jit``. Built lazily via numpyro
+        ``initialize_model`` on first access.
+        """
+        potential, _post, _z = self._ensure_potential()
+        return potential
+
     def log_density(self, unconstrained: Mapping[str, Any]) -> Any:
         """Joint log density at an **unconstrained** site dict (NUTS space).
 
         Traceable under ``jax.jit``. Equals ``-potential_fn(unconstrained)``.
         """
-        potential_fn, _post, _z = self._ensure_potential()
-        return -potential_fn(dict(unconstrained))
+        return -self.potential_fn(dict(unconstrained))
 
     def _site_transforms(self) -> dict[str, Any]:
         """Per-site bijectors from unconstrained space onto prior support."""
