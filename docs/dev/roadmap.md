@@ -74,11 +74,11 @@ Two conventions that are easy to get wrong:
 <!-- roadmap:current -->
 | Field | Value |
 | --- | --- |
-| Step | 25 |
+| Step | 26 |
 | Status | next |
-| Branch | `feat/calib-multistart` |
+| Branch | `feat/calib-gradient-free` |
 | Cut from | `main` |
-| Last landed | `feat/calib-candidates` |
+| Last landed | `feat/calib-multistart` |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -131,8 +131,8 @@ before step 15 lands. Each handoff below names its successor explicitly;
 | 22 | I | WP18 | `feat/rate-array-dispatch` | `plans/rate-dispatch-and-defer.plan.md` | Step 22 | done | — |
 | 23 | I | WP18 | `feat/rate-defer` | `plans/rate-dispatch-and-defer.plan.md` | Step 23 | done | — |
 | 24 | J | WP19 | `feat/calib-candidates` | `plans/calibration-toolkit.plan.md` | Step 24 | done | CW1 CW2 CW3 CW4 |
-| 25 | J | WP19 | `feat/calib-multistart` | `plans/calibration-toolkit.plan.md` | Step 25 | next | CW5 CW6 |
-| 26 | J | WP19 | `feat/calib-gradient-free` | `plans/calibration-toolkit.plan.md` | Step 26 | planned | CW7 |
+| 25 | J | WP19 | `feat/calib-multistart` | `plans/calibration-toolkit.plan.md` | Step 25 | done | CW5 CW6 |
+| 26 | J | WP19 | `feat/calib-gradient-free` | `plans/calibration-toolkit.plan.md` | Step 26 | next | CW7 |
 | 27 | J | WP19 | `feat/calib-seeded-mcmc` | `plans/calibration-toolkit.plan.md` | Step 27 | planned | CW8 CW9 |
 | 28 | J | WP19 | `feat/calib-outputs` | `plans/calibration-toolkit.plan.md` | Step 28 | planned | CW10 CW11 |
 <!-- /roadmap:steps -->
@@ -1591,6 +1591,8 @@ build on it.
 
 ## Step 25 — `feat/calib-multistart`
 
+**Landed:** feat/calib-multistart, PR #37, 2026-09-24.
+
 ### Summary
 
 This step optimises from many starting points at once. `wf.optimize` runs every
@@ -1664,6 +1666,28 @@ and closes `CW7`.
 **Open question to check before starting:** whether evosax resolves in the
 `jax06` pixi env. If not, gate its tests with `importorskip` there and write a
 `futureplans/` note — do not pin jax.
+
+### What the previous worker left you
+
+- `wf.optimize(bm, candidates, method=wf.Optax() | …, tuning=wf.AutoTune(),
+  reserve=, chunk_steps=, max_steps=, seed=, batch_size=)` → `OptimizeResult`
+  with `candidates`, `loss_trace` `(n_chunks, n_starts)`, `converged`,
+  `restarts`, `learning_rate`, `history`.
+- Internal `_Method` protocol: `init(z0, key) -> state`,
+  `step(state) -> (state, z_best, loss_best)`. Optax backend is `_OptaxMethod`
+  in `workflow/optimize.py`. Chunk runner: `vmap(scan(step))` via
+  `_run_chunk_vmap`; host loop freezes converged lanes with `_batch_where`.
+- `bm.potential_fn` is a public property (`-log_density`). Default Optax is
+  `inject_hyperparams(adam)` + `optax.contrib.reduce_on_plateau` (present in
+  jax06 / optax 0.2.8). AutoTune LR probe only when the opt state exposes
+  `hyperparams['learning_rate']` (default Optax path).
+- Parent package re-exports `optimize` as a function, which shadows the
+  submodule name under `import …workflow.optimize` — use
+  `importlib.import_module("summer4.epi.calibration.workflow.optimize")` in
+  tests that need private helpers.
+- Plan: `plans/calib-multistart.plan.md`. User gate:
+  `20-calibration-multistart.ipynb`. CW5–CW6 are `full` (6 of 11).
+- No new `futureplans/` note.
 
 ### Read first
 
