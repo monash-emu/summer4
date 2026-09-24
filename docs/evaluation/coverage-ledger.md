@@ -150,7 +150,7 @@ never enter the API totals above. Work package WP19 closes them; the design is
 `plans/calibration-toolkit.plan.md` and the steps are Phase J of
 {doc}`../dev/roadmap`. `Step` names the roadmap step that moves the row.
 
-Calibration workflow rows complete today: **4 of 11**
+Calibration workflow rows complete today: **6 of 11**
 
 <!-- ledger:workflow -->
 | ID | Capability | Status | Route today | Step |
@@ -159,8 +159,8 @@ Calibration workflow rows complete today: **4 of 11**
 | CW2 | Batched, memory-bounded scoring of a design | `full` | `workflow.evaluate` (`jax.lax.map`, `batch_size=`) | 24 |
 | CW3 | Keep the N best points of a scored design | `full` | `Candidates.best` | 24 |
 | CW4 | Checkpoint a stage's points to disk and reload them | `full` | `Candidates.save` / `Candidates.load` | 24 |
-| CW5 | Multi-start gradient optimisation with a configurable optax optimiser | `none` | `BayesianModel.find_map` from one start at a time | 25 |
-| CW6 | Automated optimiser tuning, convergence detection and restarts | `none` | — | 25 |
+| CW5 | Multi-start gradient optimisation with a configurable optax optimiser | `full` | `workflow.optimize` / `workflow.Optax` | 25 |
+| CW6 | Automated optimiser tuning, convergence detection and restarts | `full` | `workflow.AutoTune` | 25 |
 | CW7 | Multi-start gradient-free optimisation | `none` | — | 26 |
 | CW8 | MCMC seeded from optimised points | `none` | — | 27 |
 | CW9 | Automated MCMC run length (R-hat, ESS, divergences, budget) | `none` | — | 27 |
