@@ -150,7 +150,7 @@ never enter the API totals above. Work package WP19 closes them; the design is
 `plans/calibration-toolkit.plan.md` and the steps are Phase J of
 {doc}`../dev/roadmap`. `Step` names the roadmap step that moves the row.
 
-Calibration workflow rows complete today: **7 of 11**
+Calibration workflow rows complete today: **9 of 11**
 
 <!-- ledger:workflow -->
 | ID | Capability | Status | Route today | Step |
@@ -162,8 +162,8 @@ Calibration workflow rows complete today: **7 of 11**
 | CW5 | Multi-start gradient optimisation with a configurable optax optimiser | `full` | `workflow.optimize` / `workflow.Optax` | 25 |
 | CW6 | Automated optimiser tuning, convergence detection and restarts | `full` | `workflow.AutoTune` | 25 |
 | CW7 | Multi-start gradient-free optimisation | `full` | `workflow.CMAES` (evosax) | 26 |
-| CW8 | MCMC seeded from optimised points | `none` | — | 27 |
-| CW9 | Automated MCMC run length (R-hat, ESS, divergences, budget) | `none` | — | 27 |
+| CW8 | MCMC seeded from optimised points | `full` | `workflow.run_mcmc` | 27 |
+| CW9 | Automated MCMC run length (R-hat, ESS, divergences, budget) | `full` | `workflow.StopRule` | 27 |
 | CW10 | Sampled-output spaghetti plots and quantile ribbons | `none` | — | 28 |
 | CW11 | Scenario outputs after calibration, plotted against a reference | `none` | — | 28 |
 <!-- /ledger:workflow -->

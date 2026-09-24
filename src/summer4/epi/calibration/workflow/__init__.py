@@ -8,6 +8,7 @@ from __future__ import annotations
 from summer4.epi.calibration.workflow.candidates import Candidates, StageRecord
 from summer4.epi.calibration.workflow.design import lhs, prior_draws
 from summer4.epi.calibration.workflow.evaluate import evaluate
+from summer4.epi.calibration.workflow.mcmc import SampleResult, StopRule, run_mcmc
 from summer4.epi.calibration.workflow.optimize import (
     CMAES,
     AutoTune,
@@ -22,9 +23,12 @@ __all__ = [
     "Candidates",
     "Optax",
     "OptimizeResult",
+    "SampleResult",
     "StageRecord",
+    "StopRule",
     "evaluate",
     "lhs",
     "optimize",
     "prior_draws",
+    "run_mcmc",
 ]
