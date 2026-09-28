@@ -1,4 +1,10 @@
-"""Multi-start optimisation: chunked vmapped scan with AutoTune (step 25)."""
+"""Multi-start optimisation: chunked vmapped scan with AutoTune (steps 25, 30).
+
+A method (:class:`Optax`, :class:`CMAES`, or any :class:`OptimizeMethod`) makes
+an :class:`OptimizeBackend` — one start's ``init`` / ``step`` state machine —
+which :class:`OptimizeRun` vmaps over the starts and advances in compiled
+chunks. :func:`optimize` is the one-call convenience.
+"""
 
 from __future__ import annotations
 
@@ -53,8 +59,14 @@ def _batch_where(active: Any, new: Any, old: Any) -> Any:
 
 
 @runtime_checkable
-class _Method(Protocol):
-    """Internal optimiser backend: one start's state machine (then vmapped)."""
+class OptimizeBackend(Protocol):
+    """One start's optimiser state machine; :class:`OptimizeRun` vmaps it over starts.
+
+    ``init`` builds a state pytree from an unconstrained start ``z0`` (a site
+    dict) and a PRNG key; the state must carry ``"best_z"`` and ``"best_loss"``.
+    ``step`` performs one update and returns ``(state, best_z, best_loss)``.
+    Both are traced under ``jax.vmap`` and ``jax.lax.scan``.
+    """
 
     def init(self, z0: Mapping[str, Any], key: Any) -> Any:
         """Build optimiser state from an unconstrained start."""
@@ -62,6 +74,27 @@ class _Method(Protocol):
 
     def step(self, state: Any) -> tuple[Any, Mapping[str, Any], Any]:
         """One update; return ``(state, z_best, loss_best)``."""
+        ...
+
+
+@runtime_checkable
+class OptimizeMethod(Protocol):
+    """What ``optimize(method=)`` accepts: a factory for an :class:`OptimizeBackend`.
+
+    ``potential_fn`` maps an unconstrained site dict to ``-log_density``;
+    ``sites`` and ``template_z`` give the site order and one start's shapes.
+    ``learning_rate`` is set only when :class:`AutoTune` probed one (``Optax``).
+    """
+
+    def make(
+        self,
+        potential_fn: Any,
+        *,
+        learning_rate: float | None = None,
+        sites: tuple[str, ...] | None = None,
+        template_z: Mapping[str, Any] | None = None,
+    ) -> OptimizeBackend:
+        """Build the backend for this potential."""
         ...
 
 
@@ -87,7 +120,7 @@ class Optax:
         learning_rate: float | None = None,
         sites: tuple[str, ...] | None = None,
         template_z: Mapping[str, Any] | None = None,
-    ) -> _Method:
+    ) -> OptimizeBackend:
         del sites, template_z  # Optax works on the z pytree directly
         optax = _require_optax()
         lr = float(self.learning_rate if learning_rate is None else learning_rate)
@@ -174,7 +207,7 @@ class CMAES:
         learning_rate: float | None = None,
         sites: tuple[str, ...] | None = None,
         template_z: Mapping[str, Any] | None = None,
-    ) -> _Method:
+    ) -> OptimizeBackend:
         del learning_rate  # unused; CMA-ES has no LR probe
         if sites is None:
             raise ValueError("CMAES.make requires sites= (parameter name order).")
@@ -280,19 +313,7 @@ class AutoTune:
     jitter: float = 0.05
 
 
-@dataclass(frozen=True, slots=True)
-class OptimizeResult:
-    """Outcome of :func:`optimize`."""
-
-    candidates: Candidates
-    loss_trace: Any  # (n_chunks, n_starts)
-    converged: Any  # (n_starts,) bool
-    restarts: Any  # (n_starts,) int
-    learning_rate: float
-    history: tuple[StageRecord, ...] = ()
-
-
-def _run_chunk(method: _Method, state: Any, chunk_steps: int) -> tuple[Any, Any, Any]:
+def _run_chunk(method: OptimizeBackend, state: Any, chunk_steps: int) -> tuple[Any, Any, Any]:
     """Run ``chunk_steps`` updates on **one** start; callers ``vmap`` over starts."""
 
     def body(carry: Any, _: Any) -> tuple[Any, tuple[Any, Any]]:
@@ -303,7 +324,7 @@ def _run_chunk(method: _Method, state: Any, chunk_steps: int) -> tuple[Any, Any,
     return state, zs, losses
 
 
-def _run_chunk_vmap(method: _Method, states: Any, chunk_steps: int) -> tuple[Any, Any, Any]:
+def _run_chunk_vmap(method: OptimizeBackend, states: Any, chunk_steps: int) -> tuple[Any, Any, Any]:
     """Batched chunk: leading axis is the start index."""
     return jax.vmap(lambda s: _run_chunk(method, s, chunk_steps))(states)
 
@@ -362,173 +383,276 @@ def _state_supports_lr(state: Mapping[str, Any]) -> bool:
     return False
 
 
+class OptimizeRun:
+    """A resumable multi-start optimisation: the backend, its states, and the record.
+
+    Constructing one probes the learning rate (:class:`Optax` without a custom
+    ``optimizer``, under :class:`AutoTune`), builds the backend from ``method``,
+    and initialises one state per start; :meth:`extend` then advances every
+    start in compiled chunks of ``chunk_steps``, freezing starts that converge
+    and restarting failed ones (from ``reserve``, else jittered around the best
+    start). Calling :meth:`extend` again continues from the stored states —
+    Adam moments or CMA-ES covariance included.
+    """
+
+    def __init__(
+        self,
+        bm: Any,
+        candidates: Candidates,
+        *,
+        method: OptimizeMethod | None = None,
+        tuning: AutoTune | None = None,
+        reserve: Candidates | None = None,
+        chunk_steps: int = 50,
+        seed: int = 0,
+        batch_size: int = 64,
+    ) -> None:
+        if len(candidates) == 0:
+            raise ValueError("optimize() got an empty Candidates batch.")
+        method = Optax() if method is None else method
+        if not isinstance(method, OptimizeMethod):
+            raise TypeError(
+                "optimize method must implement OptimizeMethod (a make(potential_fn, ...) "
+                f"method); got {type(method).__name__}."
+            )
+        start = time.perf_counter()
+        self.bm = bm
+        self.method = method
+        self.tuning = AutoTune() if tuning is None else tuning
+        self.reserve = reserve
+        self.chunk_steps = max(1, int(chunk_steps))
+        self.seed = int(seed)
+        self.batch_size = max(1, int(batch_size))
+        self.sites = candidates.sites
+        self._input_history = candidates.history
+        potential_fn = bm.potential_fn
+        n = len(candidates)
+
+        self._z_start = {k: jnp.asarray(candidates.z[k]) for k in self.sites}
+        _ = potential_fn({k: v[0] for k, v in self._z_start.items()})  # warm the potential
+        template = {k: v[0] for k, v in self._z_start.items()}
+
+        self.learning_rate = float("nan")
+        if isinstance(method, Optax):
+            probe_backend = method.make(potential_fn, sites=self.sites, template_z=template)
+            sample_state = probe_backend.init(template, random.PRNGKey(0))
+            self.learning_rate = float(method.learning_rate)
+            if _state_supports_lr(sample_state) and method.optimizer is None:
+                self.learning_rate = _probe_learning_rate(
+                    method, potential_fn, self._z_start, self.tuning, self.seed
+                )
+            self.backend: OptimizeBackend = method.make(
+                potential_fn,
+                learning_rate=self.learning_rate,
+                sites=self.sites,
+                template_z=template,
+            )
+        else:
+            self.backend = method.make(potential_fn, sites=self.sites, template_z=template)
+
+        keys = random.split(random.PRNGKey(self.seed), n)
+        self.states: Any = jax.vmap(self.backend.init)(self._z_start, keys)
+        backend, steps = self.backend, self.chunk_steps
+        self.chunk_program: Any = jax.jit(lambda s: _run_chunk_vmap(backend, s, steps))
+        """The jitted chunk over the state batch; its jaxpr is independent of ``n`` and steps."""
+
+        self._converged = np.zeros(n, dtype=bool)
+        self._restarts = np.zeros(n, dtype=np.int32)
+        self._patience = np.zeros(n, dtype=np.int32)
+        self._reserve_cursor = 0
+        self._prev_loss: np.ndarray | None = None
+        self._loss_rows: list[np.ndarray] = []
+        self._records: list[StageRecord] = []
+        self._candidates: Candidates | None = None
+        self._score: Any = None
+        self._setup_seconds = time.perf_counter() - start
+
+    @property
+    def method_name(self) -> str:
+        """``"optax"``, ``"cmaes"``, or the custom method's class name in lower case."""
+        if isinstance(self.method, Optax):
+            return "optax"
+        if isinstance(self.method, CMAES):
+            return "cmaes"
+        return type(self.method).__name__.lower()
+
+    @property
+    def loss_trace(self) -> np.ndarray:
+        """Best loss per start after every chunk so far, shape ``(chunks, starts)``."""
+        n = len(self._converged)
+        return np.stack(self._loss_rows, axis=0) if self._loss_rows else np.zeros((0, n))
+
+    @property
+    def converged(self) -> np.ndarray:
+        """Per start: whether its loss has stopped improving (then it is frozen)."""
+        return self._converged.copy()
+
+    @property
+    def restarts(self) -> np.ndarray:
+        """Per start: how many times a failed start was restarted."""
+        return self._restarts.copy()
+
+    @property
+    def candidates(self) -> Candidates:
+        """Each start's best point, scored; ``history`` adds one record per call."""
+        if self._candidates is None:
+            self._candidates = self._scored()
+        return self._candidates
+
+    @property
+    def history(self) -> tuple[StageRecord, ...]:
+        """The cumulative stage history (the input's, then one record per call)."""
+        return self.candidates.history
+
+    @property
+    def best_params(self) -> dict[str, Any]:
+        """Constrained parameters of the best successful start, one value per site."""
+        cands = self.candidates
+        ld = np.where(np.asarray(cands.ok, dtype=bool), np.asarray(cands.log_density), -np.inf)
+        i = int(np.argmax(ld))
+        return {k: np.asarray(cands.params[k])[i] for k in self.sites}
+
+    def extend(self, max_steps: int) -> OptimizeRun:
+        """Advance every unconverged start by up to ``max_steps`` more steps.
+
+        Runs ``ceil(max_steps / chunk_steps)`` chunks, stopping early once every
+        start has converged. Mutates and returns ``self``.
+        """
+        start = time.perf_counter()
+        tuning = self.tuning
+        n = len(self._converged)
+        n_steps = max(1, int(max_steps))
+        n_chunks = (n_steps + self.chunk_steps - 1) // self.chunk_steps
+        for _ in range(n_chunks):
+            if bool(np.all(self._converged)):
+                break
+            new_states, _zs, _losses = self.chunk_program(self.states)
+            active = ~self._converged
+            self.states = _batch_where(jnp.asarray(active), new_states, self.states)
+            loss_best = np.asarray(self.states["best_loss"])
+            self._loss_rows.append(loss_best.copy())
+
+            if self._prev_loss is not None:
+                rel = np.abs(self._prev_loss - loss_best) / (np.abs(self._prev_loss) + 1e-12)
+                self._patience = np.where(rel >= float(tuning.rtol), 0, self._patience + 1)
+                self._converged = self._converged | (self._patience >= int(tuning.patience))
+
+            failed = ~np.isfinite(loss_best) | (loss_best >= _FAIL_POTENTIAL * 0.5)
+            for i in np.flatnonzero(failed & ~self._converged):
+                self._restart(int(i), loss_best, n)
+            self._prev_loss = loss_best
+
+        seconds = time.perf_counter() - start + self._setup_seconds
+        self._setup_seconds = 0.0
+        self._records.append(
+            StageRecord(
+                stage="optimize",
+                settings={
+                    "chunk_steps": self.chunk_steps,
+                    "max_steps": n_steps,
+                    "learning_rate": self.learning_rate if self.method_name == "optax" else None,
+                    "n": n,
+                    "method": self.method_name,
+                },
+                seconds=seconds,
+            )
+        )
+        self._candidates = None
+        return self
+
+    def _restart(self, i: int, loss_best: np.ndarray, n: int) -> None:
+        tuning = self.tuning
+        if int(self._restarts[i]) >= int(tuning.max_restarts):
+            return
+        z_new: dict[str, Any]
+        if self.reserve is not None and self._reserve_cursor < len(self.reserve):
+            z_new = {k: np.asarray(self.reserve.z[k][self._reserve_cursor]) for k in self.sites}
+            self._reserve_cursor += 1
+        else:
+            # Jitter around the current global best among finite losses.
+            finite = np.isfinite(loss_best) & (loss_best < _FAIL_POTENTIAL * 0.5)
+            if np.any(finite):
+                j = int(np.argmin(np.where(finite, loss_best, np.inf)))
+                base = {k: np.asarray(self.states["best_z"][k][j]) for k in self.sites}
+            else:
+                base = {k: np.asarray(self._z_start[k][i]) for k in self.sites}
+            rng = np.random.default_rng(self.seed + 1000 + int(self._restarts[i]) * n + i)
+            z_new = {
+                k: base[k] + float(tuning.jitter) * rng.normal(size=np.shape(base[k]))
+                for k in self.sites
+            }
+        key_i = random.fold_in(random.PRNGKey(self.seed), i + 17 * int(self._restarts[i]))
+        fresh = self.backend.init({k: jnp.asarray(v) for k, v in z_new.items()}, key_i)
+        self.states = _tree_set(self.states, i, fresh)
+        self._restarts[i] = int(self._restarts[i]) + 1
+        self._patience[i] = 0
+        self._converged[i] = False
+
+    def _scored(self) -> Candidates:
+        best_z = {k: np.asarray(self.states["best_z"][k]) for k in self.sites}
+        best_params = {k: np.asarray(v) for k, v in self.bm.constrain(best_z).items()}
+        if self._score is None:
+            bm, batch = self.bm, self.batch_size
+            self._score = jax.jit(lambda z: jax.lax.map(bm.log_density, z, batch_size=batch))
+        log_density = np.asarray(self._score({k: jnp.asarray(v) for k, v in best_z.items()}))
+        return Candidates(
+            sites=self.sites,
+            z=best_z,
+            params=best_params,
+            log_density=log_density,
+            ok=np.asarray(ok_from_log_density(log_density)),
+            history=self._input_history + tuple(self._records),
+        )
+
+
 def optimize(
     bm: Any,
     candidates: Candidates,
     *,
-    method: Optax | CMAES | None = None,
+    method: OptimizeMethod | None = None,
     tuning: AutoTune | None = None,
     reserve: Candidates | None = None,
     chunk_steps: int = 50,
     max_steps: int = 500,
     seed: int = 0,
     batch_size: int = 64,
-) -> OptimizeResult:
+) -> OptimizeRun:
     """Multi-start optimisation with a chunked, vmapped compiled program.
 
+    Exactly equivalent to::
+
+        run = OptimizeRun(bm, candidates, method=method, tuning=tuning, reserve=reserve,
+                          chunk_steps=chunk_steps, seed=seed, batch_size=batch_size)
+        return run.extend(max_steps)
+
+    ``method`` is :class:`Optax` (default), :class:`CMAES`, or any
+    :class:`OptimizeMethod`. Call ``run.extend(...)`` to keep going.
+
     Prefer a fixed-step solver for large start counts: vmapping an adaptive
-    Diffrax solve runs every lane to the slowest lane's step count.
-
-    The jaxpr of one chunk does not grow with ``max_steps`` (host loop) or with
-    the number of starts (``vmap``). With :class:`CMAES`, each step is one
-    generation and costs ``population × starts`` model solves.
+    Diffrax solve runs every lane to the slowest lane's step count. The jaxpr of
+    one chunk does not grow with ``max_steps`` (host loop) or with the number of
+    starts (``vmap``). With :class:`CMAES`, each step is one generation and costs
+    ``population × starts`` model solves.
     """
-    if len(candidates) == 0:
-        raise ValueError("optimize() got an empty Candidates batch.")
-    if method is None:
-        method = Optax()
-    if tuning is None:
-        tuning = AutoTune()
-    if not isinstance(method, (Optax, CMAES)):
-        raise TypeError(f"optimize method must be Optax or CMAES; got {type(method).__name__}.")
-
-    t0 = time.perf_counter()
-    potential_fn = bm.potential_fn
-    sites = candidates.sites
-    n = len(candidates)
-    chunk_steps = max(1, int(chunk_steps))
-    max_steps = max(1, int(max_steps))
-
-    z_batch = {k: jnp.asarray(candidates.z[k]) for k in sites}
-    # Warm potential
-    _ = potential_fn({k: v[0] for k, v in z_batch.items()})
-
-    lr = float("nan")
-    template = {k: v[0] for k, v in z_batch.items()}
-    if isinstance(method, Optax):
-        probe_backend = method.make(potential_fn, sites=sites, template_z=template)
-        sample_state = probe_backend.init({k: v[0] for k, v in z_batch.items()}, random.PRNGKey(0))
-        use_probe = _state_supports_lr(sample_state) and method.optimizer is None
-        lr = float(method.learning_rate)
-        if use_probe:
-            lr = _probe_learning_rate(method, potential_fn, z_batch, tuning, seed)
-        backend = method.make(potential_fn, learning_rate=lr, sites=sites, template_z=template)
-        method_name = "optax"
-    else:
-        backend = method.make(potential_fn, sites=sites, template_z=template)
-        method_name = "cmaes"
-
-    keys = random.split(random.PRNGKey(int(seed)), n)
-    states = jax.vmap(backend.init)(z_batch, keys)
-
-    chunk_fn = jax.jit(lambda s: _run_chunk_vmap(backend, s, chunk_steps))
-
-    converged = np.zeros(n, dtype=bool)
-    restarts = np.zeros(n, dtype=np.int32)
-    patience_count = np.zeros(n, dtype=np.int32)
-    reserve_cursor = 0
-    prev_loss: np.ndarray | None = None
-    loss_rows: list[np.ndarray] = []
-
-    n_chunks = (max_steps + chunk_steps - 1) // chunk_steps
-    for _ in range(n_chunks):
-        new_states, _zs, losses = chunk_fn(states)
-        loss_best = np.asarray(losses[:, -1])
-        active = ~converged
-        states = _batch_where(jnp.asarray(active), new_states, states)
-        # Re-read best_loss from (possibly frozen) states
-        loss_best = np.asarray(states["best_loss"])
-        loss_rows.append(loss_best.copy())
-
-        if prev_loss is not None:
-            denom = np.abs(prev_loss) + 1e-12
-            rel = np.abs(prev_loss - loss_best) / denom
-            improved = rel >= float(tuning.rtol)
-            patience_count = np.where(improved, 0, patience_count + 1)
-            newly = patience_count >= int(tuning.patience)
-            converged = converged | newly
-
-        # Restart failed / non-finite lanes
-        failed = ~np.isfinite(loss_best) | (loss_best >= _FAIL_POTENTIAL * 0.5)
-        for i in np.flatnonzero(failed & ~converged):
-            if int(restarts[i]) >= int(tuning.max_restarts):
-                continue
-            z_new: dict[str, Any]
-            if reserve is not None and reserve_cursor < len(reserve):
-                z_new = {k: np.asarray(reserve.z[k][reserve_cursor]) for k in sites}
-                reserve_cursor += 1
-            else:
-                # Jitter around the current global best among finite losses
-                finite = np.isfinite(loss_best) & (loss_best < _FAIL_POTENTIAL * 0.5)
-                if np.any(finite):
-                    j = int(np.argmin(np.where(finite, loss_best, np.inf)))
-                    base = {k: np.asarray(states["best_z"][k][j]) for k in sites}
-                else:
-                    base = {k: np.asarray(z_batch[k][i]) for k in sites}
-                rng = np.random.default_rng(int(seed) + 1000 + int(restarts[i]) * n + int(i))
-                z_new = {
-                    k: base[k] + float(tuning.jitter) * rng.normal(size=np.shape(base[k]))
-                    for k in sites
-                }
-            key_i = random.fold_in(random.PRNGKey(int(seed)), int(i) + 17 * int(restarts[i]))
-            fresh = backend.init({k: jnp.asarray(v) for k, v in z_new.items()}, key_i)
-            states = _tree_set(states, int(i), fresh)
-            restarts[i] = int(restarts[i]) + 1
-            patience_count[i] = 0
-            converged[i] = False
-
-        prev_loss = loss_best
-        if bool(np.all(converged)):
-            break
-
-    # Final scored candidates from best_z
-    best_z = {k: np.asarray(states["best_z"][k]) for k in sites}
-    best_params = {k: np.asarray(v) for k, v in bm.constrain(best_z).items()}
-    # Score with evaluate's density for ok / log_density consistency
-    scored_z = {k: jnp.asarray(best_z[k]) for k in sites}
-    mapped = jax.jit(lambda z: jax.lax.map(bm.log_density, z, batch_size=max(1, int(batch_size))))
-    log_density = np.asarray(mapped(scored_z))
-    ok = np.asarray(ok_from_log_density(log_density))
-    seconds = time.perf_counter() - t0
-    record = StageRecord(
-        stage="optimize",
-        settings={
-            "chunk_steps": chunk_steps,
-            "max_steps": max_steps,
-            "learning_rate": lr if method_name == "optax" else None,
-            "n": n,
-            "method": method_name,
-        },
-        seconds=seconds,
+    run = OptimizeRun(
+        bm,
+        candidates,
+        method=method,
+        tuning=tuning,
+        reserve=reserve,
+        chunk_steps=chunk_steps,
+        seed=seed,
+        batch_size=batch_size,
     )
-    out = Candidates(
-        sites=sites,
-        z=best_z,
-        params=best_params,
-        log_density=log_density,
-        ok=ok,
-        history=candidates.history + (record,),
-    )
-    trace = np.stack(loss_rows, axis=0) if loss_rows else np.zeros((0, n))
-    return OptimizeResult(
-        candidates=out,
-        loss_trace=trace,
-        converged=converged,
-        restarts=restarts,
-        learning_rate=lr,
-        history=(record,),
-    )
-
-
-# Exposed for jaxpr tests: one compiled chunk over a state batch.
-def _chunk_program(backend: _Method, chunk_steps: int) -> Any:
-    return jax.jit(lambda s: _run_chunk_vmap(backend, s, chunk_steps))
+    return run.extend(max_steps)
 
 
 __all__ = [
     "AutoTune",
     "CMAES",
     "Optax",
-    "OptimizeResult",
+    "OptimizeBackend",
+    "OptimizeMethod",
+    "OptimizeRun",
     "optimize",
 ]

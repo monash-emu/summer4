@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import importlib
-from typing import Any, NamedTuple
+from typing import NamedTuple
 
 import jax
 import jax.numpy as jnp
 import numpy as np
-from jax import random
 
 from summer4 import (
     Compartments,
@@ -29,10 +27,6 @@ from summer4.epi.calibration import (
     Uniform,
 )
 from summer4.epi.calibration import workflow as wf
-
-# Parent package re-exports ``optimize`` as a function, which shadows the submodule
-# name under ``import …workflow.optimize``.
-optimize_mod = importlib.import_module("summer4.epi.calibration.workflow.optimize")
 
 
 class _Rates(NamedTuple):
@@ -110,7 +104,7 @@ def test_optimize_recovers_near_find_map() -> None:
     )
     for i in range(len(starts)):
         z0 = {k: jnp.asarray(starts.z[k][i]) for k in starts.sites}
-        mapped = bm.find_map(z0, steps=200, seed=0)
+        mapped = bm.find_map(z0, steps=200, seed=0).best_params
         fitted = float(result.candidates.params["infection"][i])
         np.testing.assert_allclose(fitted, float(mapped["infection"]), rtol=0.05, atol=0.02)
 
@@ -140,41 +134,31 @@ def test_converged_starts_are_frozen() -> None:
 
 
 def test_restart_from_reserve() -> None:
-    """A non-finite lane is replaced from reserve via the same helper optimize uses."""
+    """A failed start is replaced from ``reserve`` on the next chunk."""
     bm = _sir_bm()
     design = wf.evaluate(bm, wf.lhs(bm, 12, seed=3), batch_size=6)
     starts = design.best(2)
     reserve = design.best(6)
-    backend = wf.Optax(learning_rate=0.05, plateau=False).make(bm.potential_fn)
-    states_z = {k: jnp.asarray(starts.z[k]) for k in starts.sites}
-    keys = random.split(random.PRNGKey(0), 2)
-    states = jax.vmap(backend.init)(states_z, keys)
-    states = {**states, "best_loss": states["best_loss"].at[0].set(jnp.nan)}
-    assert not np.isfinite(float(states["best_loss"][0]))
-    z_new = {k: np.asarray(reserve.z[k][0]) for k in starts.sites}
-    fresh = backend.init({k: jnp.asarray(v) for k, v in z_new.items()}, keys[0])
-    states = optimize_mod._tree_set(states, 0, fresh)
-    assert np.isfinite(float(states["best_loss"][0]))
-    # End-to-end: reserve argument is accepted and restarts vector is returned
-    result = wf.optimize(
+    run = wf.OptimizeRun(
         bm,
         starts,
         method=wf.Optax(learning_rate=0.05, plateau=False),
-        tuning=wf.AutoTune(
-            probe_steps=4,
-            probe_starts=1,
-            patience=2,
-            rtol=1e-4,
-            lr_grid=(0.05,),
-            max_restarts=2,
-        ),
+        tuning=wf.AutoTune(patience=2, rtol=1e-4, max_restarts=2),
         reserve=reserve,
         chunk_steps=15,
-        max_steps=45,
         seed=0,
     )
-    assert result.restarts.shape == (2,)
-    assert int(np.sum(result.restarts)) >= 0
+    # Poison start 0: a non-finite best loss marks it failed after the next chunk.
+    run.states = {**run.states, "best_loss": run.states["best_loss"].at[0].set(jnp.nan)}
+    run.extend(15)
+    assert int(run.restarts[0]) == 1
+    assert int(run.restarts[1]) == 0
+    np.testing.assert_allclose(
+        np.asarray(run.states["z"]["infection"][0]),
+        np.asarray(reserve.z["infection"][0]),
+    )
+    run.extend(30)
+    assert np.isfinite(float(run.states["best_loss"][0]))
 
 
 def test_lr_probe_picks_finite_rate() -> None:
@@ -201,20 +185,12 @@ def test_lr_probe_picks_finite_rate() -> None:
 
 def test_chunk_jaxpr_independent_of_n_starts() -> None:
     bm = _sir_bm()
-    c4 = wf.lhs(bm, 4, seed=0)
-    c8 = wf.lhs(bm, 8, seed=0)
-    potential = bm.potential_fn
-    backend = wf.Optax(learning_rate=0.05, plateau=False).make(potential)
-    _ = potential({k: jnp.asarray(c4.z[k][0]) for k in c4.sites})
-
-    def states_for(c: wf.Candidates) -> Any:
-        z = {k: jnp.asarray(c.z[k]) for k in c.sites}
-        keys = random.split(random.PRNGKey(0), len(c))
-        return jax.vmap(backend.init)(z, keys)
-
-    prog = optimize_mod._chunk_program(backend, 20)
-    jp4 = jax.make_jaxpr(prog)(states_for(c4))
-    jp8 = jax.make_jaxpr(prog)(states_for(c8))
+    method = wf.Optax(learning_rate=0.05, plateau=False)
+    tuning = wf.AutoTune(lr_grid=(0.05,))
+    run4 = wf.OptimizeRun(bm, wf.lhs(bm, 4, seed=0), method=method, tuning=tuning, chunk_steps=20)
+    run8 = wf.OptimizeRun(bm, wf.lhs(bm, 8, seed=0), method=method, tuning=tuning, chunk_steps=20)
+    jp4 = jax.make_jaxpr(run4.chunk_program)(run4.states)
+    jp8 = jax.make_jaxpr(run8.chunk_program)(run8.states)
     assert len(jp4.jaxpr.eqns) == len(jp8.jaxpr.eqns)
     # max_steps is only a host loop around this program
     assert "max_steps" not in str(jp4.jaxpr)

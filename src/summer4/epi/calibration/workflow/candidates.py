@@ -203,6 +203,20 @@ class Candidates:
         return cls(sites=sites, z=z, params=param_dict)
 
     @classmethod
+    def from_z(cls, bm: Any, z: Mapping[str, Any]) -> Candidates:
+        """Build unevaluated candidates from unconstrained site arrays (leading axis ``n``)."""
+        sites = tuple(bm.prior_names())
+        z_dict = {name: np.asarray(z[name]) for name in sites}
+        n = int(z_dict[sites[0]].shape[0])
+        for name in sites:
+            if z_dict[name].shape[0] != n:
+                raise ValueError(
+                    f"from_z length mismatch for {name!r}: {z_dict[name].shape[0]} vs {n}."
+                )
+        params = {k: np.asarray(v) for k, v in bm.constrain(z_dict).items()}
+        return cls(sites=sites, z=z_dict, params=params)
+
+    @classmethod
     def from_idata(
         cls,
         bm: Any,

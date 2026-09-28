@@ -39,16 +39,15 @@ pixi run composability         # statuses, evidence anchors, packages, totals
 ## Where things stand
 
 <!-- composability:totals -->
-Open findings: **11** (0 high, 4 medium, 7 low); planned: 5; deferred: 3; done: 6; rejected: 0.
+Open findings: **11** (0 high, 4 medium, 7 low); planned: 0; deferred: 3; done: 11; rejected: 0.
 <!-- /composability:totals -->
 
-The calibration workflow's MCMC stage (`CX25`) and the solve (`CP1`, `CX1`–`CX5`,
-roadmap step 29) meet the goal: `run(solver=)` takes a backend object holding
-the caller's own diffrax solver, stepsize controller, adjoint and event, and
-`run` is a documented composition of public steps. The rest of the
-calibration layer is uneven against them: `BayesianModel.sample` and
-`find_map` predate the workflow stages and duplicate them (`CX16`, `CX19`),
-and the optimisation stage keeps its backend protocol private (`CX17`).
+The calibration workflow's MCMC stage (`CX25`), the solve (`CP1`, roadmap step
+29) and the calibration entry points (`CP2`, step 30) meet the goal: the caller
+builds the diffrax, numpyro and optax objects; `run`, `sample`, `find_map` and
+`optimize` are documented compositions of public steps and return objects that
+can be inspected and extended. What remains is mostly extension points
+(`CP3`) and tests that still reach private helpers (`CP4`).
 
 ## Findings
 
@@ -70,15 +69,15 @@ and the optimisation stage keeps its backend protocol private (`CX17`).
 | CX13 | epi | P2 | low | open | `apply_compartment_weights` and `coerce_compartment_weights` are in `summer4.epi.__all__`, but the `eval_child` callback contract is undocumented and no user-facing page uses them. | Document the contract with an example, or drop them from `__all__` until the susceptibility surface lands. | `src/summer4/epi/__init__.py::"apply_compartment_weights"` |
 | CX14 | epi | P2 | medium | deferred | `MixingMatrix` row-normalises a `FieldRef` matrix inside the vector field on every call instead of once at run start. | See the note. | `futureplans/mixing-matrix-per-call-normalisation.md`; `src/summer4/epi/mixing.py::def resolved_matrix` |
 | CX15 | epi | P1 | medium | deferred | `ForceOfInfection(group_by=)` takes one `Property`, and the whole-population case needs a dummy property and a `[[1.0]]` matrix. | See the notes. | `futureplans/foi-multi-property-mixing.md`; `futureplans/foi-unstratified-dummy-pop.md` |
-| CX16 | calibration | P1, P4 | high | planned | `BayesianModel.sample(kind=...)` dispatches on a string, passes through only `**kernel_kwargs`, cannot be seeded, and duplicates the composable MCMC stage. | Rebuild it as a documented convenience over `wf.sample_until` (take `make_kernel=` and `init=`, return an `MCMCRun`), or deprecate it for `wf.run_mcmc`. | `src/summer4/epi/calibration/model.py::def sample(` |
-| CX17 | calibration | P2 | high | planned | The `wf.optimize` backend protocol is private (`_Method`) and `method=` is typed as the two built-ins, so a user cannot plug in another optimiser and reuse the chunk loop, convergence and restarts. Tests reach `_chunk_program` and `_tree_set`. | A public `OptimizeMethod` protocol (`init(z0, key)`, `step(state)`), with `Optax` and `CMAES` as two implementations. | `src/summer4/epi/calibration/workflow/optimize.py::class _Method` |
-| CX18 | calibration | P3 | medium | planned | `wf.optimize` returns no optimiser state, so a run cannot be extended; restarting from `result.candidates` resets Adam moments or the CMA-ES covariance. | Keep method state on the result and add `extend(max_steps=)`, as `MCMCRun.extend` does. | `src/summer4/epi/calibration/workflow/optimize.py::class OptimizeResult` |
-| CX19 | calibration | P3, P4 | medium | planned | `BayesianModel.find_map` returns only the final parameters (no loss trace, no state, no resume) and duplicates single-start `wf.optimize`. | Build it on `wf.optimize` with one start and return an `OptimizeResult`. | `src/summer4/epi/calibration/model.py::def find_map(` |
+| CX16 | calibration | P1, P4 | high | done | Before step 30: `BayesianModel.sample(kind=...)` dispatches on a string, passes through only `**kernel_kwargs`, cannot be seeded, and duplicates the composable MCMC stage. | Done in step 30: `sample(kernel=, init=, stop=, ...)` takes a caller-built numpyro kernel (names are sugar), seeds from `Candidates`, and is exactly `wf.run_mcmc`; returns the `MCMCRun`. | `src/summer4/epi/calibration/model.py::make_kernel=lambda: kernel_object` |
+| CX17 | calibration | P2 | high | done | Before step 30: The `wf.optimize` backend protocol is private (`_Method`) and `method=` is typed as the two built-ins, so a user cannot plug in another optimiser and reuse the chunk loop, convergence and restarts. Tests reach `_chunk_program` and `_tree_set`. | Done in step 30: public `OptimizeBackend` and `OptimizeMethod` protocols; any object with `make` runs through `wf.optimize`; `run.chunk_program` replaces the private helpers tests used. | `src/summer4/epi/calibration/workflow/optimize.py::class OptimizeBackend(Protocol)` |
+| CX18 | calibration | P3 | medium | done | Before step 30: `wf.optimize` returns no optimiser state, so a run cannot be extended; restarting from `result.candidates` resets Adam moments or the CMA-ES covariance. | Done in step 30: `wf.optimize` returns a `wf.OptimizeRun` holding the optimiser states; `run.extend(max_steps)` continues with Adam moments / CMA-ES state intact. | `src/summer4/epi/calibration/workflow/optimize.py::def extend(self, max_steps: int)` |
+| CX19 | calibration | P3, P4 | medium | done | Before step 30: `BayesianModel.find_map` returns only the final parameters (no loss trace, no state, no resume) and duplicates single-start `wf.optimize`. | Done in step 30: `find_map` is a one-start `wf.optimize` returning the `OptimizeRun` (`best_params` for the dict); `init_point` and `Candidates.from_z` are public. | `src/summer4/epi/calibration/model.py::def init_point(` |
 | CX20 | calibration | P1, P2 | medium | open | Likelihoods have no protocol, and nested prior scales are found only through attributes named `sd` or `dispersion`. A custom likelihood with a differently named prior scale silently loses that prior. | A `Likelihood` protocol with `log_prob(...)` and `prior_sites()`. | `src/summer4/epi/calibration/likelihoods.py::def prior_sites` |
 | CX21 | calibration | P1 | low | open | A prior must implement the `Prior` protocol; a bare numpyro distribution needs a hand-written wrapper. | `Prior.from_numpyro(name, dist)`, with `icdf` only where the distribution provides one. | `src/summer4/epi/calibration/priors.py::class Prior(Protocol)` |
 | CX22 | calibration | P2 | low | open | Tests call private `BayesianModel._ensure_potential()` for the initial point and the postprocess transform. | Public `init_point` / `postprocess_fn` beside the public `potential_fn`. | `tests/test_epi_calibration.py::_ensure_potential` |
 | CX23 | calibration | P2 | low | open | How a `Scenario` rebinds params, model and outputs lives in private `_scenario_bindings`, so a scenario cannot be applied outside `posterior_runs`. | A public binding function, or a method on `Scenario`. | `src/summer4/epi/calibration/posterior_runs.py::def _scenario_bindings` |
-| CX24 | calibration | P3 | low | planned | `OptimizeResult.history` holds only the optimise record, while its `candidates.history` is cumulative. | Make it cumulative, or drop it in favour of `candidates.history`. | `src/summer4/epi/calibration/workflow/optimize.py::history=(record,)` |
+| CX24 | calibration | P3 | low | done | Before step 30: `OptimizeResult.history` holds only the optimise record, while its `candidates.history` is cumulative. | Done in step 30: `run.history` is the candidates' cumulative history, one record per `optimize` / `extend` call. | `src/summer4/epi/calibration/workflow/optimize.py::history=self._input_history + tuple(self._records)` |
 | CX25 | calibration | P1, P2, P3, P4 | high | done | The MCMC stage took `kind=` strings, bundled seeding, retries and stopping, and returned a sealed `SampleResult`. It is now the reference pattern: caller-built numpyro `MCMC`, `Candidates.init_params`, `wf.warmup_until`, `wf.sample_until` → `MCMCRun`, `wf.StopRule`, `wf.replay`, and `wf.run_mcmc` (PR #39). | — | `src/summer4/epi/calibration/workflow/mcmc.py::def sample_until` |
 <!-- /composability:findings -->
 
@@ -86,9 +85,8 @@ and the optimisation stage keeps its backend protocol private (`CX17`).
 
 Every `open` or `planned` finding belongs to exactly one package; deferred
 findings are tracked by their `futureplans/` notes instead. **CP1** landed as
-roadmap step 29. **CP2** is next: it retires the duplicate calibration entry
-points before step 28's plots are written against them. **CP3** and **CP4**
-are independent and can run alongside the roadmap.
+roadmap step 29 and **CP2** as step 30. **CP3** and **CP4** are independent
+and can run alongside the roadmap.
 
 <!-- composability:packages -->
 | Package | Title | Closes |

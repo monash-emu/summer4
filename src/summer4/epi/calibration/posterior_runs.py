@@ -155,7 +155,17 @@ def _series_1d(output: Any) -> Any:
 def _as_draw_dict(draws: Any, *, n: int | None, burn_in: int, seed: int) -> dict[str, np.ndarray]:
     """Normalise InferenceData / Candidates-like / Mapping → constrained site arrays."""
     if draws is None:
-        raise TypeError("posterior_runs requires draws (InferenceData, Mapping, or Candidates).")
+        raise TypeError(
+            "posterior_runs requires draws (InferenceData, MCMCRun, OptimizeRun, Mapping, "
+            "or Candidates)."
+        )
+
+    # Run objects: an MCMCRun's draws are its .idata; an OptimizeRun's its .candidates.
+    if not hasattr(draws, "posterior") and hasattr(draws, "extend"):
+        if hasattr(draws, "idata"):
+            draws = draws.idata
+        elif hasattr(draws, "candidates"):
+            draws = draws.candidates
 
     # Candidates (step 24+) expose .params with leading axis n.
     params_attr = getattr(draws, "params", None)

@@ -67,7 +67,7 @@ original analyses re-run on numpyro.
 | KI16 | Kiribati | summer2 midpoint flow-output convention (parity) | `full` | `FlowMass(...).midpoint()` as an `OutputSet` post-op (`out[0] = f[0]`, then the average with the previous sample) | — |
 | KI17 | Kiribati | Named output set to a frame / parquet | `full` | `OutputSet.evaluate` then `Result.to_frame(shape="wide" or "long")`; a polars frame writes parquet | — |
 | KI18 | Kiribati | Priors and Normal targets, including a prior-distributed sd | `full` | `Uniform` / `NormalLikelihood(sd=Prior(...))` on `Target`; `BayesianModel` | — |
-| KI19 | Kiribati | Gradient-free posterior sampling (replacing `DEMetropolisZ`) | `full` | `BayesianModel.sample(kind="aies", "ess", or "sa")` | — |
+| KI19 | Kiribati | Gradient-free posterior sampling (replacing `DEMetropolisZ`) | `full` | `BayesianModel.sample("aies" / "ess" / "sa")`, or a numpyro `AIES` / `ESS` / `SA` kernel | — |
 | KI20 | Kiribati | MAP fit (replacing nevergrad) | `full` | `BayesianModel.find_map` (optax) | — |
 | KI21 | Kiribati | Posterior full runs × scenarios, quantiles, averted differences | `full` | `BayesianModel.posterior_runs` → `quantiles` / `differences` (Kiribati frame schemas) | — |
 | KI22 | Kiribati | Verified compile time, step cost and solver safety at TB scale | `full` | `benchmarks/tb_scale.py`; `SolverInfo.ok` when `max_steps` is exhausted; `MixingMatrix.validate` / vmap-safe reciprocity | — |
