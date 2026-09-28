@@ -74,11 +74,11 @@ Two conventions that are easy to get wrong:
 <!-- roadmap:current -->
 | Field | Value |
 | --- | --- |
-| Step | 27 |
+| Step | 28 |
 | Status | next |
-| Branch | `feat/calib-seeded-mcmc` |
+| Branch | `feat/calib-outputs` |
 | Cut from | `main` |
-| Last landed | `feat/calib-gradient-free` |
+| Last landed | `feat/calib-seeded-mcmc` |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -133,8 +133,8 @@ before step 15 lands. Each handoff below names its successor explicitly;
 | 24 | J | WP19 | `feat/calib-candidates` | `plans/calibration-toolkit.plan.md` | Step 24 | done | CW1 CW2 CW3 CW4 |
 | 25 | J | WP19 | `feat/calib-multistart` | `plans/calibration-toolkit.plan.md` | Step 25 | done | CW5 CW6 |
 | 26 | J | WP19 | `feat/calib-gradient-free` | `plans/calibration-toolkit.plan.md` | Step 26 | done | CW7 |
-| 27 | J | WP19 | `feat/calib-seeded-mcmc` | `plans/calibration-toolkit.plan.md` | Step 27 | next | CW8 CW9 |
-| 28 | J | WP19 | `feat/calib-outputs` | `plans/calibration-toolkit.plan.md` | Step 28 | planned | CW10 CW11 |
+| 27 | J | WP19 | `feat/calib-seeded-mcmc` | `plans/calibration-toolkit.plan.md` | Step 27 | done | CW8 CW9 |
+| 28 | J | WP19 | `feat/calib-outputs` | `plans/calibration-toolkit.plan.md` | Step 28 | next | CW10 CW11 |
 <!-- /roadmap:steps -->
 
 `Closes` lists row IDs of {doc}`../evaluation/tb-ports` (and, where a step moves
@@ -1721,6 +1721,8 @@ pinned and how the `jax06` env was handled.
 
 ## Step 27 — `feat/calib-seeded-mcmc`
 
+**Landed:** feat/calib-seeded-mcmc, PR #39, 2026-09-28.
+
 ### Summary
 
 This step starts MCMC from the points the earlier stages found and decides how
@@ -1807,6 +1809,43 @@ overlaid, and scenario outputs plotted against a reference. `posterior_runs`
 design's best points or optimised points, not only a posterior. An end-to-end
 notebook composes every stage, plus two shorter compositions. It lands on
 `feat/calib-outputs`, closes `CW10`–`CW11`, and needs step 15 merged.
+
+### What the previous worker left you
+
+- **The MCMC stage is composable, not the plan's shape** (see step 27's
+  *Correction (composability)* and `AGENTS.md` § Composability). The caller
+  builds numpyro's `MCMC`; summer4 ships `Candidates.init_params`,
+  `wf.warmup_until(make_mcmc, num_warmup, wf.WarmupRule())`,
+  `wf.sample_until(mcmc, stop, init_params=)` → resumable `wf.MCMCRun`
+  (`samples`, `progress`, `diagnostics`, `idata`, `candidates(bm)`,
+  `extend(stop)`), `wf.StopRule`, `wf.replay`, and `wf.run_mcmc` as the
+  one-call convenience. There is no `SampleResult`: the plan's
+  `plot_chains(sample_result)` should take an `MCMCRun` (use `.samples` and
+  `.progress`), and `Candidates.from_idata(bm, run.idata, ...)` works on it.
+- `StopRule` defaults as shipped: `rhat=1.05`, `ess=100`,
+  `max_divergence_frac=None`, `max_samples=5000`, `max_seconds=None`.
+  A divergence breach ends the run with reason `"divergences"`; there is no
+  built-in retry. `WarmupRule` defaults: `min_warmup=100`, `rhat=1.1`,
+  `max_step_size_ratio=3.0`, `accept_tolerance=0.15`,
+  `max_divergence_frac=0.01`, `max_treedepth_frac=0.05`; `warmup_until`
+  doubles up to `max_warmup=4000`.
+- **R-hat for ensemble kernels (AIES/ESS):** not validated in practice.
+  Walkers move together, so they are not the independent chains split R-hat
+  assumes; treat it as indicative only. `sample_until` works with AIES (tested)
+  and no longer requests the `diverging` field those kernels lack;
+  `WarmupRule` judges them on R-hat alone.
+- **Performance gotcha:** every `MCMC.run` is a fresh XLA compile inside
+  numpyro, so every `sample_until` chunk costs one
+  (`futureplans/mcmc-chunk-recompile.md`). Keep chunks large; for sweeps, run
+  replicates as extra vectorized chains in one `MCMC` and use `wf.replay`
+  (notebook 22 section F does this).
+- Plan: `plans/calibration-toolkit.plan.md`. User gate signed off:
+  `22-calibration-seeded-mcmc.ipynb`, rewritten as the model **acceptance**
+  notebook: a *What to check* box per section, plots and objects to inspect,
+  no asserts (those live in `tests/`). Write step 28's gate notebook the same
+  way. CW8–CW9 are `full` (9 of 11).
+- Seeding only saves chunks when warmup is short (notebook 22 section F); the
+  step's original claim does not hold at 50 warmup steps on the one-rate model.
 
 ### Read first
 
