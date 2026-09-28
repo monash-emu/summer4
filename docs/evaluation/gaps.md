@@ -78,11 +78,10 @@ by WP3's population split (port on this stack).
 
 ### 2.3 Infectiousness and susceptibility adjustments
 
-**State:** **infectiousness done** (A4 `full`) via
-`ForceOfInfection(infectiousness=...)`. **Susceptibility still open** —
-there is no FOI surface symmetric to infectiousness; chapter 15 is therefore
-`partial` and scales susceptibility via flow `adjust=` or matrix row scaling.
-See `futureplans/foi-susceptibility-surface.md`.
+**State:** **done.** Infectiousness (A4 `full`) is
+`ForceOfInfection(infectiousness=...)`; susceptibility (WP17) is the symmetric
+`ForceOfInfection(susceptibility=...)`, applied after the mixing product and
+never normalised. Chapter 15 is `full`.
 
 ## Priority 3 — blocks the remaining chapters
 

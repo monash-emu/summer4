@@ -25,7 +25,7 @@ gaps
 | summer2 API surface exercised by its own docs, complete in summer4 | **47 of 52 (90%)** |
 | … with any working route (complete or partial) | 52 of 52 (100%) |
 | summer2 documentation notebooks reproducible as runnable summer4 | **11 of 11** |
-| summer textbook chapters reproducible as runnable summer4 | **14 of 20** (1 more partially) |
+| summer textbook chapters reproducible as runnable summer4 | **16 of 20** |
 | Implemented layers of the intended stack | taxonomy + flows + results + epi + timevarying + initial population |
 | Ceiling of the planned roadmap (WP2–WP16) | 47 of 52 (90%) — see {doc}`coverage-ledger` |
 
@@ -35,9 +35,7 @@ summer4 ships a compartment taxonomy, flows, results, epidemiology
 named flows (including infection and mixing), set an initial population,
 compile to a `CompiledModel`, and `run()` to a queryable `Result`
 with selectable Euler or adaptive diffrax solvers. What remains is mainly
-a first-class FOI
-susceptibility surface (chapter 15 partial), WP9 (contact-survey data —
-chapters 16–19), and WP10 (Bayesian calibration — chapter 20).
+WP9 (contact-survey data — chapters 16–19).
 
 ## How to read this section
 
