@@ -78,7 +78,7 @@ Two conventions that are easy to get wrong:
 | Status | next |
 | Branch | `feat/calib-outputs` |
 | Cut from | `main` |
-| Last landed | `feat/calib-seeded-mcmc` |
+| Last landed | `feat/solve-composable` |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -90,13 +90,16 @@ is independent of every other phase and of its own two steps' ordering, and may
 run at any time from `main`. **Phase J** (steps 24–28) is the composable
 calibration workflow toolkit (WP19, `plans/calibration-toolkit.plan.md`). Its
 rows close the `CW` block of the {doc}`../evaluation/coverage-ledger`, not
-tb-ports rows.
+tb-ports rows. **Phase K** (step 29 onward) works through the composability
+survey's packages ({doc}`../evaluation/composability`); its rows close `CX`
+findings and name `CP` packages. Step 29 (`CP1`) was inserted on 2026-09-28,
+after step 27, and lands before step 28.
 
 **Landing order after step 14.** Step numbers are not the landing order here.
 The order is fixed as:
 
 ```text
-14 → 15 → 24 → 25 → 26 → 27 → 28 → 16 → 17 → 18 → 19
+14 → 15 → 24 → 25 → 26 → 27 → 29 → 28 → 16 → 17 → 18 → 19
 ```
 
 Phase J comes **directly after step 15** and before Track G resumes at step 16.
@@ -135,6 +138,7 @@ before step 15 lands. Each handoff below names its successor explicitly;
 | 26 | J | WP19 | `feat/calib-gradient-free` | `plans/calibration-toolkit.plan.md` | Step 26 | done | CW7 |
 | 27 | J | WP19 | `feat/calib-seeded-mcmc` | `plans/calibration-toolkit.plan.md` | Step 27 | done | CW8 CW9 |
 | 28 | J | WP19 | `feat/calib-outputs` | `plans/calibration-toolkit.plan.md` | Step 28 | next | CW10 CW11 |
+| 29 | K | CP1 | `feat/solve-composable` | `plans/solve-composable.plan.md` | Whole | done | CX1 CX2 CX3 CX4 CX5 |
 <!-- /roadmap:steps -->
 
 `Closes` lists row IDs of {doc}`../evaluation/tb-ports` (and, where a step moves
@@ -1792,7 +1796,8 @@ each chunk costs a compile: see `futureplans/mcmc-chunk-recompile.md`.
 
 ### Handoff
 
-Set step 27 `done`, step 28 `next`. Record the `StopRule`
+Set step 27 `done`, step 29 `next` (this read step 28 until `CP1` was inserted
+as step 29 on 2026-09-28). Record the `StopRule`
 defaults as shipped and whether R-hat is meaningful for the ensemble kernels
 (AIES/ESS) in practice.
 
@@ -1846,6 +1851,19 @@ notebook composes every stage, plus two shorter compositions. It lands on
   way. CW8–CW9 are `full` (9 of 11).
 - Seeding only saves chunks when warmup is short (notebook 22 section F); the
   step's original claim does not hold at 50 warmup steps on the one-rate model.
+- **Step 29 (`CP1`) landed before you** (PR #44). `run(solver=)` takes a
+  backend: `summer4.solvers.Diffrax(solver, stepsize_controller=, adjoint=,
+  event=, progress_meter=)`, `Euler()`, or any `SolverBackend`; names and
+  `rtol` / `atol` still work unchanged, so `bm.posterior_runs` and the
+  workflow stages need no edits. New and useful here: `Result.final_state` /
+  `final_time` (continue a run, e.g. from the end of a calibration window into
+  a scenario), `SolverInfo.event`, and `CompiledModel.assemble_result`. Plan:
+  `plans/solve-composable.plan.md`. User gate signed off:
+  `23-solve-backends.ipynb`. `CX1`–`CX5` are `done` in the composability
+  survey.
+- Your gate notebook is **`24-calibration-workflow.ipynb`** (23 went to step
+  29). `BacksolveAdjoint` is refused by diffrax with summer4's
+  `SaveAt(subs=...)`; use the default or `DirectAdjoint()` for gradients.
 
 ### Read first
 
@@ -1859,7 +1877,8 @@ notebook composes every stage, plus two shorter compositions. It lands on
 
 Follow the plan's *Step 28*. Plotly, imported lazily, added to the
 `calibration` extra. Do not touch `Output.plot`. Ship
-`examples/notebooks/23-calibration-workflow.ipynb`.
+`examples/notebooks/24-calibration-workflow.ipynb` (23 was taken by step 29,
+which landed first).
 
 Cut from: `main`. Merges into: `main`.
 
@@ -1867,13 +1886,59 @@ Cut from: `main`. Merges into: `main`.
 
 The [standard checks](#exit-checks-every-step), plus `CW10`–`CW11` moved; the
 ledger must then read *Calibration workflow rows complete today: **11 of
-11***. **User gate:** `23-calibration-workflow.ipynb`, run in both pixi envs.
+11***. **User gate:** `24-calibration-workflow.ipynb`, run in both pixi envs.
 
 ### Handoff
 
 Set step 28 `done`, step 16 `next` (Track G resumes — see *Landing order
 after step 14*). Phase J is finished; record which stages users should reach
 for first.
+
+
+---
+
+## Step 29 — `feat/solve-composable`
+
+**Landed:** feat/solve-composable, PR #44, 2026-09-28.
+
+### Summary
+
+This step makes the solve composable (`CP1` of
+{doc}`../evaluation/composability`). `run(solver=)` takes a solver backend
+object: `summer4.solvers.Diffrax(solver, stepsize_controller=, adjoint=,
+event=, progress_meter=)` holding the caller's own diffrax objects, or
+`Euler()`, or anything implementing the public `SolverBackend` protocol.
+Names and `rtol` / `atol` stay as sugar. `SolveSpec` becomes public, `run`
+becomes a documented composition of public steps, and `Result` gains
+`final_state` / `final_time` so a run can be continued. It lands on
+`feat/solve-composable` and closes `CX1`–`CX5`.
+
+### Read first
+
+1. `AGENTS.md` (§ *Composability is a design goal*)
+2. `plans/solve-composable.plan.md`
+3. {doc}`../evaluation/composability` — rows `CX1`–`CX5`
+4. `src/summer4/flows/compiled.py` (`CompiledModel.run`) and `src/summer4/solvers/`
+
+### Do
+
+Follow the plan. Existing calls (`solver="dopri5", rtol=, atol=`) must keep
+working unchanged. Ship `examples/notebooks/23-solve-backends.ipynb` as an
+acceptance page (notebook 22's style). Set `CX1`–`CX5` to `done` in the survey
+in the same commit as the code, then `pixi run composability-write`.
+
+Cut from: `main`. Merges into: `main`.
+
+### Exit checks
+
+The [standard checks](#exit-checks-every-step), plus `pixi run composability`.
+**User gate:** `23-solve-backends.ipynb`.
+
+### Handoff
+
+Set step 29 `done`, step 28 `next`. Record in step 28's *What the previous
+worker left you* anything that changes how step 28 calls `run` (for example
+`final_state`).
 
 ---
 

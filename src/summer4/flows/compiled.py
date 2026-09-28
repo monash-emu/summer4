@@ -1199,126 +1199,108 @@ class CompiledModel:
     ) -> Any:
         """Integrate and return a :class:`~summer4.results.Result`.
 
-        Exactly one of ``t1`` / ``steps``. ``solver`` is a name (``"euler"``,
-        ``"heun"``, ``"tsit5"``, ``"dopri5"``) or a diffrax solver instance.
+        Exactly one of ``t1`` / ``steps``. ``solver`` is a backend —
+        :class:`~summer4.solvers.Diffrax` holding your own diffrax solver,
+        stepsize controller, adjoint and event; :class:`~summer4.solvers.Euler`;
+        or any :class:`~summer4.solvers.SolverBackend` — or sugar for one: a
+        name (``"euler"``, ``"heun"``, ``"tsit5"``, ``"dopri5"``) or a bare
+        diffrax solver, with ``rtol`` / ``atol`` building a ``PIDController``.
         With no ``y0``, uses :meth:`initial_state` when an initial population
         is attached.
 
         ``throw`` is passed to diffrax when a bool is given; the default
         (``None`` → ``False``) leaves failure visible on
         :attr:`~summer4.results.SolverInfo.ok` instead of raising.
+
+        Exactly equivalent to::
+
+            prepared = model.prepare(params)
+            y0 = model.initial_state(prepared) if y0 is None else y0
+            plan = model.expand(EVERYTHING if save is None else save)
+            spec = SolveSpec.window(t0=t0, t1=t1, dt=dt, steps=steps,
+                                    max_steps=max_steps, throw=throw, dense=plan.dense)
+            backend = resolve_solver(solver, rtol=rtol, atol=atol)
+            out = backend.solve(model, y0=y0, params=prepared, spec=spec, plan=plan)
+            return model.assemble_result(plan, out, spec=spec, epoch=epoch)
         """
-        from summer4.results.eval import dims_for_quantity, values_for
-        from summer4.results.groups import group_requests
-        from summer4.results.output import Output
         from summer4.results.plan import EVERYTHING, SavePlan
-        from summer4.results.result import Result
         from summer4.solvers.base import SolveSpec
-        from summer4.solvers.diffrax_backend import KNOWN_SOLVER_NAMES, diffrax_solve
-        from summer4.solvers.euler_backend import euler_solve
-        from summer4.time import Epoch, TimeAxis, TimeAxisKind
+        from summer4.solvers.resolve import resolve_solver
 
         prepared = self.prepare(params)
         if y0 is None:
             y0 = self.initial_state(prepared)
-
         if save is None:
             save = EVERYTHING
         if not isinstance(save, SavePlan):
             raise TypeError(f"save must be a SavePlan, got {type(save).__name__}.")
-        if (t1 is None) == (steps is None):
-            raise ValueError("Provide exactly one of t1 or steps.")
-        if steps is None:
-            assert t1 is not None
-            if dt <= 0:
-                raise ValueError(f"dt must be > 0, got {dt}.")
-            steps = int(round((float(t1) - float(t0)) / float(dt)))
-            if steps < 0:
-                raise ValueError("t1 must be >= t0.")
-        n_steps = int(steps)
-
-        expanded = self.expand(save)
-        # Default save grid: include t0 and every step endpoint
-        if expanded.ts is None:
-            default_ts = t0 + dt * np.arange(n_steps + 1, dtype=np.float64)
-        else:
-            default_ts = np.asarray(expanded.ts, dtype=np.float64)
-
-        groups = group_requests(expanded, default_ts)
-        key_to_group = {key: g for g in groups for key in g.keys}
-
-        times = TimeAxis(
-            values=default_ts,
-            epoch=epoch if isinstance(epoch, Epoch) else epoch,
-            kind=TimeAxisKind.GRID,
-        )
-
-        spec = SolveSpec(
-            t0=float(t0),
-            t1=float(t1) if t1 is not None else None,
-            steps=n_steps,
-            dt=float(dt),
-            rtol=rtol,
-            atol=atol,
+        plan = self.expand(save)
+        spec = SolveSpec.window(
+            t0=t0,
+            t1=t1,
+            dt=dt,
+            steps=steps,
             max_steps=max_steps,
-            dense=bool(expanded.dense),
             throw=throw,
+            dense=bool(plan.dense),
         )
+        backend = resolve_solver(solver, rtol=rtol, atol=atol)
+        out = backend.solve(self, y0=y0, params=prepared, spec=spec, plan=plan)
+        return self.assemble_result(plan, out, spec=spec, epoch=epoch)
 
-        use_euler = solver == "euler" or (isinstance(solver, str) and solver.lower() == "euler")
-        if use_euler:
-            if rtol is not None or atol is not None:
-                raise ValueError("rtol/atol apply to adaptive diffrax solvers, not euler.")
-            out = euler_solve(
-                self,
-                y0=y0,
-                params=prepared,
-                spec=spec,
-                groups=groups,
-                plan=expanded,
-                solver_stats=bool(expanded.solver_stats),
-            )
-        else:
-            if isinstance(solver, str) and solver.lower() not in KNOWN_SOLVER_NAMES:
-                known = ", ".join(repr(n) for n in KNOWN_SOLVER_NAMES)
-                raise ValueError(f"Unknown solver {solver!r}. Known names: {known}.")
-            out = diffrax_solve(
-                self,
-                y0=y0,
-                params=prepared,
-                spec=spec,
-                groups=groups,
-                plan=expanded,
-                solver=solver,
-                solver_stats=bool(expanded.solver_stats),
-            )
+    def assemble_result(
+        self,
+        plan: Any,
+        out: Any,
+        *,
+        spec: Any,
+        epoch: Any = None,
+    ) -> Any:
+        """Wrap a backend's :class:`~summer4.solvers.SolveOutput` as a :class:`Result`.
+
+        ``plan`` is the expanded plan the backend saved (:meth:`expand`) and
+        ``spec`` the :class:`~summer4.solvers.SolveSpec` it integrated; each
+        saved array becomes an :class:`~summer4.results.Output` on its group's
+        save times, and the end state becomes ``Result.final_state``.
+        """
+        from summer4.jax.propertydata import PropertyData
+        from summer4.results.eval import dims_for_quantity, values_for
+        from summer4.results.groups import group_requests
+        from summer4.results.output import Output
+        from summer4.results.plan import GroupedOutput
+        from summer4.results.result import Result
+        from summer4.time import Epoch, TimeAxis, TimeAxisKind
+
+        default_ts = spec.default_ts()
+        groups = group_requests(plan, default_ts)
+        key_to_group = {key: g for g in groups for key in g.keys}
+        axis_epoch = epoch if isinstance(epoch, Epoch) else epoch
 
         outputs: dict[str, Output] = {}
-        for key, req in expanded.requests.items():
-            from summer4.results.plan import GroupedOutput
-
+        for key, req in plan.requests.items():
             dims: tuple[str, ...]
             if isinstance(req.what, GroupedOutput) and req.what.name in self.capture_meta:
                 prop = self.capture_meta[req.what.name][0]
                 dims = ("time", prop.name)
             else:
                 dims = dims_for_quantity(req.what)
-            raw = out.saved[key]
             group = key_to_group[key]
-            trace_times = TimeAxis(
-                values=group.ts,
-                epoch=epoch if isinstance(epoch, Epoch) else epoch,
-                kind=TimeAxisKind.GRID,
+            outputs[key] = Output(
+                times=TimeAxis(values=group.ts, epoch=axis_epoch, kind=TimeAxisKind.GRID),
+                values=values_for(req, out.saved[key], self),
+                dims=dims,
             )
-            values = values_for(req, raw, self)
-            outputs[key] = Output(times=trace_times, values=values, dims=dims)
 
         return Result(
-            times=times,
+            times=TimeAxis(values=default_ts, epoch=axis_epoch, kind=TimeAxisKind.GRID),
             outputs=outputs,
             solver=out.stats,
             dense=out.dense,
             _state_pmap=self.pmap if out.dense is not None else None,
+            final_state=(
+                None if out.final_state is None else PropertyData(self.pmap, out.final_state)
+            ),
+            final_time=out.final_time,
         )
 
     def __hash__(self) -> int:

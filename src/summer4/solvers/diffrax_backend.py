@@ -1,12 +1,14 @@
-"""diffrax adaptive / fixed-step backend with SubSaveAt groups."""
+"""The diffrax backend: the caller's diffrax objects, one ``SubSaveAt`` per save group."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
-from summer4.results.groups import SaveGroup
+from summer4.results.groups import group_requests
 from summer4.results.result import SolverInfo
 from summer4.solvers.base import SolveOutput, SolveSpec, default_max_steps
+from summer4.solvers.resolve import KNOWN_SOLVER_NAMES
 
 _NAMED_SOLVERS: dict[str, str] = {
     "heun": "Heun",
@@ -14,7 +16,6 @@ _NAMED_SOLVERS: dict[str, str] = {
     "dopri5": "Dopri5",
 }
 
-KNOWN_SOLVER_NAMES: tuple[str, ...] = ("euler", "heun", "tsit5", "dopri5")
 
 # Equinox Module classes are created once so Diffrax's filter_jit keys by
 # structure (CompiledModel digest + request tree), not by Python id.
@@ -34,7 +35,7 @@ def _import_diffrax() -> Any:
 
 
 def resolve_diffrax_solver(solver: str | Any) -> tuple[Any, str]:
-    """Return ``(diffrax solver instance, display name)``."""
+    """Return ``(diffrax solver instance, display name)`` for a name or an instance."""
     diffrax = _import_diffrax()
     if isinstance(solver, str):
         key = solver.lower()
@@ -133,105 +134,167 @@ def _result_code(result: Any) -> Any:
     return result._value
 
 
-def diffrax_solve(
-    model: Any,
-    *,
-    y0: object,
-    params: object,
-    spec: SolveSpec,
-    groups: tuple[SaveGroup, ...],
-    plan: Any,
-    solver: str | Any,
-    solver_stats: bool,
-) -> SolveOutput:
-    """Integrate with diffrax; one ``SubSaveAt`` per save group."""
-    import jax.numpy as jnp
+# Save key for the end-of-integration state; cannot collide with a group name.
+_FINAL = "__summer4_final__"
 
-    from summer4.flows.stages import Prepared
-    from summer4.jax.state import unpack_state
 
-    diffrax = _import_diffrax()
-    solver_inst, solver_name = resolve_diffrax_solver(solver)
-    vf_cls, save_cls = _ensure_eqx_modules()
+@dataclass(frozen=True)
+class Diffrax:
+    """Integrate with diffrax, using the caller's own diffrax objects.
 
-    prepared = params if isinstance(params, Prepared) else model.prepare(params)
-    y_arr, _rebox = unpack_state(y0, model.pmap)
+    ``solver`` is any ``diffrax.AbstractSolver`` (or a name: ``"heun"``,
+    ``"tsit5"``, ``"dopri5"``). Every other field is passed to
+    ``diffrax.diffeqsolve`` as given; ``None`` keeps summer4's default —
+    ``ConstantStepSize()`` for ``stepsize_controller`` and diffrax's own
+    defaults for ``adjoint``, ``event`` and ``progress_meter``::
 
-    term = diffrax.ODETerm(vf_cls(model))
-    subs: dict[str, Any] = {}
-    for group in groups:
-        group_plan = _filtered_plan(plan, group.keys)
-        requests = tuple((key, group_plan.requests[key].what) for key in group.keys)
-        keep = group_plan.flow_reads()
-        subs[group.name] = diffrax.SubSaveAt(
-            ts=jnp.asarray(group.ts),
-            fn=save_cls(model, requests, keep),
-        )
-    saveat = diffrax.SaveAt(subs=subs, dense=bool(spec.dense))
-
-    if spec.rtol is not None or spec.atol is not None:
-        controller: Any = diffrax.PIDController(
-            rtol=1e-3 if spec.rtol is None else float(spec.rtol),
-            atol=1e-6 if spec.atol is None else float(spec.atol),
-        )
-        dt0: float | None = float(spec.dt)
-    else:
-        controller = diffrax.ConstantStepSize()
-        dt0 = float(spec.dt)
-
-    t0 = float(spec.t0)
-    if spec.t1 is not None:
-        t1 = float(spec.t1)
-    elif spec.steps is not None:
-        t1 = t0 + float(spec.dt) * int(spec.steps)
-    else:
-        raise ValueError("diffrax backend requires t1 or steps.")
-
-    # Include every requested save time in the integration window.
-    for group in groups:
-        if group.ts.size:
-            t1 = max(t1, float(group.ts[-1]))
-
-    if spec.max_steps is None:
-        max_steps = default_max_steps(t0, t1, float(spec.dt))
-    else:
-        max_steps = int(spec.max_steps)
-
-    # None → False so failure surfaces as SolverInfo.ok / result_code.
-    throw = False if spec.throw is None else bool(spec.throw)
-
-    sol = diffrax.diffeqsolve(
-        term,
-        solver_inst,
-        t0=t0,
-        t1=t1,
-        dt0=dt0,
-        y0=y_arr,
-        args=prepared,
-        saveat=saveat,
-        stepsize_controller=controller,
-        max_steps=max_steps,
-        throw=throw,
-    )
-
-    saved: dict[str, Any] = {}
-    for group in groups:
-        group_ys = sol.ys[group.name]
-        for key in group.keys:
-            saved[key] = group_ys[key]
-
-    stats: SolverInfo | None = None
-    if solver_stats:
-        st = sol.stats
-        stats = SolverInfo(
-            solver=solver_name,
-            num_steps=st.get("num_steps"),
-            num_accepted_steps=st.get("num_accepted_steps"),
-            num_rejected_steps=st.get("num_rejected_steps"),
-            result_code=_result_code(sol.result),
-            max_steps=st.get("max_steps", max_steps),
-            dense=bool(spec.dense),
+        Diffrax(
+            diffrax.Tsit5(),
+            stepsize_controller=diffrax.PIDController(rtol=1e-6, atol=1e-9),
+            adjoint=diffrax.DirectAdjoint(),
+            event=diffrax.Event(cond_fn),
         )
 
-    dense = sol.interpolation if spec.dense else None
-    return SolveOutput(saved=saved, stats=stats, dense=dense)
+    ``BacksolveAdjoint`` is not supported: summer4 saves through
+    ``SaveAt(subs=...)``, which diffrax refuses with that adjoint.
+
+    ``SolveSpec.dt`` is the step for a constant controller and the first step
+    ``dt0`` for an adaptive one. When an ``event`` stops the solve, saves after
+    that time are ``inf`` (diffrax's convention), :attr:`SolverInfo.event` is
+    true, and ``Result.final_time`` / ``final_state`` are where it stopped.
+    """
+
+    solver: Any
+    stepsize_controller: Any = None
+    adjoint: Any = None
+    event: Any = None
+    progress_meter: Any = None
+
+    def __post_init__(self) -> None:
+        instance, _name = resolve_diffrax_solver(self.solver)
+        object.__setattr__(self, "solver", instance)
+
+    @property
+    def name(self) -> str:
+        """Display name for :attr:`SolverInfo.solver` (the solver class, lower case)."""
+        return type(self.solver).__name__.lower()
+
+    def solve(
+        self,
+        model: Any,
+        *,
+        y0: object,
+        params: object,
+        spec: SolveSpec,
+        plan: Any,
+    ) -> SolveOutput:
+        """Integrate with ``diffrax.diffeqsolve``; see :class:`SolverBackend`."""
+        import jax.numpy as jnp
+
+        from summer4.flows.stages import Prepared
+        from summer4.jax.state import unpack_state
+
+        diffrax = _import_diffrax()
+        vf_cls, save_cls = _ensure_eqx_modules()
+
+        prepared = params if isinstance(params, Prepared) else model.prepare(params)
+        y_arr, _rebox = unpack_state(y0, model.pmap)
+        groups = group_requests(plan, spec.default_ts())
+
+        term = diffrax.ODETerm(vf_cls(model))
+        subs: dict[str, Any] = {}
+        for group in groups:
+            group_plan = _filtered_plan(plan, group.keys)
+            requests = tuple((key, group_plan.requests[key].what) for key in group.keys)
+            keep = group_plan.flow_reads()
+            subs[group.name] = diffrax.SubSaveAt(
+                ts=jnp.asarray(group.ts),
+                fn=save_cls(model, requests, keep),
+            )
+        subs[_FINAL] = diffrax.SubSaveAt(t1=True)
+        saveat = diffrax.SaveAt(subs=subs, dense=bool(spec.dense))
+
+        controller = (
+            diffrax.ConstantStepSize()
+            if self.stepsize_controller is None
+            else self.stepsize_controller
+        )
+
+        t0 = float(spec.t0)
+        t1 = spec.end
+        # Include every requested save time in the integration window.
+        for group in groups:
+            if group.ts.size:
+                t1 = max(t1, float(group.ts[-1]))
+
+        max_steps = (
+            default_max_steps(t0, t1, float(spec.dt))
+            if spec.max_steps is None
+            else int(spec.max_steps)
+        )
+        # None → False so failure surfaces as SolverInfo.ok / result_code.
+        throw = False if spec.throw is None else bool(spec.throw)
+
+        extra: dict[str, Any] = {}
+        if self.adjoint is not None:
+            extra["adjoint"] = self.adjoint
+        if self.event is not None:
+            extra["event"] = self.event
+        if self.progress_meter is not None:
+            extra["progress_meter"] = self.progress_meter
+
+        sol = diffrax.diffeqsolve(
+            term,
+            self.solver,
+            t0=t0,
+            t1=t1,
+            dt0=float(spec.dt),
+            y0=y_arr,
+            args=prepared,
+            saveat=saveat,
+            stepsize_controller=controller,
+            max_steps=max_steps,
+            throw=throw,
+            **extra,
+        )
+
+        saved: dict[str, Any] = {}
+        for group in groups:
+            group_ys = sol.ys[group.name]
+            for key in group.keys:
+                saved[key] = group_ys[key]
+
+        stats: SolverInfo | None = None
+        if plan.solver_stats:
+            st = sol.stats
+            code = _result_code(sol.result)
+            stats = SolverInfo(
+                solver=self.name,
+                num_steps=st.get("num_steps"),
+                num_accepted_steps=st.get("num_accepted_steps"),
+                num_rejected_steps=st.get("num_rejected_steps"),
+                result_code=code,
+                max_steps=st.get("max_steps", max_steps),
+                dense=bool(spec.dense),
+                event_occurred=(
+                    None
+                    if self.event is None
+                    else code == _result_code(diffrax.RESULTS.event_occurred)
+                ),
+            )
+
+        dense = sol.interpolation if spec.dense else None
+        return SolveOutput(
+            saved=saved,
+            stats=stats,
+            dense=dense,
+            final_time=sol.ts[_FINAL][-1],
+            final_state=sol.ys[_FINAL][-1],
+        )
+
+
+__all__ = [
+    "Diffrax",
+    "KNOWN_SOLVER_NAMES",
+    "resolve_diffrax_solver",
+]

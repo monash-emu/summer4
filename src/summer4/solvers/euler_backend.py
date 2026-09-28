@@ -1,13 +1,14 @@
-"""Fixed-step Euler backend with per-group saves."""
+"""summer4's fixed-step Euler backend with per-group saves."""
 
 from __future__ import annotations
 
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, ClassVar
 
 import numpy as np
 from numpy.typing import NDArray
 
-from summer4.results.groups import SaveGroup
+from summer4.results.groups import group_requests
 from summer4.results.result import SolverInfo
 from summer4.solvers.base import SolveOutput, SolveSpec
 
@@ -75,7 +76,8 @@ def _euler_group_fast(
     steps: int,
     ts: NDArray[np.float64],
     init_snap: dict[str, Any],
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], Any]:
+    """Save on an arithmetic subgrid; also return the state at ``ts[-1]``."""
     import jax
     import jax.numpy as jnp
 
@@ -104,10 +106,10 @@ def _euler_group_fast(
         t2, y2 = jax.lax.cond(do_step, do_stride, lambda ty: ty, (t, y))
         return (t2, y2, k + 1), snap
 
-    (_tf, _yf, _), snaps = jax.lax.scan(
+    (_tf, y_last, _), snaps = jax.lax.scan(
         outer_body, (jnp.asarray(t0), y_arr, jnp.asarray(0)), xs=None, length=n_saves
     )
-    return {k: snaps[k] for k in init_snap}
+    return {k: snaps[k] for k in init_snap}, y_last
 
 
 def _euler_trajectory(
@@ -169,74 +171,125 @@ def _filtered_plan(plan: Any, keys: tuple[str, ...]) -> Any:
     )
 
 
-def euler_solve(
-    model: Any,
-    *,
-    y0: object,
-    params: object,
-    spec: SolveSpec,
-    groups: tuple[SaveGroup, ...],
-    plan: Any,
-    solver_stats: bool,
-) -> SolveOutput:
-    """Integrate with Euler and evaluate each save group on its own ``ts``."""
-    from summer4.flows.stages import Prepared
-    from summer4.jax.state import unpack_state
-    from summer4.results.eval import build_save_fn
+def _advance(observe_arr: Any, y: Any, t_start: float, dt: float, n: int) -> Any:
+    """Take ``n`` more Euler steps from ``(t_start, y)``."""
+    import jax
+    import jax.numpy as jnp
 
-    if spec.steps is None:
-        raise ValueError("Euler backend requires a fixed step count.")
-    steps = int(spec.steps)
-    dt = float(spec.dt)
-    t0 = float(spec.t0)
+    def step(i: Any, ty: tuple[Any, Any]) -> tuple[Any, Any]:
+        del i
+        tt, yy = ty
+        ctx = observe_arr(tt, yy)
+        return tt + dt, yy + dt * _dy_array(ctx.dy)
 
-    prepared = params if isinstance(params, Prepared) else model.prepare(params)
+    _t, y_end = jax.lax.fori_loop(0, n, step, (jnp.asarray(t_start), y))
+    return y_end
 
-    y_arr, rebox = unpack_state(y0, model.pmap)
-    saved: dict[str, Any] = {}
-    ys_all: Any | None = None
-    step_ts: NDArray[np.float64] | None = None
 
-    for group in groups:
-        group_plan = _filtered_plan(plan, group.keys)
-        save_fn = build_save_fn(group_plan, pmap=model.pmap, edge_maps=dict(model.edge_maps))
-        keep = group_plan.flow_reads()
-        observe_arr, snapshot = _snapshot_factory(model, prepared, rebox, save_fn, keep=keep)
-        init_snap = snapshot(np.asarray(t0), y_arr)
+@dataclass(frozen=True)
+class Euler:
+    """summer4's own fixed-step explicit Euler backend.
 
-        if _is_arithmetic_subgrid(group.ts, t0, dt):
-            part = _euler_group_fast(
-                observe_arr=observe_arr,
-                snapshot=snapshot,
-                y_arr=y_arr,
-                t0=t0,
-                dt=dt,
-                steps=steps,
-                ts=group.ts,
-                init_snap=init_snap,
-            )
-        else:
-            if ys_all is None:
-                ys_all, step_ts = _euler_trajectory(
+    Steps every ``SolveSpec.dt`` from ``t0``; save groups on an arithmetic
+    subgrid of the step grid are saved during one ``scan``, other grids are
+    linearly interpolated from the stored trajectory. ``final_state`` is the
+    state after all ``SolveSpec.steps`` steps.
+    """
+
+    name: ClassVar[str] = "euler"
+
+    def solve(
+        self,
+        model: Any,
+        *,
+        y0: object,
+        params: object,
+        spec: SolveSpec,
+        plan: Any,
+    ) -> SolveOutput:
+        """Integrate with Euler steps; see :class:`SolverBackend`."""
+        from summer4.flows.stages import Prepared
+        from summer4.jax.state import unpack_state
+        from summer4.results.eval import build_save_fn
+
+        if spec.steps is None:
+            raise ValueError("Euler backend requires a fixed step count.")
+        steps = int(spec.steps)
+        dt = float(spec.dt)
+        t0 = float(spec.t0)
+
+        prepared = params if isinstance(params, Prepared) else model.prepare(params)
+        groups = group_requests(plan, spec.default_ts())
+
+        y_arr, rebox = unpack_state(y0, model.pmap)
+        saved: dict[str, Any] = {}
+        ys_all: Any | None = None
+        step_ts: NDArray[np.float64] | None = None
+        # Latest state reached on the step grid, as (step index, state).
+        reached: tuple[int, Any] = (0, y_arr)
+
+        for group in groups:
+            group_plan = _filtered_plan(plan, group.keys)
+            save_fn = build_save_fn(group_plan, pmap=model.pmap, edge_maps=dict(model.edge_maps))
+            keep = group_plan.flow_reads()
+            observe_arr, snapshot = _snapshot_factory(model, prepared, rebox, save_fn, keep=keep)
+            init_snap = snapshot(np.asarray(t0), y_arr)
+
+            if _is_arithmetic_subgrid(group.ts, t0, dt):
+                part, y_last = _euler_group_fast(
                     observe_arr=observe_arr,
+                    snapshot=snapshot,
                     y_arr=y_arr,
                     t0=t0,
                     dt=dt,
                     steps=steps,
+                    ts=group.ts,
+                    init_snap=init_snap,
                 )
-            assert step_ts is not None
-            part = _lerp_snapshot(
-                snapshot=snapshot,
-                ys_all=ys_all,
-                step_ts=step_ts,
-                ts=group.ts,
-                init_snap=init_snap,
-            )
-        saved.update(part)
+                last_index = int(round((float(group.ts[-1]) - t0) / dt))
+                if last_index > reached[0]:
+                    reached = (last_index, y_last)
+            else:
+                if ys_all is None:
+                    ys_all, step_ts = _euler_trajectory(
+                        observe_arr=observe_arr,
+                        y_arr=y_arr,
+                        t0=t0,
+                        dt=dt,
+                        steps=steps,
+                    )
+                    if steps >= reached[0]:
+                        reached = (steps, ys_all[-1])
+                assert step_ts is not None
+                part = _lerp_snapshot(
+                    snapshot=snapshot,
+                    ys_all=ys_all,
+                    step_ts=step_ts,
+                    ts=group.ts,
+                    init_snap=init_snap,
+                )
+            saved.update(part)
 
-    stats = (
-        SolverInfo(solver="euler", num_steps=steps, result_code=0, dense=False)
-        if solver_stats
-        else None
-    )
-    return SolveOutput(saved=saved, stats=stats, dense=None)
+        index, final_state = reached
+        if index < steps:
+            observe_end, _snap = _snapshot_factory(
+                model, prepared, rebox, lambda ctx: {}, keep=frozenset()
+            )
+            final_state = _advance(observe_end, final_state, t0 + dt * index, dt, steps - index)
+            index = steps
+
+        stats = (
+            SolverInfo(solver=self.name, num_steps=steps, result_code=0, dense=False)
+            if plan.solver_stats
+            else None
+        )
+        return SolveOutput(
+            saved=saved,
+            stats=stats,
+            dense=None,
+            final_time=t0 + dt * index,
+            final_state=final_state,
+        )
+
+
+__all__ = ["Euler"]

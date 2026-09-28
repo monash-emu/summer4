@@ -39,28 +39,27 @@ pixi run composability         # statuses, evidence anchors, packages, totals
 ## Where things stand
 
 <!-- composability:totals -->
-Open findings: **21** (4 high, 9 medium, 8 low); planned: 0; deferred: 3; done: 1; rejected: 0.
+Open findings: **16** (2 high, 6 medium, 8 low); planned: 0; deferred: 3; done: 6; rejected: 0.
 <!-- /composability:totals -->
 
-The calibration workflow's MCMC stage (`CX25`) is the reference pattern, and
-the rest of the calibration layer is uneven against it: `BayesianModel.sample`
-and `find_map` predate it and duplicate it (`CX16`, `CX19`), and the
-optimisation stage keeps its backend protocol private (`CX17`). The largest
-gap outside calibration is the solve itself. `run()` accepts a diffrax solver
-but builds everything around it — stepsize controller, adjoint, events — so a
-calibration that needs a different adjoint for its gradients cannot get one
-(`CX1`, `CX2`).
+The calibration workflow's MCMC stage (`CX25`) and the solve (`CP1`, `CX1`–`CX5`,
+roadmap step 29) meet the goal: `run(solver=)` takes a backend object holding
+the caller's own diffrax solver, stepsize controller, adjoint and event, and
+`run` is a documented composition of public steps. The rest of the
+calibration layer is uneven against them: `BayesianModel.sample` and
+`find_map` predate the workflow stages and duplicate them (`CX16`, `CX19`),
+and the optimisation stage keeps its backend protocol private (`CX17`).
 
 ## Findings
 
 <!-- composability:findings -->
 | ID | Area | Principle | Severity | Status | Finding | Proposed shape | Evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| CX1 | run | P1 | high | open | `run()` builds the stepsize controller itself: `PIDController(rtol, atol)` when either is set, else `ConstantStepSize`. A caller's own controller (PID coefficients, `dtmin`, jump times) cannot be passed. | `run(..., stepsize_controller=diffrax.PIDController(...))`; `rtol` / `atol` stay as sugar that builds one. | `src/summer4/solvers/diffrax_backend.py::controller: Any = diffrax.PIDController(` |
-| CX2 | run | P1 | high | open | `diffeqsolve` is called with no `adjoint=`, `event=` or `progress_meter=`. Calibration gradients always use diffrax's default adjoint, and a run cannot stop on a state event. | Pass caller-built `adjoint=` / `event=` objects through, for example on a public `SolveSpec` (`CX3`). | `src/summer4/solvers/diffrax_backend.py::sol = diffrax.diffeqsolve(` |
-| CX3 | run | P1, P2 | medium | open | Solver choice is one argument that is either a name or a diffrax instance; summer4's own Euler backend is reachable only by the string `"euler"`, and the solve settings (`SolveSpec`) are internal. | Public backend objects (`summer4.solvers.Euler()`, any diffrax solver) and a public `SolveSpec`; names stay as sugar. | `src/summer4/flows/compiled.py::solver: str`; `src/summer4/solvers/base.py::class SolveSpec` |
-| CX4 | run | P2, P4 | medium | open | `CompiledModel.run` is one long method: prepare, expand the save plan, group requests, build the time axis, build a `SolveSpec`, dispatch, assemble the `Result`. No intermediate step is public, so changing one (say, the `SaveAt`) means forking `run`. | Public steps (`expand_plan`, `solve`, `assemble_result`) with `run` as their documented and tested composition. | `src/summer4/flows/compiled.py::def run(` |
-| CX5 | run | P3 | medium | open | A `Result` carries no end state. Continuing a run needs a hand-saved `Compartments()` at `t1`, re-wrapped as `y0`. | `Result.final_state` (a `PropertyData`) usable directly as the next `y0`. | `src/summer4/results/result.py::class Result:` |
+| CX1 | run | P1 | high | done | Before step 29: `run()` builds the stepsize controller itself: `PIDController(rtol, atol)` when either is set, else `ConstantStepSize`. A caller's own controller (PID coefficients, `dtmin`, jump times) cannot be passed. | Done in step 29: `Diffrax(solver, stepsize_controller=...)`; `rtol` / `atol` build a `PIDController` via `resolve_solver`. | `src/summer4/solvers/diffrax_backend.py::class Diffrax` |
+| CX2 | run | P1 | high | done | Before step 29: `diffeqsolve` is called with no `adjoint=`, `event=` or `progress_meter=`. Calibration gradients always use diffrax's default adjoint, and a run cannot stop on a state event. | Done in step 29: `Diffrax(..., adjoint=, event=, progress_meter=)`; `SolverInfo.event`, and `ok` counts an event stop as success. | `src/summer4/solvers/diffrax_backend.py::extra["adjoint"]` |
+| CX3 | run | P1, P2 | medium | done | Before step 29: Solver choice is one argument that is either a name or a diffrax instance; summer4's own Euler backend is reachable only by the string `"euler"`, and the solve settings (`SolveSpec`) are internal. | Done in step 29: public `SolverBackend` protocol, `Euler()` / `Diffrax(...)` backends, public `SolveSpec.window`, `resolve_solver` for names. | `src/summer4/solvers/base.py::class SolverBackend` |
+| CX4 | run | P2, P4 | medium | done | Before step 29: `CompiledModel.run` is one long method: prepare, expand the save plan, group requests, build the time axis, build a `SolveSpec`, dispatch, assemble the `Result`. No intermediate step is public, so changing one (say, the `SaveAt`) means forking `run`. | Done in step 29: `run` is `prepare` → `expand` → `SolveSpec.window` → `resolve_solver` → `backend.solve` → `assemble_result`, documented and tested. | `src/summer4/flows/compiled.py::def assemble_result` |
+| CX5 | run | P3 | medium | done | Before step 29: A `Result` carries no end state. Continuing a run needs a hand-saved `Compartments()` at `t1`, re-wrapped as `y0`. | Done in step 29: `Result.final_state` / `final_time`; `run(params, r.final_state, t0=r.final_time, ...)` continues a run. | `src/summer4/results/result.py::final_state` |
 | CX6 | rates | P2 | medium | open | Extension and staging points are not exported from `summer4.flows`: `register_rate_eval` (the custom-rates cookbook imports it from `summer4.flows.rates`), and `rate_stage` / `build_hoist_table` (tests import them from `summer4.flows.stages`). A modeller cannot ask which stage a rate will run in. | Export them, or add a `CompiledModel.hoist_table` / stage-report view. | `src/summer4/flows/rates.py::def register_rate_eval`; `src/summer4/flows/stages.py::def rate_stage` |
 | CX7 | rates | P1 | medium | open | Callables are keyed by identity with no stable-name option: `SaveFn.fn` digests `id(fn)`, as do `Transform.fn` and `derived_fn`, so a lambda built in a loop retraces every call. `defer` already solves this with `name=`. | An optional `name=` on `SaveFn`, `Transform` and `derived_fn`, with the `defer(name=)` contract. | `src/summer4/results/plan.py::str(id(fn))`; `src/summer4/flows/rates.py::class Transform` |
 | CX8 | rates | P2 | low | open | Tests import private flows helpers (`_align_rate`, `_align_grouped_rate`, `_eval_interp`, `_rate_bytes`). Most are true internals. | Triage: promote what a custom-rate author needs, test the rest through public behaviour. | `src/summer4/flows/compiled.py::def _align_rate` |
@@ -86,10 +85,8 @@ calibration that needs a different adjoint for its gradients cannot get one
 ## Work packages
 
 Every `open` or `planned` finding belongs to exactly one package; deferred
-findings are tracked by their `futureplans/` notes instead. Take packages in
-this order. **CP1** first: `CX1`–`CX2` block calibrations that need a
-different adjoint or an event, and every later package builds on a public
-`SolveSpec`. **CP2** next, because it retires the duplicate calibration entry
+findings are tracked by their `futureplans/` notes instead. **CP1** landed as
+roadmap step 29. **CP2** is next: it retires the duplicate calibration entry
 points before step 28's plots are written against them. **CP3** and **CP4**
 are independent and can run alongside the roadmap.
 
