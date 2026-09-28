@@ -163,7 +163,7 @@ Calibration workflow rows complete today: **9 of 11**
 | CW6 | Automated optimiser tuning, convergence detection and restarts | `full` | `workflow.AutoTune` | 25 |
 | CW7 | Multi-start gradient-free optimisation | `full` | `workflow.CMAES` (evosax) | 26 |
 | CW8 | MCMC seeded from optimised points | `full` | `Candidates.init_params` → numpyro `MCMC(init_params=)`; `workflow.run_mcmc` in one call | 27 |
-| CW9 | Automated MCMC run length (R-hat, ESS, divergences, budget) | `full` | `workflow.sample_until` + `workflow.StopRule` (resumable `MCMCRun`) | 27 |
+| CW9 | Automated MCMC run length (R-hat, ESS, divergences, budget) | `full` | `workflow.warmup_until` + `WarmupRule` (warmup length), `workflow.sample_until` + `workflow.StopRule` (draws; resumable `MCMCRun`) | 27 |
 | CW10 | Sampled-output spaghetti plots and quantile ribbons | `none` | — | 28 |
 | CW11 | Scenario outputs after calibration, plotted against a reference | `none` | — | 28 |
 <!-- /ledger:workflow -->

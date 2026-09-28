@@ -78,7 +78,12 @@ class StopRule:
             return True, "diagnostics"
         if int(row["samples"]) >= int(self.max_samples):
             return False, "max_samples"
-        if self.max_seconds is not None and float(row["seconds"]) >= float(self.max_seconds):
+        seconds = row.get("seconds")
+        if (
+            self.max_seconds is not None
+            and seconds is not None
+            and float(seconds) >= float(self.max_seconds)
+        ):
             return False, "max_seconds"
         return None
 
@@ -102,6 +107,55 @@ def _site_diagnostics(samples: Mapping[str, np.ndarray]) -> dict[str, tuple[floa
         else:
             out[name] = (float(split_gelman_rubin(x)), float(effective_sample_size(x)))
     return out
+
+
+def _progress_row(
+    samples: Mapping[str, np.ndarray], diverging: np.ndarray | None
+) -> tuple[dict[str, Any], dict[str, tuple[float, float]]]:
+    site_rows = _site_diagnostics(samples)
+    row = {
+        "samples": int(np.shape(next(iter(samples.values())))[1]),
+        "rhat_max": max(v[0] for v in site_rows.values()),
+        "ess_bulk_min": min(v[1] for v in site_rows.values()),
+        "divergence_frac": None if diverging is None else float(np.mean(diverging)),
+    }
+    return row, site_rows
+
+
+def replay(
+    stop: Stop,
+    samples: Mapping[str, Any],
+    chunk_samples: int,
+    *,
+    diverging: Any | None = None,
+) -> Any:
+    """Apply ``stop`` to existing draws as :func:`sample_until` would have, chunk by chunk.
+
+    ``samples`` maps each site to a ``(chain, draw, ...)`` array, for example
+    ``mcmc.get_samples(group_by_chain=True)`` or :attr:`MCMCRun.samples`
+    restricted to some chains. Returns the progress table up to and including
+    the chunk where ``stop`` decided (``seconds`` is ``None``: nothing is
+    timed). No sampling, no warnings — use it to ask what another rule would
+    have done with the same draws.
+    """
+    pd = _require_pandas()
+    chunk = int(chunk_samples)
+    arrays = {k: np.asarray(v) for k, v in samples.items()}
+    div = None if diverging is None else np.asarray(diverging)
+    total = int(np.shape(next(iter(arrays.values())))[1])
+    rows: list[dict[str, Any]] = []
+    for k, end in enumerate(range(chunk, total + 1, chunk), start=1):
+        row, _ = _progress_row(
+            {name: a[:, :end] for name, a in arrays.items()},
+            None if div is None else div[:, :end],
+        )
+        row.update(chunk=k, seconds=None, decision=None, converged=None)
+        decision = stop(dict(row))
+        rows.append(row)
+        if decision is not None:
+            row["converged"], row["decision"] = bool(decision[0]), str(decision[1])
+            break
+    return pd.DataFrame(rows).set_index("chunk")
 
 
 def _records_divergences(mcmc: Any) -> bool:
@@ -154,8 +208,8 @@ class MCMCRun:
     def progress(self) -> Any:
         """One row per chunk: draws per chain, worst R-hat, smallest ESS, divergences, seconds.
 
-        Diagnostics cover every draw so far, not just that chunk. ``decision`` is
-        the stop callable's reason on the chunk that ended a call, else ``None``.
+        Diagnostics cover every draw so far, not just that chunk. ``decision`` and
+        ``converged`` are filled on each chunk that ended a call, else ``None``.
         """
         pd = _require_pandas()
         return pd.DataFrame(self._rows).set_index("chunk")
@@ -223,20 +277,11 @@ class MCMCRun:
                 div if self.diverging is None else np.concatenate([self.diverging, div], axis=1)
             )
         self._seconds += time.perf_counter() - start
-        self._site_rows = _site_diagnostics({k: self.samples[k] for k in self.sites})
-        self._rows.append(
-            {
-                "chunk": len(self._rows) + 1,
-                "samples": int(next(iter(self.samples.values())).shape[1]),
-                "rhat_max": max(v[0] for v in self._site_rows.values()),
-                "ess_bulk_min": min(v[1] for v in self._site_rows.values()),
-                "divergence_frac": (
-                    None if self.diverging is None else float(np.mean(self.diverging))
-                ),
-                "seconds": self._seconds,
-                "decision": None,
-            }
+        row, self._site_rows = _progress_row(
+            {k: self.samples[k] for k in self.sites}, self.diverging
         )
+        row.update(chunk=len(self._rows) + 1, seconds=self._seconds, decision=None, converged=None)
+        self._rows.append(row)
 
     def _decide(self, stop: Stop, *, warn: bool) -> bool:
         row = self._rows[-1]
@@ -244,7 +289,7 @@ class MCMCRun:
         if decision is None:
             return False
         self.converged, self.reason = bool(decision[0]), str(decision[1])
-        row["decision"] = self.reason
+        row["decision"], row["converged"] = self.reason, self.converged
         if warn and not self.converged:
             warnings.warn(
                 f"MCMC stopped without converging (reason={self.reason!r}, "
@@ -274,11 +319,19 @@ def sample_until(
     Non-convergence warns rather than raises.
 
     ``init_params`` is typically ``candidates.init_params(num_chains)``; ``None``
-    keeps numpyro's default initialisation.
+    keeps numpyro's default initialisation. If ``mcmc`` has already been warmed
+    up (``mcmc.post_warmup_state`` is set, for example by :func:`warmup_until`),
+    sampling continues from that state with no further warmup, and
+    ``init_params`` must be ``None``.
     """
     from jax import random
 
     _require_numpyro()
+    if init_params is not None and mcmc.post_warmup_state is not None:
+        raise ValueError(
+            "sample_until got init_params for an MCMC that is already warmed up; the chains "
+            "continue from mcmc.post_warmup_state. Pass init_params to the warmup instead."
+        )
     _check_ensemble_init(mcmc, init_params)
     run = MCMCRun(mcmc)
     run._sample(random.PRNGKey(int(seed)), init_params=init_params)
@@ -291,11 +344,12 @@ def run_mcmc(
     bm: Any,
     init: Candidates | None = None,
     *,
-    kernel: Any = None,
+    make_kernel: Callable[[], Any] | None = None,
     num_chains: int = 4,
     num_warmup: int = 200,
     chunk_samples: int = 200,
     stop: Stop | None = None,
+    warmup: Any = None,
     jitter: float = 0.05,
     seed: int = 0,
     chain_method: str = "vectorized",
@@ -304,14 +358,22 @@ def run_mcmc(
 ) -> MCMCRun:
     """Seeded chunked MCMC in one call. Exactly equivalent to::
 
-        mcmc = MCMC(
-            kernel or NUTS(bm.numpyro_model()),
-            num_warmup=num_warmup, num_samples=chunk_samples,
-            num_chains=num_chains, chain_method=chain_method, progress_bar=progress_bar,
-        )
+        def make_mcmc(n):
+            return MCMC(
+                make_kernel() if make_kernel else NUTS(bm.numpyro_model()),
+                num_warmup=n, num_samples=chunk_samples,
+                num_chains=num_chains, chain_method=chain_method, progress_bar=progress_bar,
+            )
+
         init_params = None if init is None else init.init_params(
             num_chains, jitter=jitter, seed=seed
         )
+        if warmup is None:
+            mcmc = make_mcmc(num_warmup)
+        else:  # e.g. warmup=WarmupRule(): grow num_warmup until good
+            mcmc = warmup_until(make_mcmc, num_warmup, warmup, init_params=init_params,
+                                seed=seed).mcmc
+            init_params = None
         return sample_until(mcmc, stop or StopRule(), init_params=init_params, seed=seed)
 
     Write those lines yourself to use another kernel's options, inspect the
@@ -322,17 +384,28 @@ def run_mcmc(
     _require_numpyro()
     from numpyro.infer import MCMC, NUTS
 
-    mcmc = MCMC(
-        kernel if kernel is not None else NUTS(bm.numpyro_model()),
-        num_warmup=int(num_warmup),
-        num_samples=int(chunk_samples),
-        num_chains=int(num_chains),
-        chain_method=chain_method,
-        progress_bar=progress_bar,
-    )
+    def make_mcmc(n: int) -> Any:
+        return MCMC(
+            make_kernel() if make_kernel is not None else NUTS(bm.numpyro_model()),
+            num_warmup=int(n),
+            num_samples=int(chunk_samples),
+            num_chains=int(num_chains),
+            chain_method=chain_method,
+            progress_bar=progress_bar,
+        )
+
     init_params = (
         None if init is None else init.init_params(int(num_chains), jitter=jitter, seed=seed)
     )
+    if warmup is None:
+        mcmc = make_mcmc(int(num_warmup))
+    else:
+        from summer4.epi.calibration.workflow.warmup import warmup_until
+
+        mcmc = warmup_until(
+            make_mcmc, int(num_warmup), warmup, init_params=init_params, seed=seed, warn=warn
+        ).mcmc
+        init_params = None
     return sample_until(
         mcmc,
         stop if stop is not None else StopRule(),
@@ -347,6 +420,7 @@ __all__ = [
     "MCMCRun",
     "Stop",
     "StopRule",
+    "replay",
     "run_mcmc",
     "sample_until",
 ]

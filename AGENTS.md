@@ -53,7 +53,10 @@ public API against it:
 
 The reference example is step 27's MCMC stage:
 `MCMC(NUTS(bm.numpyro_model()), ...)` + `Candidates.init_params` +
-`wf.sample_until` + `wf.StopRule`, with `wf.run_mcmc` as the convenience.
+`wf.warmup_until` + `wf.sample_until` + `wf.StopRule`, with `wf.run_mcmc` as
+the convenience. Where the underlying library forbids reusing an object (a
+numpyro kernel or `MCMC` cannot be re-warmed), take a small factory
+(`make_mcmc(num_warmup)`) rather than hiding construction behind strings.
 
 ## JAX is the primary runtime target
 

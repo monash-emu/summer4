@@ -1765,7 +1765,8 @@ The [standard checks](#exit-checks-every-step), plus `CW8`–`CW9` moved.
 chains begin there, the run stops at the first chunk that clears the
 `StopRule` (`MCMCRun.progress`), a budget stop warns and `extend` resumes it,
 the posterior matches the exact one, seeding saves chunks when warmup is
-short, and `run_mcmc` equals its documented expansion. The original claim —
+short, `run_mcmc` equals its documented expansion, and `warmup_until` finds
+the warmup knee of a two-rate model. The original claim —
 seeded converges in fewer chunks — does not hold at 50 warmup steps on this
 model; it holds at 0–10.
 
@@ -1777,7 +1778,15 @@ a resumable `wf.MCMCRun`, and `wf.StopRule` as the default stop callable (any
 one-call convenience over those pieces. The plan's `kind=` string,
 `SampleResult`, and built-in divergence retry are gone: a `max_divergence_frac`
 breach now ends the run with reason `"divergences"`, and the retry is the
-caller rebuilding `NUTS(..., target_accept_prob=0.95)`.
+caller rebuilding `NUTS(..., target_accept_prob=0.95)`. Two further pieces:
+`wf.warmup_until(make_mcmc, num_warmup, wf.WarmupRule())` grows NUTS warmup
+(doubling, positions carried over) until R-hat, step-size agreement,
+acceptance, divergences and tree depth pass on the second half of the warmup
+draws — it takes an `MCMC` factory because numpyro cannot re-warm one object —
+and `wf.replay(stop, samples, chunk)` applies a stop rule to existing draws.
+`run_mcmc(kernel=)` became `run_mcmc(make_kernel=)` (a kernel cannot be shared
+between `MCMC` objects) and gained `warmup=`. Every `MCMC.run` recompiles, so
+each chunk costs a compile: see `futureplans/mcmc-chunk-recompile.md`.
 
 ### Handoff
 

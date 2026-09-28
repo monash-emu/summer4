@@ -264,6 +264,201 @@ def test_ensemble_kernel_runs_and_rejects_duplicate_walkers() -> None:
     assert run.samples["infection"].shape == (4, 10)
 
 
+def test_replay_reproduces_live_decisions() -> None:
+    bm = _sir_bm()
+    init = _starts(bm, 2, seed=1).init_params(2, seed=1)
+    run = wf.sample_until(
+        _nuts_mcmc(bm, warmup=30, chunk=40),
+        wf.StopRule(rhat=1.2, ess=15, max_samples=400),
+        init_params=init,
+        seed=1,
+    )
+    replayed = wf.replay(
+        wf.StopRule(rhat=1.2, ess=15, max_samples=400),
+        run.samples,
+        40,
+        diverging=run.diverging,
+    )
+    live = run.progress
+    assert list(replayed.index) == list(live.index)
+    np.testing.assert_allclose(replayed["rhat_max"], live["rhat_max"])
+    np.testing.assert_allclose(replayed["ess_bulk_min"], live["ess_bulk_min"])
+    assert replayed["decision"].iloc[-1] == live["decision"].iloc[-1] == "diagnostics"
+    assert replayed["seconds"].isna().all()
+
+    # A stricter rule on the same draws, without sampling again.
+    strict = wf.replay(wf.StopRule(rhat=1.0, ess=10_000, max_samples=10_000), run.samples, 40)
+    assert len(strict) == run.chunks
+    assert strict["decision"].isna().all()
+
+
+def test_sample_until_rejects_init_params_after_warmup() -> None:
+    bm = _sir_bm()
+    mcmc = _nuts_mcmc(bm, warmup=10, chunk=10)
+    from jax import random
+
+    mcmc.warmup(random.PRNGKey(0))
+    init = _starts(bm, 2, seed=0).init_params(2)
+    with pytest.raises(ValueError, match="already warmed up"):
+        wf.sample_until(mcmc, wf.StopRule(rhat=None, ess=None), init_params=init)
+
+
+def _make_nuts(bm: BayesianModel, *, chunk: int = 20, chains: int = 4) -> Any:
+    return lambda n: _nuts_mcmc(bm, warmup=n, chunk=chunk, chains=chains)
+
+
+def test_warmup_until_doubles_until_the_check_passes() -> None:
+    bm = _sir_bm()
+    seen: list[int] = []
+
+    def passes_at_100(row: Mapping[str, Any]) -> tuple[str, ...]:
+        seen.append(int(row["num_warmup"]))
+        return () if row["num_warmup"] >= 100 else ("too short",)
+
+    warm = wf.warmup_until(_make_nuts(bm), 25, passes_at_100, seed=0)
+    assert seen == [25, 50, 100]
+    assert warm.converged and warm.reason == "passed"
+    assert warm.num_warmup == 100 and warm.mcmc.num_warmup == 100
+    assert warm.mcmc.post_warmup_state is not None
+    assert list(warm.progress["failed"].fillna("")) == ["too short", "too short", ""]
+    assert warm.samples["infection"].shape == (4, 100)
+    assert 0.5 < warm.progress["accept_mean"].iloc[-1] <= 1.0
+    assert warm.progress["target_accept_prob"].iloc[-1] == pytest.approx(0.8)
+
+    run = wf.sample_until(warm.mcmc, wf.StopRule(rhat=None, ess=None), seed=0)
+    assert run.mcmc is warm.mcmc
+    assert run.samples["infection"].shape == (4, 20)
+
+
+def test_warmup_until_carries_chain_positions_between_rounds() -> None:
+    from numpyro.infer import MCMC, NUTS
+
+    bm = _sir_bm()
+    inits: list[Any] = []
+
+    class RecordingMCMC(MCMC):  # type: ignore[misc]
+        def warmup(self, rng_key: Any, *args: Any, **kwargs: Any) -> None:
+            inits.append(kwargs.get("init_params"))
+            super().warmup(rng_key, *args, **kwargs)
+
+    def make(n: int) -> Any:
+        return RecordingMCMC(
+            NUTS(bm.numpyro_model()), num_warmup=n, num_samples=10, num_chains=2, progress_bar=False
+        )
+
+    def record_then_fail_once(row: Mapping[str, Any]) -> tuple[str, ...]:
+        return ("first round",) if row["round"] == 1 else ()
+
+    start = _starts(bm, 2, seed=0).init_params(2, jitter=0.0)
+    warm = wf.warmup_until(make, 20, record_then_fail_once, init_params=start, seed=0)
+    assert warm.rounds == 2
+    np.testing.assert_array_equal(np.asarray(inits[0]["infection"]), start["infection"])
+    assert not np.allclose(np.asarray(inits[1]["infection"]), start["infection"])
+
+
+def test_warmup_until_stops_at_max_warmup_and_warns() -> None:
+    bm = _sir_bm()
+    with pytest.warns(RuntimeWarning, match="max_warmup=100") as caught:
+        warm = wf.warmup_until(_make_nuts(bm), 25, lambda row: ("never",), max_warmup=100)
+    assert caught[0].filename == __file__
+    assert not warm.converged and warm.reason == "max_warmup"
+    assert list(warm.progress["num_warmup"]) == [25, 50, 100]
+    assert warm.mcmc.post_warmup_state is not None  # still usable for sampling
+
+
+def test_warmup_until_rejects_a_bad_factory() -> None:
+    bm = _sir_bm()
+    with pytest.raises(ValueError, match="num_warmup=25"):
+        wf.warmup_until(lambda n: _nuts_mcmc(bm, warmup=10, chunk=10), 25)
+    with pytest.raises(ValueError, match="growth"):
+        wf.warmup_until(_make_nuts(bm), 25, growth=1.0)
+
+
+def test_warmup_rule_criteria() -> None:
+    good = {
+        "num_warmup": 200,
+        "rhat_max": 1.01,
+        "step_size_ratio": 1.5,
+        "accept_mean": 0.78,
+        "target_accept_prob": 0.8,
+        "divergence_frac": 0.0,
+        "treedepth_frac": 0.0,
+    }
+    rule = wf.WarmupRule()
+    assert rule(good) == ()
+    assert rule({**good, "num_warmup": 50}) == ("min_warmup",)
+    assert rule({**good, "rhat_max": float("nan")}) == ("rhat",)
+    assert rule({**good, "step_size_ratio": 5.0}) == ("step_size_ratio",)
+    assert rule({**good, "accept_mean": 0.6}) == ("accept_prob",)
+    assert rule({**good, "divergence_frac": 0.05}) == ("divergences",)
+    assert rule({**good, "treedepth_frac": 0.2}) == ("treedepth",)
+    # Kernels without HMC statistics are checked on R-hat alone.
+    ensemble_row = {
+        **good,
+        "step_size_ratio": None,
+        "accept_mean": None,
+        "target_accept_prob": None,
+        "divergence_frac": None,
+        "treedepth_frac": None,
+    }
+    assert rule(ensemble_row) == ()
+    assert wf.WarmupRule(rhat=None, min_warmup=0)({**ensemble_row, "rhat_max": 9.0}) == ()
+
+
+def test_warmup_until_with_an_ensemble_kernel_checks_rhat_only() -> None:
+    from numpyro.infer import AIES, MCMC
+
+    bm = _sir_bm()
+
+    def make(n: int) -> Any:
+        return MCMC(
+            AIES(bm.numpyro_model()),
+            num_warmup=n,
+            num_samples=10,
+            num_chains=4,
+            chain_method="vectorized",
+            progress_bar=False,
+        )
+
+    warm = wf.warmup_until(
+        make,
+        20,
+        wf.WarmupRule(min_warmup=0, rhat=100.0),
+        init_params=_starts(bm, 2, seed=0).init_params(4, jitter=0.05),
+    )
+    row = warm.progress.iloc[-1]
+    assert warm.converged
+    assert row["step_size_ratio"] is None or np.isnan(row["step_size_ratio"])
+    assert row["accept_mean"] is None or np.isnan(row["accept_mean"])
+
+
+def test_run_mcmc_with_warmup_equals_its_documented_expansion() -> None:
+    bm = _sir_bm()
+    starts = _starts(bm, 2, seed=5)
+    rule = wf.WarmupRule(min_warmup=40, rhat=1.2)
+    stop = wf.StopRule(rhat=None, ess=None)
+    short = wf.run_mcmc(
+        bm,
+        starts,
+        num_chains=2,
+        num_warmup=20,
+        chunk_samples=15,
+        stop=stop,
+        warmup=rule,
+        seed=5,
+    )
+    warm = wf.warmup_until(
+        lambda n: _nuts_mcmc(bm, warmup=n, chunk=15),
+        20,
+        rule,
+        init_params=starts.init_params(2, jitter=0.05, seed=5),
+        seed=5,
+    )
+    long = wf.sample_until(warm.mcmc, stop, seed=5)
+    assert short.mcmc.num_warmup == warm.num_warmup
+    np.testing.assert_array_equal(short.samples["infection"], long.samples["infection"])
+
+
 def test_run_mcmc_equals_its_documented_expansion() -> None:
     bm = _sir_bm()
     starts = _starts(bm, 2, seed=4)

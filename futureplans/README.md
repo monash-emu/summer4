@@ -20,6 +20,9 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
 
 ## Notes
 
+- [`mcmc-chunk-recompile.md`](mcmc-chunk-recompile.md) — every `sample_until`
+  chunk pays a full XLA compile inside numpyro's `MCMC.run`.
+
 - [`state-ledgers-flow-integral.md`](state-ledgers-flow-integral.md) — opt-in
   exact flow accumulation via `State.ledgers` (post-hoc trapezoid is not the
   solver's own integral).

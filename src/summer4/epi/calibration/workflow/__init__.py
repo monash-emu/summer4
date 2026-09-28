@@ -13,6 +13,7 @@ from summer4.epi.calibration.workflow.mcmc import (
     MCMCRun,
     Stop,
     StopRule,
+    replay,
     run_mcmc,
     sample_until,
 )
@@ -22,6 +23,12 @@ from summer4.epi.calibration.workflow.optimize import (
     Optax,
     OptimizeResult,
     optimize,
+)
+from summer4.epi.calibration.workflow.warmup import (
+    WarmupCheck,
+    WarmupRule,
+    WarmupRun,
+    warmup_until,
 )
 
 __all__ = [
@@ -35,10 +42,15 @@ __all__ = [
     "StageRecord",
     "Stop",
     "StopRule",
+    "WarmupCheck",
+    "WarmupRule",
+    "WarmupRun",
     "evaluate",
     "lhs",
     "optimize",
     "prior_draws",
+    "replay",
     "run_mcmc",
     "sample_until",
+    "warmup_until",
 ]
