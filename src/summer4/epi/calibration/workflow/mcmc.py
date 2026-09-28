@@ -58,6 +58,7 @@ class SampleResult:
     chunks: int
     candidates: Candidates
     history: tuple[StageRecord, ...] = ()
+    progress: Any = None  # pandas DataFrame, one row per chunk
 
 
 def _kernel_cls(kind: str) -> Any:
@@ -249,6 +250,7 @@ def run_mcmc(
 
     acc_samples: dict[str, Any] | None = None
     acc_div: Any | None = None
+    progress_rows: list[dict[str, Any]] = []
     chunks = 0
     converged = False
     reason = "continuing"
@@ -274,8 +276,20 @@ def run_mcmc(
         frame = _diagnostics_frame(acc_samples, acc_div)
         n_samples = int(next(iter(acc_samples.values())).shape[1])
         elapsed = time.perf_counter() - t0
+        passed = _diagnostics_pass(stop, frame, acc_div)
+        progress_rows.append(
+            {
+                "chunk": chunks,
+                "samples": n_samples,
+                "rhat_max": float(np.max(np.asarray(frame["rhat"]))),
+                "ess_bulk_min": float(np.min(np.asarray(frame["ess_bulk"]))),
+                "divergence_frac": frame.attrs.get("divergence_frac"),
+                "seconds": elapsed,
+                "passed": passed,
+            }
+        )
 
-        if _diagnostics_pass(stop, frame, acc_div):
+        if passed:
             converged, reason = True, "diagnostics"
             break
         if n_samples >= int(stop.max_samples):
@@ -327,6 +341,8 @@ def run_mcmc(
         },
         seconds=seconds,
     )
+    import pandas as pd
+
     return SampleResult(
         idata=idata,
         diagnostics=frame,
@@ -335,6 +351,7 @@ def run_mcmc(
         chunks=chunks,
         candidates=cands,
         history=(record,),
+        progress=pd.DataFrame(progress_rows).set_index("chunk"),
     )
 
 

@@ -1760,8 +1760,13 @@ Cut from: `main`. Merges into: `main`.
 ### Exit checks
 
 The [standard checks](#exit-checks-every-step), plus `CW8`–`CW9` moved.
-**User gate:** `22-calibration-seeded-mcmc.ipynb` — seeded chains converge in
-fewer chunks than prior-seeded ones.
+**User gate:** `22-calibration-seeded-mcmc.ipynb` — an acceptance page with a
+*What to check* box per section: starts are the design's best points, seeded
+chains begin there, the run stops at the first chunk that clears the
+`StopRule` (`SampleResult.progress`), a budget stop warns, the posterior
+matches the exact one, and seeding saves chunks when warmup is short. The
+original claim — seeded converges in fewer chunks — does not hold at 50 warmup
+steps on this model; it holds at 0–10.
 
 ### Handoff
 

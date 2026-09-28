@@ -144,6 +144,14 @@ def test_stops_early_once_diagnostics_pass() -> None:
     assert res.reason == "diagnostics"
     assert res.chunks >= 1
     assert res.chunks < 10  # should not burn the full budget
+    # One progress row per chunk; only the final chunk clears the StopRule.
+    assert list(res.progress.index) == list(range(1, res.chunks + 1))
+    assert list(res.progress["samples"]) == [40 * k for k in range(1, res.chunks + 1)]
+    assert list(res.progress["passed"]) == [False] * (res.chunks - 1) + [True]
+    last = res.progress.iloc[-1]
+    assert last["rhat_max"] <= 1.2
+    assert last["ess_bulk_min"] >= 15
+    assert last["rhat_max"] == pytest.approx(float(res.diagnostics["rhat"].max()))
 
 
 def test_continues_then_hits_budget() -> None:
@@ -164,6 +172,9 @@ def test_continues_then_hits_budget() -> None:
     assert not res.converged
     assert res.reason == "max_samples"
     assert res.chunks >= 2
+    assert len(res.progress) == res.chunks
+    assert not res.progress["passed"].any()
+    assert res.progress["samples"].iloc[-1] >= 60
 
 
 def test_aies_rejects_duplicate_walkers_when_jitter_zero() -> None:
