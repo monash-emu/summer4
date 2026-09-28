@@ -1,6 +1,32 @@
 #!/bin/sh
 # Persist plan files from a merged branch into plans/.
 # Installed via `pixi run setup` (git config core.hooksPath .githooks).
-set -e
+#
+# Git runs hooks with the caller's PATH, which usually lacks the pixi
+# environment and often has no bare `python`. copy_merged_plans.py is
+# stdlib-only, so any Python 3 will do: prefer the project's pixi env (as
+# pre-commit does), then python3 / python, then `pixi run` as a last resort.
+# The merge has already happened, so never fail it — warn instead.
 ROOT="$(git rev-parse --show-toplevel)"
-python "$ROOT/scripts/copy_merged_plans.py"
+SCRIPT="$ROOT/scripts/copy_merged_plans.py"
+
+if [ -x "$ROOT/.pixi/envs/default/bin/python" ]; then
+  set -- "$ROOT/.pixi/envs/default/bin/python"
+elif command -v python3 >/dev/null 2>&1; then
+  set -- python3
+elif command -v python >/dev/null 2>&1; then
+  set -- python
+elif command -v pixi >/dev/null 2>&1; then
+  set -- pixi run --manifest-path "$ROOT/pixi.toml" python
+else
+  echo "post-merge: no Python found (pixi env, python3, python or pixi);" \
+    "merged *.plan.md files were NOT copied into plans/." \
+    "Run: python3 scripts/copy_merged_plans.py" >&2
+  exit 0
+fi
+
+if ! "$@" "$SCRIPT"; then
+  echo "post-merge: copy_merged_plans.py failed; merged *.plan.md files may be" \
+    "missing from plans/. Rerun: python3 scripts/copy_merged_plans.py" >&2
+fi
+exit 0

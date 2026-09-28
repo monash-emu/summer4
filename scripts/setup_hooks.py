@@ -30,7 +30,10 @@ def main() -> int:
         cwd=ROOT,
         check=True,
     )
-    print("Installed git hooks from .githooks (pre-commit: Black + cleared notebooks).")
+    print(
+        "Installed git hooks from .githooks "
+        "(pre-commit: Black + cleared notebooks; post-merge: copy merged plans)."
+    )
     return 0
 
 
