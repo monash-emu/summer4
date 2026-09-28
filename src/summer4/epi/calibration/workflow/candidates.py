@@ -70,6 +70,32 @@ class Candidates:
         chosen = order[:n_keep]
         return self.take(chosen)
 
+    def init_params(
+        self, num_chains: int, *, jitter: float = 0.05, seed: int = 0
+    ) -> dict[str, Any]:
+        """Unconstrained starts for ``numpyro.infer.MCMC.run(init_params=...)``.
+
+        Chain ``c`` starts from row ``c % len(self)``, so rows are cycled when
+        there are more chains than candidates. ``jitter`` adds
+        ``jitter * N(0, 1)`` noise in unconstrained space, which keeps cycled
+        rows distinct (ensemble kernels such as AIES require distinct walkers).
+        Each array has a leading chain axis.
+        """
+        if len(self) == 0:
+            raise ValueError("init_params() needs at least one candidate.")
+        n_chains = int(num_chains)
+        if n_chains < 1:
+            raise ValueError(f"init_params(num_chains) expects >= 1, got {n_chains}.")
+        rows = np.arange(n_chains) % len(self)
+        rng = np.random.default_rng(int(seed))
+        out: dict[str, Any] = {}
+        for name in self.sites:
+            z = np.asarray(self.z[name], dtype=np.float64)[rows]
+            if float(jitter) != 0.0:
+                z = z + float(jitter) * rng.normal(size=z.shape)
+            out[name] = z
+        return out
+
     def concat(self, other: Candidates) -> Candidates:
         """Stack two batches along the candidate axis."""
         if self.sites != other.sites:
