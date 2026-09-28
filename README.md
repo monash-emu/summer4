@@ -1,14 +1,16 @@
 # summer4
 
-JAX-native compartmental modelling. Current tag: **`v0.2.0a4`**. See
+JAX-native compartmental modelling. Current tag: **`v0.2.0a5`**. See
 [CHANGELOG.md](CHANGELOG.md) and [docs/releases/](docs/releases/) for what each
 release does.
 
 This release ships the compartment taxonomy (`Property`, `Trait`, a Kleene
 three-valued selector algebra, an immutable NumPy-backed `PropertyMap`) and a
 flows layer (`FlowModel`, `CompiledModel`, named transition/entry/exit flows, a
-JAX vector field), plus the TB-port surface: ageing sugar, generalised FOI,
-and `Output` / `OutputSet` algebra. Repeated `CompiledModel.run()` calls with
+JAX vector field), plus the TB-port surface (ageing sugar, generalised FOI,
+`Output` / `OutputSet` algebra) and Bayesian calibration: priors,
+likelihoods, `BayesianModel`, and a composable calibration workflow (designs,
+multi-start optimisation, seeded MCMC with automated warmup and run length). Repeated `CompiledModel.run()` calls with
 the same save plan reuse the Diffrax / equinox JIT cache, including when
 params are plain `{str: float}` dicts.
 
