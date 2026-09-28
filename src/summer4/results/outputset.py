@@ -447,4 +447,6 @@ class OutputSet:
             outputs=ordered,
             solver=result.solver,
             _state_pmap=result._state_pmap,
+            final_state=result.final_state,
+            final_time=result.final_time,
         )

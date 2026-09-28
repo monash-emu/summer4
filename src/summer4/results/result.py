@@ -34,17 +34,27 @@ class SolverInfo:
     result_code: int | None = None
     max_steps: int | None = None
     dense: bool | None = None
+    event_occurred: Any = None
 
     @property
     def ok(self) -> Any:
-        """Whether the solve finished successfully (``result_code == 0``).
+        """Whether the solve finished successfully or was stopped by its event.
 
-        Traced under ``jax.jit`` / ``vmap`` so calibration can branch on it.
-        Euler always reports success (``result_code`` 0 or absent).
+        ``result_code == 0``, or a diffrax ``Event`` terminated the solve
+        (:attr:`event`). Traced under ``jax.jit`` / ``vmap`` so calibration can
+        branch on it. Euler always reports success (``result_code`` 0 or absent).
         """
         if self.result_code is None:
             return True
-        return self.result_code == 0
+        ok = self.result_code == 0
+        if self.event_occurred is None:
+            return ok
+        return ok | self.event_occurred
+
+    @property
+    def event(self) -> Any:
+        """Whether a diffrax ``Event`` stopped the solve before ``t1`` (traced)."""
+        return False if self.event_occurred is None else self.event_occurred
 
     @property
     def message(self) -> str:
@@ -69,6 +79,7 @@ class SolverInfo:
             self.num_accepted_steps,
             self.num_rejected_steps,
             self.result_code,
+            self.event_occurred,
         )
         aux = (self.solver, self.max_steps, self.dense)
         return children, aux
@@ -76,7 +87,7 @@ class SolverInfo:
     @classmethod
     def tree_unflatten(cls, aux: Any, children: tuple[Any, ...]) -> SolverInfo:
         solver, max_steps, dense = aux
-        num_steps, num_accepted, num_rejected, result_code = children
+        num_steps, num_accepted, num_rejected, result_code, event_occurred = children
         return cls(
             solver=solver,
             num_steps=num_steps,
@@ -85,6 +96,7 @@ class SolverInfo:
             result_code=result_code,
             max_steps=max_steps,
             dense=dense,
+            event_occurred=event_occurred,
         )
 
 
@@ -97,6 +109,11 @@ class Result:
     there is no privileged ``.compartments`` / ``.flows`` namespace.
     Deliberately does not carry ``params`` or ``model``.
 
+    ``final_state`` / ``final_time`` are the state and time where the
+    integration ended — ``t1``, or where an event stopped it — so
+    ``model.run(params, result.final_state, t0=result.final_time, ...)``
+    continues the run.
+
     ``dense`` holds the solver's interpolation when the plan requested it.
     Calling :meth:`evaluate` requires a finite ``max_steps`` at solve time and
     allocates that many interpolation coefficients — strictly heavier than any
@@ -108,6 +125,8 @@ class Result:
     solver: SolverInfo | None = None
     dense: Any | None = None
     _state_pmap: Any = field(default=None, repr=False, compare=False)
+    final_state: Any | None = None
+    final_time: Any | None = None
 
     def __getitem__(self, key: str) -> Output:
         try:
@@ -187,7 +206,13 @@ class Result:
         times_list = [self.outputs[k].times.values for k in keys]
         epochs = tuple(self.outputs[k].times.epoch for k in keys)
         kinds = tuple(self.outputs[k].times.kind for k in keys)
-        flat_children: list[Any] = [self.times.values, self.solver, self.dense]
+        flat_children: list[Any] = [
+            self.times.values,
+            self.solver,
+            self.dense,
+            self.final_state,
+            self.final_time,
+        ]
         pmaps: list[Any] = []
         for key in keys:
             tr = self.outputs[key]
@@ -217,7 +242,7 @@ class Result:
         from summer4.jax.propertydata import PropertyData
 
         epoch, kind, keys, dims, pmaps, epochs, kinds, state_pmap = aux
-        time_values, solver, dense, *rest = children
+        time_values, solver, dense, final_state, final_time, *rest = children
         n = len(keys)
         vals = rest[:n]
         trace_times = rest[n:]
@@ -232,7 +257,15 @@ class Result:
                 values=values,
                 dims=dim,
             )
-        return cls(times=times, outputs=outputs, solver=solver, dense=dense, _state_pmap=state_pmap)
+        return cls(
+            times=times,
+            outputs=outputs,
+            solver=solver,
+            dense=dense,
+            _state_pmap=state_pmap,
+            final_state=final_state,
+            final_time=final_time,
+        )
 
 
 @dataclass(frozen=True, slots=True)

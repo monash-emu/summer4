@@ -1,8 +1,8 @@
 # API reference
 
 The complete public API of summer4. Every name below is exported from
-`summer4.__all__`; anything not listed here is internal and may change without
-notice.
+`summer4.__all__`, except the solver backends, which live in `summer4.solvers`;
+anything not listed here is internal and may change without notice.
 
 ```{toctree}
 :maxdepth: 2
@@ -122,6 +122,32 @@ merge observation times into a save plan for sparse calibration runs.
 prediction down to an aggregate series. :class:`~summer4.results.outputset.OutputSet`
 names a DAG of outputs; only its leaves enter the save plan, and
 :meth:`~summer4.results.result.Result.to_frame` stacks the evaluated names.
+
+### Solver backends (`summer4.solvers`)
+
+```{eval-rst}
+.. currentmodule:: summer4.solvers
+
+.. autosummary::
+   :toctree: generated
+   :nosignatures:
+
+   Diffrax
+   Euler
+   SolverBackend
+   SolveSpec
+   SolveOutput
+   resolve_solver
+```
+
+`run(solver=)` takes a backend. :class:`~summer4.solvers.Diffrax` holds your
+own diffrax solver, stepsize controller, adjoint, event and progress meter;
+:class:`~summer4.solvers.Euler` is summer4's fixed-step stepper; anything
+implementing :class:`~summer4.solvers.SolverBackend` works. Names such as
+`"dopri5"` and `rtol` / `atol` are sugar resolved by
+:func:`~summer4.solvers.resolve_solver`. A
+:class:`~summer4.results.result.Result` carries `final_state` / `final_time`,
+so a later `run` can continue from where one ended.
 
 ### Rates and adjustments
 
