@@ -7,6 +7,7 @@ from itertools import pairwise
 from pathlib import Path
 
 import pytest
+from scripts.composability_check import SURVEY, parse_packages
 from scripts.coverage_report import LEDGER, read_packages
 from scripts.roadmap_check import (
     BRANCH,
@@ -78,6 +79,7 @@ def test_every_cited_plan_exists(text: str) -> None:
 
 def test_work_packages_are_declared(text: str) -> None:
     declared = {pkg for pkg, _name, _closes in read_packages(LEDGER.read_text(encoding="utf-8"))}
+    declared |= {pkg for pkg, _closes in parse_packages(SURVEY.read_text(encoding="utf-8"))}
     for row in read_roadmap_block(text, "steps"):
         if row[WP] not in {"—", ""}:
             assert row[WP] in declared, f"step {row[STEP]} names undeclared {row[WP]}"

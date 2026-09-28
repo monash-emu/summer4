@@ -8,7 +8,7 @@ the runbook still hangs together:
 * the machine-readable blocks parse and use known statuses;
 * exactly one step is current, and the current-position block agrees with it;
 * every step cites a plan file that exists, a work package the coverage ledger
-  declares, and ledger row IDs that exist;
+  or the composability survey declares, and ledger or survey row IDs that exist;
 * every step has a section with the headings a low-context worker is told to
   read.
 
@@ -22,6 +22,7 @@ import re
 import sys
 from pathlib import Path
 
+from scripts.composability_check import SURVEY, parse_findings, parse_packages
 from scripts.coverage_report import LEDGER, PORTS, read_packages
 from scripts.coverage_report import read_block as read_ledger_block
 
@@ -83,7 +84,13 @@ def known_ids() -> set[str]:
     api = read_ledger_block(ledger_text, "api")
     workflow = read_ledger_block(ledger_text, "workflow")
     ports = read_ledger_block(PORTS.read_text(encoding="utf-8"), "ports", PORTS)
-    return {row[0] for row in api} | {row[0] for row in workflow} | {row[0] for row in ports}
+    survey = parse_findings(SURVEY.read_text(encoding="utf-8"))
+    return (
+        {row[0] for row in api}
+        | {row[0] for row in workflow}
+        | {row[0] for row in ports}
+        | {finding.id for finding in survey}
+    )
 
 
 def step_sections(text: str) -> dict[int, str]:
@@ -104,7 +111,9 @@ def check(text: str) -> list[str]:
     problems: list[str] = []
     rows = read_roadmap_block(text, "steps")
     ledger_text = LEDGER.read_text(encoding="utf-8")
-    declared = {pkg_id for pkg_id, _name, _closes in read_packages(ledger_text)}
+    declared = {pkg_id for pkg_id, _name, _closes in read_packages(ledger_text)} | {
+        pkg_id for pkg_id, _closes in parse_packages(SURVEY.read_text(encoding="utf-8"))
+    }
     ids = known_ids()
     sections = step_sections(text)
 
@@ -127,14 +136,14 @@ def check(text: str) -> list[str]:
         if row[WP] not in NONE_CELLS and row[WP] not in declared:
             problems.append(
                 f"Step {number} names work package {row[WP]!r}, "
-                "which the coverage ledger does not declare."
+                "which neither the coverage ledger nor the composability survey declares."
             )
         if not (ROOT / row[PLAN]).is_file():
             problems.append(f"Step {number} cites a missing plan file: {row[PLAN]}.")
         if row[CLOSES] not in NONE_CELLS:
             for row_id in row[CLOSES].split():
                 if row_id not in ids:
-                    problems.append(f"Step {number} closes unknown ledger ID {row_id!r}.")
+                    problems.append(f"Step {number} closes unknown ledger or survey ID {row_id!r}.")
 
         body = sections.get(number)
         if body is None:
