@@ -58,6 +58,13 @@ the convenience. Where the underlying library forbids reusing an object (a
 numpyro kernel or `MCMC` cannot be re-warmed), take a small factory
 (`make_mcmc(num_warmup)`) rather than hiding construction behind strings.
 
+Where the API falls short today is recorded in
+[`docs/evaluation/composability.md`](docs/evaluation/composability.md): findings
+`CX*` with severity and evidence, and ordered work packages `CP*`. Read it
+before designing or extending a public API, cite its IDs in plans and PRs, and
+set a finding to `done` in the commit that fixes it (`pixi run
+composability-write`, then `pixi run composability`).
+
 ## JAX is the primary runtime target
 
 Compiled models, the results query surface, and calibration losses are expected
@@ -231,6 +238,7 @@ pixi run test
 pixi run check-branch
 pixi run coverage
 pixi run roadmap
+pixi run composability
 ```
 
 `check-branch` fails if this branch changed `src/summer4` but did not also change `tests/` and (for new or changed public modules) `examples/notebooks/`, or if a feature branch has no plan under `plans/`.
