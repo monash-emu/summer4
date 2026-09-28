@@ -21,7 +21,9 @@ from summer4.epi.calibration.workflow.optimize import (
     CMAES,
     AutoTune,
     Optax,
-    OptimizeResult,
+    OptimizeBackend,
+    OptimizeMethod,
+    OptimizeRun,
     optimize,
 )
 from summer4.epi.calibration.workflow.warmup import (
@@ -38,7 +40,9 @@ __all__ = [
     "Decision",
     "MCMCRun",
     "Optax",
-    "OptimizeResult",
+    "OptimizeBackend",
+    "OptimizeMethod",
+    "OptimizeRun",
     "StageRecord",
     "Stop",
     "StopRule",

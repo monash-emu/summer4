@@ -326,7 +326,7 @@ def test_log_density_jittable_and_map_near_truth() -> None:
     _pot, _post, z = bm._ensure_potential()
     jitted = jax.jit(bm.log_density)
     np.testing.assert_allclose(float(jitted(z)), float(bm.log_density(z)), rtol=1e-5)
-    mapped = bm.find_map(steps=80, seed=0)
+    mapped = bm.find_map(steps=80, seed=0).best_params
     assert abs(float(mapped["infection"]) - 0.35) < 0.05
 
 
@@ -373,15 +373,15 @@ def test_nuts_recovers_infection_in_95_interval() -> None:
         y0=y0,
         run_kwargs=dict(t0=0.0, t1=80.0, dt=1.0, solver="euler"),
     )
-    idata = bm.sample(
-        kind="nuts",
+    run = bm.sample(
+        "nuts",
         num_warmup=80,
         num_samples=80,
         num_chains=1,
         seed=0,
         progress_bar=False,
     )
-    samples = np.asarray(idata.posterior["infection"]).reshape(-1)
+    samples = np.asarray(run.idata.posterior["infection"]).reshape(-1)
     lo, hi = np.quantile(samples, [0.025, 0.975])
     assert lo <= 0.35 <= hi
 
@@ -397,15 +397,15 @@ def test_aies_recovers_infection_in_95_interval() -> None:
         y0=y0,
         run_kwargs=dict(t0=0.0, t1=80.0, dt=1.0, solver="euler"),
     )
-    idata = bm.sample(
-        kind="aies",
+    run = bm.sample(
+        "aies",
         num_warmup=40,
         num_samples=40,
         num_chains=4,
         seed=1,
         progress_bar=False,
     )
-    samples = np.asarray(idata.posterior["infection"]).reshape(-1)
+    samples = np.asarray(run.idata.posterior["infection"]).reshape(-1)
     lo, hi = np.quantile(samples, [0.025, 0.975])
     assert lo <= 0.35 <= hi
 
@@ -422,15 +422,15 @@ def test_sa_recovers_infection_in_95_interval() -> None:
         run_kwargs=dict(t0=0.0, t1=80.0, dt=1.0, solver="euler"),
     )
     # SA wants a long warmup relative to NUTS; 500 is enough on this SIR.
-    idata = bm.sample(
-        kind="sa",
+    run = bm.sample(
+        "sa",
         num_warmup=500,
         num_samples=100,
         num_chains=1,
         seed=2,
         progress_bar=False,
     )
-    samples = np.asarray(idata.posterior["infection"]).reshape(-1)
+    samples = np.asarray(run.idata.posterior["infection"]).reshape(-1)
     lo, hi = np.quantile(samples, [0.025, 0.975])
     assert lo <= 0.35 <= hi
 

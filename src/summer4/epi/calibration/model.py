@@ -21,6 +21,12 @@ from summer4.results.targets import TargetSet
 SampleKind = Literal["nuts", "aies", "ess", "sa"]
 
 
+def _one_chunk(row: Mapping[str, Any]) -> tuple[bool, str]:
+    """Stop callable for :meth:`BayesianModel.sample`: stop after the first chunk."""
+    del row
+    return True, "num_samples"
+
+
 def _require_numpyro() -> Any:
     try:
         import numpyro  # type: ignore[import-untyped]
@@ -273,6 +279,19 @@ class BayesianModel:
             out[name] = transform.inv(jnp.asarray(params[name]))
         return out
 
+    def init_point(self, seed: int = 0) -> dict[str, Any]:
+        """numpyro's initial point for this model: an **unconstrained** site dict.
+
+        Drawn by ``numpyro.infer.util.initialize_model`` (``init_to_uniform``)
+        with ``PRNGKey(seed)``; the same space as :meth:`log_density`.
+        """
+        from jax import random
+        from numpyro.infer.util import initialize_model
+
+        _require_numpyro()
+        params_info = initialize_model(random.PRNGKey(int(seed)), self.numpyro_model())[0]
+        return dict(params_info.z)
+
     def find_map(
         self,
         init: Mapping[str, Any] | None = None,
@@ -280,48 +299,43 @@ class BayesianModel:
         steps: int = 500,
         optimizer: Any | None = None,
         seed: int = 0,
-    ) -> dict[str, Any]:
-        """Maximise the joint density with optax; return **constrained** params.
+    ) -> Any:
+        """Maximise the joint density from one start; return the :class:`OptimizeRun`.
 
-        ``init`` is an unconstrained site dict (same space as :meth:`log_density`).
-        When omitted, uses numpyro's ``initialize_model`` draw.
+        ``run.best_params`` is the MAP estimate as a dict of constrained values;
+        ``run.extend(steps)`` keeps optimising. ``optimizer`` is any optax
+        ``GradientTransformation`` (default ``optax.adam(0.05)``); ``init`` is an
+        unconstrained site dict (default :meth:`init_point`). Exactly::
+
+            z0 = model.init_point(seed) if init is None else init
+            start = wf.Candidates.from_z(model, {k: jnp.asarray(v)[None] for k, v in z0.items()})
+            return wf.optimize(model, start, method=wf.Optax(optimizer or optax.adam(0.05)),
+                               max_steps=steps, chunk_steps=min(50, steps), seed=seed)
         """
-        import jax
         import jax.numpy as jnp
-        from jax import random
+
+        from summer4.epi.calibration.workflow.candidates import Candidates
+        from summer4.epi.calibration.workflow.optimize import Optax, optimize
 
         optax = _require_optax()
-        potential_fn, postprocess_fn, default_z = self._ensure_potential(random.PRNGKey(seed))
-        if optimizer is None:
-            optimizer = optax.adam(0.05)
-
-        if init is None:
-            z0 = {k: jnp.array(v) for k, v in default_z.items()}
-        else:
-            z0 = {k: jnp.array(v) for k, v in dict(init).items()}
-
-        opt_state = optimizer.init(z0)
-
-        @jax.jit
-        def step(z: dict[str, Any], state: Any) -> tuple[dict[str, Any], Any, Any]:
-            loss, grads = jax.value_and_grad(potential_fn)(z)
-            updates, state = optimizer.update(grads, state, z)
-            z = optax.apply_updates(z, updates)
-            return z, state, loss
-
-        z = z0
-        state = opt_state
-        for _ in range(int(steps)):
-            z, state, _loss = step(z, state)
-
-        constrained = postprocess_fn(z)
-        names = {p.name for p in self._sites}
-        return {k: constrained[k] for k in names if k in constrained}
+        z0 = self.init_point(seed) if init is None else dict(init)
+        start = Candidates.from_z(self, {k: jnp.asarray(v)[None] for k, v in z0.items()})
+        steps = max(1, int(steps))
+        return optimize(
+            self,
+            start,
+            method=Optax(optax.adam(0.05) if optimizer is None else optimizer),
+            max_steps=steps,
+            chunk_steps=min(50, steps),
+            seed=seed,
+        )
 
     def sample(
         self,
-        kind: SampleKind | str = "nuts",
+        kernel: Any = "nuts",
         *,
+        init: Any = None,
+        stop: Any = None,
         num_warmup: int = 500,
         num_samples: int = 500,
         num_chains: int = 1,
@@ -330,38 +344,62 @@ class BayesianModel:
         progress_bar: bool = False,
         **kernel_kwargs: Any,
     ) -> Any:
-        """Run MCMC and return an ``arviz.InferenceData``.
+        """Run MCMC on this model and return the resumable :class:`MCMCRun`.
 
-        ``kind`` is ``"nuts"`` (default), ``"aies"``, ``"ess"``, or ``"sa"``
-        (numpyro's Sample Adaptive MCMC — gradient-free, like AIES/ESS a
-        stand-in for pymc ``DEMetropolisZ``). Chains use
-        ``chain_method="vectorized"`` by default so one compiled program
-        serves them all.
+        ``kernel`` is a numpyro kernel you built from :meth:`numpyro_model`
+        (``NUTS(model.numpyro_model(), target_accept_prob=0.95)``), or a name —
+        ``"nuts"``, ``"aies"``, ``"ess"``, ``"sa"`` — built with
+        ``**kernel_kwargs``. ``init`` seeds the chains from :class:`Candidates`.
+        With ``stop=None`` the run takes ``num_samples`` draws per chain in one
+        chunk; with a :class:`StopRule` it samples in chunks of ``num_samples``
+        until the rule decides. ``run.idata`` is the ``arviz.InferenceData``.
+        Exactly::
+
+            return wf.run_mcmc(model, init, make_kernel=lambda: kernel_object,
+                               num_chains=num_chains, num_warmup=num_warmup,
+                               chunk_samples=num_samples,
+                               stop=stop or (lambda row: (True, "num_samples")),
+                               seed=seed, chain_method=chain_method,
+                               progress_bar=progress_bar)
+
+        where ``kernel_object`` is ``kernel`` or the named kernel class applied to
+        ``model.numpyro_model()``.
         """
-        from jax import random
-        from numpyro.infer import AIES, ESS, MCMC, NUTS, SA  # type: ignore[import-untyped]
+        from numpyro.infer import AIES, ESS, NUTS, SA  # type: ignore[import-untyped]
+
+        from summer4.epi.calibration.workflow.mcmc import run_mcmc
 
         _require_numpyro()
-        az = _require_arviz()
-
-        key = str(kind).strip().lower()
-        kernels: dict[str, Any] = {"nuts": NUTS, "aies": AIES, "ess": ESS, "sa": SA}
-        if key not in kernels:
-            raise ValueError(f"Unknown sample kind {kind!r}; expected one of {sorted(kernels)}.")
-        if key in ("aies", "ess") and int(num_chains) < 2:
-            raise ValueError(f"{key} requires num_chains >= 2 (ensemble walkers).")
-
-        kernel = kernels[key](self.numpyro_model(), **kernel_kwargs)
-        mcmc = MCMC(
-            kernel,
-            num_warmup=int(num_warmup),
-            num_samples=int(num_samples),
+        if isinstance(kernel, str):
+            key = kernel.strip().lower()
+            kernels: dict[str, Any] = {"nuts": NUTS, "aies": AIES, "ess": ESS, "sa": SA}
+            if key not in kernels:
+                raise ValueError(
+                    f"Unknown kernel {kernel!r}; expected a numpyro kernel or one of "
+                    f"{sorted(kernels)}."
+                )
+            if key in ("aies", "ess") and int(num_chains) < 2:
+                raise ValueError(f"{key} requires num_chains >= 2 (ensemble walkers).")
+            kernel_object = kernels[key](self.numpyro_model(), **kernel_kwargs)
+        else:
+            if kernel_kwargs:
+                raise ValueError(
+                    "kernel keyword arguments are sugar for a named kernel; configure "
+                    f"the {type(kernel).__name__} you passed instead."
+                )
+            kernel_object = kernel
+        return run_mcmc(
+            self,
+            init,
+            make_kernel=lambda: kernel_object,
             num_chains=int(num_chains),
+            num_warmup=int(num_warmup),
+            chunk_samples=int(num_samples),
+            stop=_one_chunk if stop is None else stop,
+            seed=int(seed),
             chain_method=chain_method,
             progress_bar=progress_bar,
         )
-        mcmc.run(random.PRNGKey(int(seed)))
-        return az.from_numpyro(mcmc)
 
     def prior_names(self) -> tuple[str, ...]:
         """Names of every sampled site (top-level priors and hierarchical scales)."""
