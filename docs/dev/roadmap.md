@@ -74,11 +74,11 @@ Two conventions that are easy to get wrong:
 <!-- roadmap:current -->
 | Field | Value |
 | --- | --- |
-| Step | 30 |
-| Status | in-progress |
-| Branch | `feat/calib-composable` |
+| Step | 28 |
+| Status | next |
+| Branch | `feat/calib-outputs` |
 | Cut from | `main` |
-| Last landed | `feat/solve-composable` |
+| Last landed | `feat/calib-composable` |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -138,9 +138,9 @@ before step 15 lands. Each handoff below names its successor explicitly;
 | 25 | J | WP19 | `feat/calib-multistart` | `plans/calibration-toolkit.plan.md` | Step 25 | done | CW5 CW6 |
 | 26 | J | WP19 | `feat/calib-gradient-free` | `plans/calibration-toolkit.plan.md` | Step 26 | done | CW7 |
 | 27 | J | WP19 | `feat/calib-seeded-mcmc` | `plans/calibration-toolkit.plan.md` | Step 27 | done | CW8 CW9 |
-| 28 | J | WP19 | `feat/calib-outputs` | `plans/calibration-toolkit.plan.md` | Step 28 | planned | CW10 CW11 |
+| 28 | J | WP19 | `feat/calib-outputs` | `plans/calibration-toolkit.plan.md` | Step 28 | next | CW10 CW11 |
 | 29 | K | CP1 | `feat/solve-composable` | `plans/solve-composable.plan.md` | Whole | done | CX1 CX2 CX3 CX4 CX5 |
-| 30 | K | CP2 | `feat/calib-composable` | `plans/calib-composable.plan.md` | Whole | in-progress | CX16 CX17 CX18 CX19 CX24 |
+| 30 | K | CP2 | `feat/calib-composable` | `plans/calib-composable.plan.md` | Whole | done | CX16 CX17 CX18 CX19 CX24 |
 <!-- /roadmap:steps -->
 
 `Closes` lists row IDs of {doc}`../evaluation/tb-ports` (and, where a step moves
@@ -1864,7 +1864,23 @@ notebook composes every stage, plus two shorter compositions. It lands on
   `23-solve-backends.ipynb`. `CX1`–`CX5` are `done` in the composability
   survey.
 - Your gate notebook is **`25-calibration-workflow.ipynb`** (23 went to step
-  29, 24 to step 30). `BacksolveAdjoint` is refused by diffrax with summer4's
+  29, 24 to step 30).
+- **Step 30 (`CP2`) landed before you** (PR #45). The entry points now return
+  run objects: `wf.optimize` → `wf.OptimizeRun` (`.candidates`, `.loss_trace`,
+  `.best_params`, `.extend()`, cumulative `.history`); `bm.find_map` → the same
+  (use `.best_params` for the dict); `bm.sample(kernel, init=, stop=)` → the
+  `MCMCRun` (use `.idata`). `posterior_runs` accepts either run directly, and a
+  `Scenario(outputs=...)` asks forward runs for outputs the fit never saved
+  (notebook 24 section F: a six-month projection from four weeks of data).
+  The plan's `plot_chains(sample_result)` should take an `MCMCRun`;
+  `OptimizeResult` is now `OptimizeRun`. Plan: `plans/calib-composable.plan.md`.
+  User gate signed off: `24-calibration-entry-points.ipynb`.
+- **Write the gate on a model where the workflow matters.** The user rejected a
+  one-rate SIR for notebook 24: every start converged to one point, so nothing
+  was shown. Notebook 24 uses an SIR with both contact and recovery unknown,
+  fitted to early-growth data only — a ridge of near-equal fits whose
+  projections disagree. Reuse it for step 28's spaghetti plots and ribbons:
+  they are only interesting when the fits disagree. `BacksolveAdjoint` is refused by diffrax with summer4's
   `SaveAt(subs=...)`; use the default or `DirectAdjoint()` for gradients.
 
 ### Read first
@@ -1947,6 +1963,8 @@ you* anything that changes how step 28 calls `run` (for example
 ---
 
 ## Step 30 — `feat/calib-composable`
+
+**Landed:** feat/calib-composable, PR #45, 2026-09-29.
 
 ### Summary
 
