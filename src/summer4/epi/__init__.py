@@ -1,4 +1,4 @@
-"""Epidemiological modelling: mixing, force of infection, and calibration."""
+"""Epidemiological modelling: contact data, mixing, force of infection, and calibration."""
 
 from summer4.epi.calibration import (
     AggregateHow,
@@ -17,6 +17,7 @@ from summer4.epi.calibration import (
     Uniform,
     priors_from_frame,
 )
+from summer4.epi.contacts import ContactMatrix, Reciprocity, SettingStack, band_label
 from summer4.epi.infection import (
     FOIKind,
     ForceOfInfection,
@@ -31,6 +32,7 @@ __all__ = [
     "AggregateHow",
     "BayesianModel",
     "Beta",
+    "ContactMatrix",
     "FOIKind",
     "ForceOfInfection",
     "Gamma",
@@ -44,11 +46,14 @@ __all__ = [
     "Param",
     "Poisson",
     "PosteriorRuns",
+    "Reciprocity",
     "SampleKind",
     "Scenario",
+    "SettingStack",
     "TruncatedNormal",
     "Uniform",
     "apply_compartment_weights",
+    "band_label",
     "coerce_compartment_weights",
     "priors_from_frame",
 ]

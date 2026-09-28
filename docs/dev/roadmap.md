@@ -166,6 +166,7 @@ changed about them is recorded here instead, and overrides them.
 | `tb-ports-feature-completeness` | §10.3 | The object `posterior_runs` returns must keep **per-draw outputs** (for example `runs.samples(scenario, output)` → shape `(n, t)`), not only quantiles, so step 28 can draw spaghetti plots from it. Keep its draw input a plain unconstrained/constrained site dict internally so step 28 can pass `Candidates` as well as `InferenceData` |
 | `tb-ports-feature-completeness` | §10.4 | Notebook `12-calibration` / step-15 `14-calibration` are taken. Step 13 ships `examples/notebooks/17-priors-and-likelihoods.ipynb`. Step 15 uses the next free `18-calibration.ipynb` |
 | `tb-ports-feature-completeness` | §10.2 | No `preprocess=` on `BayesianModel`. Run-start work uses `FlowModel.compile(prepare_fn=...)`. `futureplans/wp10-preprocess-is-prepare-fn.md` is deleted |
+| `wp9-contact-surveys` | §17d, §17f, §18g | Notebook `15` is taken twice and `24`/`25` are claimed by steps 30 and 28: steps 17 and 18 share `examples/notebooks/26-contact-matrices.ipynb` (17 ships the loading sections, 18 extends it). No `ContactMatrix.plot` — no plotting seam exists (`CX9`); `to_pandas()` returns the square frame to plot with any backend |
 
 ---
 
@@ -1205,15 +1206,16 @@ survive `jit`, since intervention scaling is a calibration target.
 
 Follow `plans/wp9-contact-surveys.plan.md`, *Step 18*. Build constant index
 arrays at trace time and check with `jax.make_jaxpr` that jaxpr size does not
-grow with the number of age bands. Ship
-`examples/notebooks/15-contact-matrices.ipynb`.
+grow with the number of age bands. Extend
+`examples/notebooks/26-contact-matrices.ipynb`, which step 17 started with the
+loading and inspection sections.
 
 Cut from: `main`. Merges into: `main`.
 
 ### Exit checks
 
 The [standard checks](#exit-checks-every-step). **User gate:**
-`15-contact-matrices.ipynb`.
+`26-contact-matrices.ipynb`.
 
 ### Handoff
 

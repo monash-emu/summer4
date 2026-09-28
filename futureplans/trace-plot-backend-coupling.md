@@ -50,3 +50,13 @@ Either way, a test that sets the Plotly backend, calls `Output.plot()`, and
 asserts no matplotlib figure was created would pin the behaviour. Notebook call
 sites that pass matplotlib-only kwargs should move to
 `output.to_pandas().plot(...)`.
+
+## Not repeated in `ContactMatrix`
+
+Roadmap step 17 (`summer4.epi.contacts`) deliberately ships no
+`ContactMatrix.plot`, although `plans/wp9-contact-surveys.plan.md` §17d listed
+one: with no plotting seam, it would have been a second hard-coded plotting
+import. `ContactMatrix.to_pandas()` returns the square participant × contact
+frame, and callers plot it with their own backend
+(`cm.to_pandas().plot(kind="imshow")` under Plotly). When a seam exists, a
+`plot` built on it can be added to both.
