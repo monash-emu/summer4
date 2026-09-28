@@ -74,11 +74,11 @@ Two conventions that are easy to get wrong:
 <!-- roadmap:current -->
 | Field | Value |
 | --- | --- |
-| Step | 29 |
-| Status | in-progress |
-| Branch | `feat/solve-composable` |
+| Step | 28 |
+| Status | next |
+| Branch | `feat/calib-outputs` |
 | Cut from | `main` |
-| Last landed | `feat/calib-seeded-mcmc` |
+| Last landed | `feat/solve-composable` |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -137,8 +137,8 @@ before step 15 lands. Each handoff below names its successor explicitly;
 | 25 | J | WP19 | `feat/calib-multistart` | `plans/calibration-toolkit.plan.md` | Step 25 | done | CW5 CW6 |
 | 26 | J | WP19 | `feat/calib-gradient-free` | `plans/calibration-toolkit.plan.md` | Step 26 | done | CW7 |
 | 27 | J | WP19 | `feat/calib-seeded-mcmc` | `plans/calibration-toolkit.plan.md` | Step 27 | done | CW8 CW9 |
-| 28 | J | WP19 | `feat/calib-outputs` | `plans/calibration-toolkit.plan.md` | Step 28 | planned | CW10 CW11 |
-| 29 | K | CP1 | `feat/solve-composable` | `plans/solve-composable.plan.md` | Whole | in-progress | CX1 CX2 CX3 CX4 CX5 |
+| 28 | J | WP19 | `feat/calib-outputs` | `plans/calibration-toolkit.plan.md` | Step 28 | next | CW10 CW11 |
+| 29 | K | CP1 | `feat/solve-composable` | `plans/solve-composable.plan.md` | Whole | done | CX1 CX2 CX3 CX4 CX5 |
 <!-- /roadmap:steps -->
 
 `Closes` lists row IDs of {doc}`../evaluation/tb-ports` (and, where a step moves
@@ -1851,6 +1851,19 @@ notebook composes every stage, plus two shorter compositions. It lands on
   way. CW8–CW9 are `full` (9 of 11).
 - Seeding only saves chunks when warmup is short (notebook 22 section F); the
   step's original claim does not hold at 50 warmup steps on the one-rate model.
+- **Step 29 (`CP1`) landed before you** (PR #44). `run(solver=)` takes a
+  backend: `summer4.solvers.Diffrax(solver, stepsize_controller=, adjoint=,
+  event=, progress_meter=)`, `Euler()`, or any `SolverBackend`; names and
+  `rtol` / `atol` still work unchanged, so `bm.posterior_runs` and the
+  workflow stages need no edits. New and useful here: `Result.final_state` /
+  `final_time` (continue a run, e.g. from the end of a calibration window into
+  a scenario), `SolverInfo.event`, and `CompiledModel.assemble_result`. Plan:
+  `plans/solve-composable.plan.md`. User gate signed off:
+  `23-solve-backends.ipynb`. `CX1`–`CX5` are `done` in the composability
+  survey.
+- Your gate notebook is **`24-calibration-workflow.ipynb`** (23 went to step
+  29). `BacksolveAdjoint` is refused by diffrax with summer4's
+  `SaveAt(subs=...)`; use the default or `DirectAdjoint()` for gradients.
 
 ### Read first
 
@@ -1885,6 +1898,8 @@ for first.
 ---
 
 ## Step 29 — `feat/solve-composable`
+
+**Landed:** feat/solve-composable, PR #44, 2026-09-28.
 
 ### Summary
 
