@@ -9,6 +9,71 @@ Install from the matching git tag (see
 [Installation](docs/getting-started/installation.md)). Narrative release notes
 for the Sphinx site live under [docs/releases/](docs/releases/).
 
+## [0.2.0a5] — 2026-09-28
+
+Tag: [`v0.2.0a5`](https://github.com/monash-emu/summer4/releases/tag/v0.2.0a5)
+
+### Highlights
+
+- **Bayesian calibration (WP10).** Priors, target likelihoods, a
+  `BayesianModel` with MAP and numpyro MCMC, and posterior scenario runs close
+  the Kiribati and tb_macro calibration rows (`KI18`–`KI21`, `TM8`).
+- **Composable calibration workflow (WP19, steps 24–27).** `Candidates`, Latin
+  hypercube designs, batched scoring, multi-start Optax and CMA-ES
+  optimisation, and seeded MCMC with automated warmup and run length — each a
+  separate piece built on the underlying library's own objects
+  (`from summer4.epi.calibration import workflow as wf`).
+- **Solver safety.** Adaptive solves report failure through a traced
+  `SolverInfo.ok` instead of silently returning partial results.
+
+### Added
+
+- Priors (`Uniform`, `Normal`, `LogNormal`, `TruncatedNormal`, `Beta`,
+  `Gamma`) with `to_numpyro()`, `bounds` and `priors_from_frame`; target
+  likelihoods (`Normal`, `Poisson`, `NegativeBinomial`) with hierarchical
+  scales; traceable `TargetSet.log_likelihood` (`feat/epi-priors-likelihoods`,
+  PR #32).
+- `BayesianModel`: `log_density`, `find_map` (optax), `sample` (NUTS / AIES /
+  ESS / SA → arviz) (`feat/epi-sampling`, PR #33).
+- `BayesianModel.posterior_runs` with `Scenario`, per-draw samples, quantiles
+  and differences (`feat/epi-posterior-runs`, PR #34).
+- `wf.Candidates`, `wf.lhs`, `wf.prior_draws`, batched `wf.evaluate`,
+  `Prior.icdf`, `BayesianModel.constrain` / `unconstrain`
+  (`feat/calib-candidates`, PR #35).
+- `wf.optimize` with `wf.Optax` and `wf.AutoTune` (chunked, vmapped
+  multi-start with learning-rate probe, convergence freeze and restarts);
+  public `BayesianModel.potential_fn` (`feat/calib-multistart`, PR #37).
+- `wf.CMAES` gradient-free backend via evosax, behind a new `gradient-free`
+  extra (`feat/calib-gradient-free`, PR #38).
+- Seeded chunked MCMC (`feat/calib-seeded-mcmc`, PR #39): the caller builds
+  numpyro's `MCMC`, and summer4 adds `Candidates.init_params`,
+  `wf.warmup_until` + `wf.WarmupRule` (grow NUTS warmup until R-hat, step
+  size agreement, acceptance, divergences and tree depth pass),
+  `wf.sample_until` → resumable `wf.MCMCRun` with a per-chunk `progress`
+  record, `wf.StopRule`, `wf.replay`, and `wf.run_mcmc` as a one-call
+  convenience.
+- `SolverInfo.ok` for adaptive solves; `run(..., throw=)` passes through to
+  diffrax (`feat/solver-safety`, PR #28).
+- TB-scale Kiribati-shaped benchmark baseline in `benchmarks/`
+  (`feat/tb-scale-bench`, PR #27).
+
+### Changed
+
+- `compile(fuse_compartment_updates=True)` (the default) fuses per-flow `dy`
+  scatters into one sparse scatter-add (`feat/fuse-incidence-scatter`, PR #31).
+- Default `max_steps` is derived from `(t1 - t0) / dt` with headroom instead of
+  a fixed 4096 (`feat/solver-safety`).
+- `MixingMatrix` defaults to `check_reciprocal=False`; the reciprocity check
+  is vmap-safe, and `MixingMatrix.validate` runs it on the host
+  (`feat/solver-safety`).
+- `AGENTS.md` records composability as a project-wide design goal.
+
+### Known issues
+
+- Every `MCMC.run` call, and so every `wf.sample_until` chunk, pays a full XLA
+  compile inside numpyro. Prefer large chunks
+  (`futureplans/mcmc-chunk-recompile.md`).
+
 ## [0.2.0a4] — 2026-09-22
 
 Tag: [`v0.2.0a4`](https://github.com/monash-emu/summer4/releases/tag/v0.2.0a4)

@@ -1,14 +1,15 @@
 # summer4 documentation
 
 **summer4** is a JAX-native compartmental modelling platform under active
-development. The current tag (`0.2.0a4`) ships the **compartment taxonomy**, a
+development. The current tag (`0.2.0a5`) ships the **compartment taxonomy**, a
 **flows** layer, a **results** layer (`Output` / `OutputSet`), **epidemiology**
-(`summer4.epi`, including generalised FOI), and **time-varying** rates
+(`summer4.epi`, including generalised FOI), **Bayesian calibration**
+(`summer4.epi.calibration` and its composable `workflow`), and **time-varying** rates
 (`summer4.timevarying` / `summer4.data`): declare compartments, attach named
 flows (including infection and mixing), compile to a vector field, and `run()`
 to a queryable `Result`. Repeated `run()` calls with the same save plan reuse
 the Diffrax / equinox JIT cache — including with plain `{str: float}` params.
-See {doc}`releases/v0.2.0a4` for the TB-port surface on this tag.
+See {doc}`releases/v0.2.0a5` for what this tag adds.
 
 ```{admonition} Read this first — scope of the current release
 :class: important
@@ -22,7 +23,10 @@ The public API of summer4 today is the taxonomy (`Property`, `Trait`,
 `MixingMatrix`), and time-varying helpers (`Time()`, `summer4.timevarying`,
 `summer4.data`). Initial population / population split (WP3) is applied
 (`InitialPopulation` / `Split` / `CompiledModel.initial_state`). Bayesian
-calibration (likelihoods / priors; WP10) is still ahead.
+calibration (WP10) is applied (`summer4.epi.calibration`: priors,
+likelihoods, `BayesianModel`, posterior runs), as are workflow steps 24–27
+(`workflow`: designs, optimisation, seeded MCMC); sampled-output plots
+(step 28) are still ahead.
 
 Material from the [summer2 documentation](https://summer2.readthedocs.io) and
 the [summer textbook](https://github.com/monash-emu/summer-textbook) that needs
