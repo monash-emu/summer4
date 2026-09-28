@@ -7,6 +7,7 @@ feature set**, and **how well is it likely to serve its users**.
 :maxdepth: 2
 
 coverage-ledger
+composability
 feature-completeness
 docs-coverage
 user-satisfaction
