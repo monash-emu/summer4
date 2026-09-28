@@ -1,19 +1,33 @@
-"""Seeded MCMC with automated run length (step 27)."""
+"""Chunked MCMC with an automated stop (step 27).
+
+The sampler is plain numpyro: build ``numpyro.infer.MCMC`` around any kernel,
+seed it with :meth:`Candidates.init_params`, and hand it to
+:func:`sample_until`. summer4 owns only the chunk loop, the stop decision and
+the per-chunk record. :func:`run_mcmc` is the one-call convenience built from
+those pieces.
+"""
 
 from __future__ import annotations
 
 import time
 import warnings
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Any, Literal
+from pathlib import Path
+from typing import Any
 
-import jax.numpy as jnp
 import numpy as np
-from jax import random
 
 from summer4.epi.calibration.workflow.candidates import Candidates, StageRecord
 
-SampleKind = Literal["nuts", "aies", "ess", "sa"]
+# Warnings point at the caller's line, whichever public entry point was used.
+_PACKAGE_DIR = str(Path(__file__).resolve().parent)
+
+Decision = tuple[bool, str]
+"""``(converged, reason)`` returned by a stop callable when sampling should end."""
+
+Stop = Callable[[Mapping[str, Any]], Decision | None]
+"""Called with the latest :attr:`MCMCRun.progress` row; ``None`` means keep going."""
 
 
 def _require_numpyro() -> Any:
@@ -21,24 +35,28 @@ def _require_numpyro() -> Any:
         import numpyro  # type: ignore[import-untyped]
     except ImportError as exc:  # pragma: no cover
         raise ImportError(
-            "wf.run_mcmc requires the calibration extra: pip install summer4[calibration]"
+            "wf.sample_until requires the calibration extra: pip install summer4[calibration]"
         ) from exc
     return numpyro
 
 
-def _require_arviz() -> Any:
+def _require_pandas() -> Any:
     try:
-        import arviz  # type: ignore[import-untyped]
+        import pandas as pd  # type: ignore[import-untyped]
     except ImportError as exc:  # pragma: no cover
-        raise ImportError(
-            "wf.run_mcmc requires arviz (calibration extra): pip install summer4[calibration]"
-        ) from exc
-    return arviz
+        raise ImportError("MCMCRun.progress requires pandas: pip install summer4[pandas]") from exc
+    return pd
 
 
 @dataclass(frozen=True, slots=True)
 class StopRule:
-    """Stopping criteria for chunked MCMC (``None`` disables a criterion)."""
+    """Default stop callable for :func:`sample_until` (``None`` disables a criterion).
+
+    Checked after every chunk, in this order: too many divergences ends the run
+    unconverged (``"divergences"``); R-hat and ESS both passing ends it converged
+    (``"diagnostics"``); otherwise a spent draw or time budget ends it
+    unconverged (``"max_samples"`` / ``"max_seconds"``).
+    """
 
     rhat: float | None = 1.05
     ess: float | None = 100.0
@@ -46,317 +64,289 @@ class StopRule:
     max_samples: int = 5000
     max_seconds: float | None = None
 
-
-@dataclass(frozen=True, slots=True)
-class SampleResult:
-    """Outcome of :func:`run_mcmc`."""
-
-    idata: Any
-    diagnostics: Any  # pandas DataFrame
-    converged: bool
-    reason: str
-    chunks: int
-    candidates: Candidates
-    history: tuple[StageRecord, ...] = ()
-    progress: Any = None  # pandas DataFrame, one row per chunk
-
-
-def _kernel_cls(kind: str) -> Any:
-    from numpyro.infer import AIES, ESS, NUTS, SA  # type: ignore[import-untyped]
-
-    kernels = {"nuts": NUTS, "aies": AIES, "ess": ESS, "sa": SA}
-    if kind not in kernels:
-        raise ValueError(f"Unknown sample kind {kind!r}; expected one of {sorted(kernels)}.")
-    return kernels[kind]
-
-
-def _seed_init_params(
-    init: Candidates | None,
-    *,
-    sites: tuple[str, ...],
-    num_chains: int,
-    jitter: float,
-    seed: int,
-    kind: str,
-) -> dict[str, Any] | None:
-    if init is None:
+    def __call__(self, row: Mapping[str, Any]) -> Decision | None:
+        divergence = row.get("divergence_frac")
+        if (
+            self.max_divergence_frac is not None
+            and divergence is not None
+            and float(divergence) > float(self.max_divergence_frac)
+        ):
+            return False, "divergences"
+        rhat_ok = self.rhat is None or float(row["rhat_max"]) <= float(self.rhat)
+        ess_ok = self.ess is None or float(row["ess_bulk_min"]) >= float(self.ess)
+        if rhat_ok and ess_ok:
+            return True, "diagnostics"
+        if int(row["samples"]) >= int(self.max_samples):
+            return False, "max_samples"
+        if self.max_seconds is not None and float(row["seconds"]) >= float(self.max_seconds):
+            return False, "max_seconds"
         return None
-    if len(init) == 0:
-        raise ValueError("run_mcmc init Candidates is empty.")
-    rng = np.random.default_rng(int(seed) + 17)
-    stacked: dict[str, list[Any]] = {name: [] for name in sites}
-    for c in range(int(num_chains)):
-        i = c % len(init)
-        for name in sites:
-            z = np.asarray(init.z[name][i], dtype=np.float64)
-            if float(jitter) != 0.0:
-                z = z + float(jitter) * rng.normal(size=np.shape(z))
-            stacked[name].append(z)
-    out = {name: jnp.asarray(np.stack(vals, axis=0)) for name, vals in stacked.items()}
-    if kind in ("aies", "ess") and float(jitter) == 0.0:
-        # Distinct unconstrained starts required for ensemble walkers.
-        for name in sites:
-            rows = np.asarray(out[name])
-            # Compare flattened rows
-            flat = rows.reshape(rows.shape[0], -1)
-            if len({tuple(np.round(r, decimals=8)) for r in flat}) < num_chains:
-                raise ValueError(
-                    f"{kind} requires distinct init walkers; got duplicates with jitter=0."
-                )
-    return out
 
 
-def _concat_chain_draw(acc: dict[str, Any] | None, chunk: dict[str, Any]) -> dict[str, Any]:
-    if acc is None:
-        return {k: np.asarray(v) for k, v in chunk.items()}
-    return {k: np.concatenate([acc[k], np.asarray(chunk[k])], axis=1) for k in chunk}
-
-
-def _diagnostics_frame(samples: dict[str, Any], diverging: Any | None) -> Any:
+def _site_diagnostics(samples: Mapping[str, np.ndarray]) -> dict[str, tuple[float, float]]:
     from numpyro.diagnostics import (  # type: ignore[import-untyped]
         effective_sample_size,
         split_gelman_rubin,
     )
 
-    try:
-        import pandas as pd  # type: ignore[import-untyped]
-    except ImportError as exc:  # pragma: no cover
-        raise ImportError(
-            "SampleResult.diagnostics requires pandas: pip install summer4[pandas]"
-        ) from exc
-
-    rows: list[dict[str, Any]] = []
+    out: dict[str, tuple[float, float]] = {}
     for name, arr in samples.items():
         x = np.asarray(arr)
-        # (chain, draw, ...) — collapse trailing dims for scalar diagnostics
         if x.ndim > 2:
+            # (chain, draw, ...) — one row per site, averaged over trailing dims
             x = x.reshape(x.shape[0], x.shape[1], -1)
-            # report mean over trailing; still one row per site
-            rhat = float(np.mean(split_gelman_rubin(x)))
-            ess = float(np.mean(effective_sample_size(x)))
+            out[name] = (
+                float(np.mean(split_gelman_rubin(x))),
+                float(np.mean(effective_sample_size(x))),
+            )
         else:
-            rhat = float(split_gelman_rubin(x))
-            ess = float(effective_sample_size(x))
-        rows.append({"site": name, "rhat": rhat, "ess_bulk": ess, "ess_tail": ess})
-    frame = pd.DataFrame(rows).set_index("site")
-    if diverging is not None:
-        d = np.asarray(diverging)
-        frame.attrs["divergence_frac"] = float(np.mean(d)) if d.size else 0.0
-    return frame
+            out[name] = (float(split_gelman_rubin(x)), float(effective_sample_size(x)))
+    return out
 
 
-def _diagnostics_pass(stop: StopRule, frame: Any, diverging: Any | None) -> bool:
-    if stop.rhat is not None and float(np.max(np.asarray(frame["rhat"]))) > float(stop.rhat):
-        return False
-    if stop.ess is not None and float(np.min(np.asarray(frame["ess_bulk"]))) < float(stop.ess):
-        return False
-    return not (
-        stop.max_divergence_frac is not None
-        and diverging is not None
-        and float(np.mean(np.asarray(diverging))) > float(stop.max_divergence_frac)
+def _records_divergences(mcmc: Any) -> bool:
+    from numpyro.infer import HMC  # type: ignore[import-untyped]
+
+    return isinstance(mcmc.sampler, HMC)
+
+
+def _check_ensemble_init(mcmc: Any, init_params: Mapping[str, Any] | None) -> None:
+    from numpyro.infer.ensemble import EnsembleSampler  # type: ignore[import-untyped]
+
+    if init_params is None or not isinstance(mcmc.sampler, EnsembleSampler):
+        return
+    flat = np.concatenate(
+        [np.asarray(v).reshape(np.shape(v)[0], -1) for v in init_params.values()], axis=1
     )
+    if len({tuple(np.round(r, decimals=8)) for r in flat}) < flat.shape[0]:
+        raise ValueError(
+            f"{type(mcmc.sampler).__name__} needs distinct walkers; init_params repeats a "
+            "row (pass jitter > 0 to Candidates.init_params)."
+        )
+
+
+class MCMCRun:
+    """A resumable chunked MCMC run: the numpyro ``MCMC`` plus its per-chunk record.
+
+    Built by :func:`sample_until`. ``mcmc`` is the caller's own object, so its
+    kernel, adapted step size and last state are all reachable. :meth:`extend`
+    samples further chunks from where the run stopped.
+    """
+
+    def __init__(self, mcmc: Any) -> None:
+        self.mcmc = mcmc
+        self.sites: tuple[str, ...] = ()
+        self.samples: dict[str, np.ndarray] = {}
+        self.diverging: np.ndarray | None = None
+        self.converged = False
+        self.reason = "not started"
+        self._rows: list[dict[str, Any]] = []
+        self._site_rows: dict[str, tuple[float, float]] = {}
+        self._seconds = 0.0
+        self._divergences = _records_divergences(mcmc)
+
+    @property
+    def chunks(self) -> int:
+        """Number of chunks sampled so far."""
+        return len(self._rows)
+
+    @property
+    def progress(self) -> Any:
+        """One row per chunk: draws per chain, worst R-hat, smallest ESS, divergences, seconds.
+
+        Diagnostics cover every draw so far, not just that chunk. ``decision`` is
+        the stop callable's reason on the chunk that ended a call, else ``None``.
+        """
+        pd = _require_pandas()
+        return pd.DataFrame(self._rows).set_index("chunk")
+
+    @property
+    def diagnostics(self) -> Any:
+        """Split R-hat and bulk ESS per site over every draw so far."""
+        pd = _require_pandas()
+        frame = pd.DataFrame(
+            [{"site": k, "rhat": v[0], "ess_bulk": v[1]} for k, v in self._site_rows.items()]
+        )
+        return frame.set_index("site")
+
+    @property
+    def idata(self) -> Any:
+        """Every post-warmup draw as ``arviz.InferenceData``."""
+        try:
+            import arviz as az  # type: ignore[import-untyped]
+        except ImportError as exc:  # pragma: no cover
+            raise ImportError(
+                "MCMCRun.idata requires arviz (calibration extra): pip install summer4[calibration]"
+            ) from exc
+        groups: dict[str, Any] = {"posterior": dict(self.samples)}
+        if self.diverging is not None:
+            groups["sample_stats"] = {"diverging": self.diverging}
+        return az.from_dict(groups)
+
+    def candidates(self, bm: Any) -> Candidates:
+        """Each chain's latest draw as :class:`Candidates`, for re-seeding another stage."""
+        last = {name: np.asarray(self.samples[name])[:, -1] for name in self.sites}
+        record = StageRecord(
+            stage="sample_until",
+            settings={"chunks": self.chunks, "converged": self.converged, "reason": self.reason},
+            seconds=self._seconds,
+        )
+        base = Candidates.from_params(bm, last)
+        return Candidates(sites=base.sites, z=base.z, params=base.params, history=(record,))
+
+    def extend(self, stop: Stop, *, warn: bool = True) -> MCMCRun:
+        """Sample at least one more chunk from the last state, until ``stop`` decides.
+
+        Mutates and returns ``self``. ``stop`` sees cumulative totals, so a
+        ``StopRule(max_samples=...)`` budget counts draws from earlier calls.
+        """
+        while True:
+            self.mcmc.post_warmup_state = self.mcmc.last_state
+            self._sample(self.mcmc.post_warmup_state.rng_key, init_params=None)
+            if self._decide(stop, warn=warn):
+                return self
+
+    def _sample(self, rng_key: Any, *, init_params: Any) -> None:
+        extra = ("diverging",) if self._divergences else ()
+        start = time.perf_counter()
+        self.mcmc.run(rng_key, init_params=init_params, extra_fields=extra)
+        chunk = self.mcmc.get_samples(group_by_chain=True)
+        if not self.sites:
+            self.sites = tuple(chunk)
+        for name in self.sites:
+            new = np.asarray(chunk[name])
+            old = self.samples.get(name)
+            self.samples[name] = new if old is None else np.concatenate([old, new], axis=1)
+        if self._divergences:
+            div = np.asarray(self.mcmc.get_extra_fields(group_by_chain=True)["diverging"])
+            self.diverging = (
+                div if self.diverging is None else np.concatenate([self.diverging, div], axis=1)
+            )
+        self._seconds += time.perf_counter() - start
+        self._site_rows = _site_diagnostics({k: self.samples[k] for k in self.sites})
+        self._rows.append(
+            {
+                "chunk": len(self._rows) + 1,
+                "samples": int(next(iter(self.samples.values())).shape[1]),
+                "rhat_max": max(v[0] for v in self._site_rows.values()),
+                "ess_bulk_min": min(v[1] for v in self._site_rows.values()),
+                "divergence_frac": (
+                    None if self.diverging is None else float(np.mean(self.diverging))
+                ),
+                "seconds": self._seconds,
+                "decision": None,
+            }
+        )
+
+    def _decide(self, stop: Stop, *, warn: bool) -> bool:
+        row = self._rows[-1]
+        decision = stop(dict(row))
+        if decision is None:
+            return False
+        self.converged, self.reason = bool(decision[0]), str(decision[1])
+        row["decision"] = self.reason
+        if warn and not self.converged:
+            warnings.warn(
+                f"MCMC stopped without converging (reason={self.reason!r}, "
+                f"chunks={self.chunks}).",
+                RuntimeWarning,
+                skip_file_prefixes=(_PACKAGE_DIR,),
+            )
+        return True
+
+
+def sample_until(
+    mcmc: Any,
+    stop: Stop,
+    *,
+    init_params: Mapping[str, Any] | None = None,
+    seed: int = 0,
+    warn: bool = True,
+) -> MCMCRun:
+    """Run a numpyro ``MCMC`` in chunks until ``stop`` decides.
+
+    ``mcmc`` is built by the caller around any kernel; its ``num_warmup`` is the
+    warmup and its ``num_samples`` is the chunk size. After each chunk, split
+    R-hat and bulk ESS are recomputed over every draw so far (with
+    ``numpyro.diagnostics``) and passed to ``stop`` as one :attr:`MCMCRun.progress`
+    row. ``stop`` is a :class:`StopRule` or any callable returning
+    ``(converged, reason)`` to end the run, or ``None`` to continue.
+    Non-convergence warns rather than raises.
+
+    ``init_params`` is typically ``candidates.init_params(num_chains)``; ``None``
+    keeps numpyro's default initialisation.
+    """
+    from jax import random
+
+    _require_numpyro()
+    _check_ensemble_init(mcmc, init_params)
+    run = MCMCRun(mcmc)
+    run._sample(random.PRNGKey(int(seed)), init_params=init_params)
+    if run._decide(stop, warn=warn):
+        return run
+    return run.extend(stop, warn=warn)
 
 
 def run_mcmc(
     bm: Any,
     init: Candidates | None = None,
     *,
-    kind: SampleKind | str = "nuts",
+    kernel: Any = None,
     num_chains: int = 4,
     num_warmup: int = 200,
     chunk_samples: int = 200,
-    stop: StopRule | None = None,
+    stop: Stop | None = None,
     jitter: float = 0.05,
     seed: int = 0,
     chain_method: str = "vectorized",
     progress_bar: bool = False,
-    target_accept_prob: float = 0.8,
-    max_retries: int = 2,
-) -> SampleResult:
-    """Seeded, chunked MCMC with automated stopping.
+    warn: bool = True,
+) -> MCMCRun:
+    """Seeded chunked MCMC in one call. Exactly equivalent to::
 
-    Builds ``numpyro.infer.MCMC`` from ``bm.numpyro_model()`` (does not call
-    :meth:`BayesianModel.sample`). Diagnostics use ``numpyro.diagnostics``,
-    not arviz. Non-convergence warns rather than raises.
+        mcmc = MCMC(
+            kernel or NUTS(bm.numpyro_model()),
+            num_warmup=num_warmup, num_samples=chunk_samples,
+            num_chains=num_chains, chain_method=chain_method, progress_bar=progress_bar,
+        )
+        init_params = None if init is None else init.init_params(
+            num_chains, jitter=jitter, seed=seed
+        )
+        return sample_until(mcmc, stop or StopRule(), init_params=init_params, seed=seed)
+
+    Write those lines yourself to use another kernel's options, inspect the
+    ``MCMC`` object, or retry with a new kernel (for example
+    ``NUTS(bm.numpyro_model(), target_accept_prob=0.95)`` after a
+    ``"divergences"`` stop).
     """
-    from numpyro.infer import MCMC
-
     _require_numpyro()
-    az = _require_arviz()
-    if stop is None:
-        stop = StopRule()
+    from numpyro.infer import MCMC, NUTS
 
-    kind_key = str(kind).strip().lower()
-    n_chains = int(num_chains)
-    if kind_key in ("aies", "ess") and n_chains < 2:
-        raise ValueError(f"{kind_key} requires num_chains >= 2.")
-
-    sites = tuple(bm.prior_names())
-    init_params = _seed_init_params(
-        init,
-        sites=sites,
-        num_chains=n_chains,
-        jitter=float(jitter),
-        seed=int(seed),
-        kind=kind_key,
+    mcmc = MCMC(
+        kernel if kernel is not None else NUTS(bm.numpyro_model()),
+        num_warmup=int(num_warmup),
+        num_samples=int(chunk_samples),
+        num_chains=int(num_chains),
+        chain_method=chain_method,
+        progress_bar=progress_bar,
     )
-
-    t0 = time.perf_counter()
-    accept_schedule = [0.8, 0.9, 0.95]
-    # Find starting index nearest to requested target_accept_prob
-    start_idx = int(np.argmin(np.abs(np.asarray(accept_schedule) - float(target_accept_prob))))
-    accept = float(accept_schedule[start_idx])
-    warmup = int(num_warmup)
-    retries = 0
-
-    def _build_mcmc(warmup_n: int, accept_p: float) -> Any:
-        kernel_kwargs: dict[str, Any] = {}
-        if kind_key == "nuts":
-            kernel_kwargs["target_accept_prob"] = float(accept_p)
-        kernel = _kernel_cls(kind_key)(bm.numpyro_model(), **kernel_kwargs)
-        return MCMC(
-            kernel,
-            num_warmup=int(warmup_n),
-            num_samples=int(chunk_samples),
-            num_chains=n_chains,
-            chain_method=chain_method,
-            progress_bar=progress_bar,
-        )
-
-    mcmc = _build_mcmc(warmup, accept)
-    rng = random.PRNGKey(int(seed))
-    mcmc.run(rng, init_params=init_params, extra_fields=("diverging",))
-
-    # Divergence retry on first chunk (NUTS only)
-    if kind_key == "nuts" and stop.max_divergence_frac is not None:
-        while retries < int(max_retries):
-            extra = mcmc.get_extra_fields(group_by_chain=True)
-            div = extra.get("diverging")
-            if div is None:
-                break
-            frac = float(np.mean(np.asarray(div)))
-            if frac <= float(stop.max_divergence_frac):
-                break
-            retries += 1
-            idx = min(start_idx + retries, len(accept_schedule) - 1)
-            accept = float(accept_schedule[idx])
-            warmup = int(warmup * 2)
-            mcmc = _build_mcmc(warmup, accept)
-            mcmc.run(
-                random.PRNGKey(int(seed) + retries),
-                init_params=init_params,
-                extra_fields=("diverging",),
-            )
-
-    acc_samples: dict[str, Any] | None = None
-    acc_div: Any | None = None
-    progress_rows: list[dict[str, Any]] = []
-    chunks = 0
-    converged = False
-    reason = "continuing"
-
-    while True:
-        chunks += 1
-        chunk = mcmc.get_samples(group_by_chain=True)
-        # Drop deterministic / non-site keys if any
-        chunk = {k: v for k, v in chunk.items() if k in sites or k in bm.prior_names()}
-        if not chunk:
-            chunk = dict(mcmc.get_samples(group_by_chain=True))
-        acc_samples = _concat_chain_draw(acc_samples, chunk)
-        extra = mcmc.get_extra_fields(group_by_chain=True)
-        div = extra.get("diverging")
-        if div is not None:
-            acc_div = (
-                np.asarray(div)
-                if acc_div is None
-                else np.concatenate([np.asarray(acc_div), np.asarray(div)], axis=1)
-            )
-
-        assert acc_samples is not None
-        frame = _diagnostics_frame(acc_samples, acc_div)
-        n_samples = int(next(iter(acc_samples.values())).shape[1])
-        elapsed = time.perf_counter() - t0
-        passed = _diagnostics_pass(stop, frame, acc_div)
-        progress_rows.append(
-            {
-                "chunk": chunks,
-                "samples": n_samples,
-                "rhat_max": float(np.max(np.asarray(frame["rhat"]))),
-                "ess_bulk_min": float(np.min(np.asarray(frame["ess_bulk"]))),
-                "divergence_frac": frame.attrs.get("divergence_frac"),
-                "seconds": elapsed,
-                "passed": passed,
-            }
-        )
-
-        if passed:
-            converged, reason = True, "diagnostics"
-            break
-        if n_samples >= int(stop.max_samples):
-            converged, reason = False, "max_samples"
-            break
-        if stop.max_seconds is not None and elapsed >= float(stop.max_seconds):
-            converged, reason = False, "max_seconds"
-            break
-
-        # Continue from last state
-        mcmc.post_warmup_state = mcmc.last_state
-        mcmc.run(mcmc.post_warmup_state.rng_key, extra_fields=("diverging",))
-
-    if not converged:
-        warnings.warn(
-            f"run_mcmc did not meet StopRule (reason={reason!r}, chunks={chunks}).",
-            RuntimeWarning,
-            stacklevel=2,
-        )
-
-    assert acc_samples is not None
-    posterior = {k: np.asarray(v) for k, v in acc_samples.items()}
-    groups: dict[str, Any] = {"posterior": posterior}
-    if acc_div is not None:
-        groups["sample_stats"] = {"diverging": np.asarray(acc_div)}
-    idata = az.from_dict(groups)
-
-    # Last-chain unconstrained z as Candidates
-    last_z = mcmc.last_state.z
-    z_batch = {name: np.asarray(last_z[name]) for name in sites if name in last_z}
-    # Ensure leading chain axis
-    for name in list(z_batch):
-        arr = z_batch[name]
-        if arr.ndim == 0:
-            z_batch[name] = arr.reshape(1)
-    params = {k: np.asarray(v) for k, v in bm.constrain(z_batch).items()}
-    cands = Candidates(sites=sites, z=z_batch, params=params)
-    seconds = time.perf_counter() - t0
-    record = StageRecord(
-        stage="run_mcmc",
-        settings={
-            "kind": kind_key,
-            "num_chains": n_chains,
-            "num_warmup": warmup,
-            "chunk_samples": int(chunk_samples),
-            "chunks": chunks,
-            "converged": converged,
-            "reason": reason,
-        },
-        seconds=seconds,
+    init_params = (
+        None if init is None else init.init_params(int(num_chains), jitter=jitter, seed=seed)
     )
-    import pandas as pd
-
-    return SampleResult(
-        idata=idata,
-        diagnostics=frame,
-        converged=converged,
-        reason=reason,
-        chunks=chunks,
-        candidates=cands,
-        history=(record,),
-        progress=pd.DataFrame(progress_rows).set_index("chunk"),
+    return sample_until(
+        mcmc,
+        stop if stop is not None else StopRule(),
+        init_params=init_params,
+        seed=seed,
+        warn=warn,
     )
 
 
 __all__ = [
-    "SampleResult",
+    "Decision",
+    "MCMCRun",
+    "Stop",
     "StopRule",
     "run_mcmc",
+    "sample_until",
 ]

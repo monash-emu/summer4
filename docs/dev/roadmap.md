@@ -1763,10 +1763,21 @@ The [standard checks](#exit-checks-every-step), plus `CW8`–`CW9` moved.
 **User gate:** `22-calibration-seeded-mcmc.ipynb` — an acceptance page with a
 *What to check* box per section: starts are the design's best points, seeded
 chains begin there, the run stops at the first chunk that clears the
-`StopRule` (`SampleResult.progress`), a budget stop warns, the posterior
-matches the exact one, and seeding saves chunks when warmup is short. The
-original claim — seeded converges in fewer chunks — does not hold at 50 warmup
-steps on this model; it holds at 0–10.
+`StopRule` (`MCMCRun.progress`), a budget stop warns and `extend` resumes it,
+the posterior matches the exact one, seeding saves chunks when warmup is
+short, and `run_mcmc` equals its documented expansion. The original claim —
+seeded converges in fewer chunks — does not hold at 50 warmup steps on this
+model; it holds at 0–10.
+
+**Correction (composability):** the stage was rewritten before merge so the
+caller builds numpyro's `MCMC` around any kernel. summer4 ships
+`Candidates.init_params`, `wf.sample_until(mcmc, stop, init_params=)` returning
+a resumable `wf.MCMCRun`, and `wf.StopRule` as the default stop callable (any
+`row -> (converged, reason) | None` callable works). `wf.run_mcmc` is the
+one-call convenience over those pieces. The plan's `kind=` string,
+`SampleResult`, and built-in divergence retry are gone: a `max_divergence_frac`
+breach now ends the run with reason `"divergences"`, and the retry is the
+caller rebuilding `NUTS(..., target_accept_prob=0.95)`.
 
 ### Handoff
 

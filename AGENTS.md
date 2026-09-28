@@ -31,6 +31,30 @@ unless this file or the tooling below says otherwise.
   including tests and scripts. mypy `--strict` on `src/summer4` enforces this
   for the package.
 
+## Composability is a design goal
+
+summer4 values composability across the whole project. Design and review every
+public API against it:
+
+- **Accept the underlying library's objects.** If a user could import and
+  configure the thing themselves — a numpyro kernel or `MCMC`, an optax
+  optimiser, a diffrax solver — take that object, not a string `kind=` or a
+  hand-picked subset of its keyword arguments.
+- **One policy per piece.** Seeding, stopping, retrying and recording are
+  separate, public, individually testable parts, not branches inside one
+  function. A private helper that tests have to reach into is a sign it should
+  be public.
+- **Long-running work is inspectable and resumable.** Return an object that
+  holds the caller's own objects and can be extended, not a sealed result.
+- **Conveniences are built from the pieces.** Keep one-call entry points for
+  modellers who are not programmers, but implement them from the composable
+  parts and document the few lines each one stands for (and test that
+  equivalence).
+
+The reference example is step 27's MCMC stage:
+`MCMC(NUTS(bm.numpyro_model()), ...)` + `Candidates.init_params` +
+`wf.sample_until` + `wf.StopRule`, with `wf.run_mcmc` as the convenience.
+
 ## JAX is the primary runtime target
 
 Compiled models, the results query surface, and calibration losses are expected
