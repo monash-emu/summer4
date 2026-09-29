@@ -31,7 +31,27 @@ from summer4.properties import Property
 from summer4.time import Epoch
 from summer4.timevarying import linear, sigmoidal, step
 
-__all__ = ["Data", "TableData"]
+__all__ = ["Data", "TableData", "frame_columns"]
+
+
+def frame_columns(frame: Any, names: Sequence[str]) -> dict[str, NDArray[Any]]:
+    """Read named columns of a pandas or polars frame as NumPy arrays.
+
+    Duck-typed: anything with a ``columns`` sequence and ``frame[name].to_numpy()``
+    works, so neither library is imported here. Raise naming every missing
+    column and the columns the frame does have.
+    """
+    available = getattr(frame, "columns", None)
+    if available is None:
+        raise TypeError(
+            f"Expected a pandas or polars DataFrame, got {type(frame).__name__} "
+            "(it has no 'columns')."
+        )
+    have = [str(column) for column in available]
+    missing = [name for name in names if name not in have]
+    if missing:
+        raise ValueError(f"Frame is missing columns {missing}; it has {have}.")
+    return {name: np.asarray(frame[name].to_numpy()) for name in names}
 
 
 def _require_pandas() -> Any:
