@@ -24,9 +24,9 @@ The public API of summer4 today is the taxonomy (`Property`, `Trait`,
 `summer4.data`). Initial population / population split (WP3) is applied
 (`InitialPopulation` / `Split` / `CompiledModel.initial_state`). Bayesian
 calibration (WP10) is applied (`summer4.epi.calibration`: priors,
-likelihoods, `BayesianModel`, posterior runs), as are workflow steps 24–27
-(`workflow`: designs, optimisation, seeded MCMC); sampled-output plots
-(step 28) are still ahead.
+likelihoods, `BayesianModel`, posterior runs), as is the whole calibration
+workflow, steps 24–28 (`workflow`: designs, optimisation, seeded MCMC, and
+spaghetti, ribbon, scenario and diagnostic plots).
 
 Material from the [summer2 documentation](https://summer2.readthedocs.io) and
 the [summer textbook](https://github.com/monash-emu/summer-textbook) that needs

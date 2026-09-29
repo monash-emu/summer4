@@ -9851,6 +9851,7 @@ packages:
   - optax>=0.2.0 ; extra == 'calibration'
   - arviz>=0.20.0 ; extra == 'calibration'
   - scipy>=1.11 ; extra == 'calibration'
+  - plotly>=5.24 ; extra == 'calibration'
   - evosax>=0.3.1,<0.4 ; extra == 'gradient-free'
   - pandas>=2.0 ; extra == 'pandas'
   - polars>=1.0 ; extra == 'frames'

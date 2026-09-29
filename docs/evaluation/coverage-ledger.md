@@ -150,7 +150,7 @@ never enter the API totals above. Work package WP19 closes them; the design is
 `plans/calibration-toolkit.plan.md` and the steps are Phase J of
 {doc}`../dev/roadmap`. `Step` names the roadmap step that moves the row.
 
-Calibration workflow rows complete today: **9 of 11**
+Calibration workflow rows complete today: **11 of 11**
 
 <!-- ledger:workflow -->
 | ID | Capability | Status | Route today | Step |
@@ -164,8 +164,8 @@ Calibration workflow rows complete today: **9 of 11**
 | CW7 | Multi-start gradient-free optimisation | `full` | `workflow.CMAES` (evosax) | 26 |
 | CW8 | MCMC seeded from optimised points | `full` | `Candidates.init_params` → numpyro `MCMC(init_params=)`; `workflow.run_mcmc` in one call | 27 |
 | CW9 | Automated MCMC run length (R-hat, ESS, divergences, budget) | `full` | `workflow.warmup_until` + `WarmupRule` (warmup length), `workflow.sample_until` + `workflow.StopRule` (draws; resumable `MCMCRun`) | 27 |
-| CW10 | Sampled-output spaghetti plots and quantile ribbons | `none` | — | 28 |
-| CW11 | Scenario outputs after calibration, plotted against a reference | `none` | — | 28 |
+| CW10 | Sampled-output spaghetti plots and quantile ribbons | `full` | `bm.posterior_runs` (from `Candidates`, `OptimizeRun`, `MCMCRun` or `InferenceData`) → `workflow.plot_spaghetti` / `workflow.plot_ribbons`, targets overlaid (`workflow.add_targets`); `plot_design`, `plot_optimisation`, `plot_chains` for the stages | 28 |
+| CW11 | Scenario outputs after calibration, plotted against a reference | `full` | `Scenario` → `bm.posterior_runs` → `workflow.plot_scenarios` (paired per-draw `PosteriorRuns.difference`) | 28 |
 <!-- /ledger:workflow -->
 
 ## Delivery status
@@ -364,7 +364,7 @@ TB-scale benchmark, `SolverInfo.ok` when adaptive solves hit their step ceiling,
 a span-derived default `max_steps`, and a vmap-safe reciprocity check. Plan:
 `plans/tb-ports-feature-completeness.plan.md`.
 
-### WP19 — Calibration workflow toolkit
+### WP19 — Calibration workflow toolkit (applied)
 
 **Closes:** *(no API rows)* · the [calibration workflow ledger](#calibration-workflow-ledger)
 
