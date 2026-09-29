@@ -2,8 +2,9 @@
 
 ``BayesianModel.posterior_runs`` normalises draws to a constrained site dict
 with leading axis ``n``, evaluates each scenario in memory-bounded chunks, and
-returns a :class:`PosteriorRuns` that keeps per-draw series for spaghetti plots
-(step 28) as well as Kiribati-shaped quantile / difference frames.
+returns a :class:`PosteriorRuns` that keeps per-draw series (drawn by the
+``workflow.plot_*`` figures) as well as Kiribati-shaped quantile / difference
+frames.
 """
 
 from __future__ import annotations
@@ -86,6 +87,32 @@ class PosteriorRuns:
             out[scen] = frame
         return out
 
+    def difference(
+        self,
+        scenario: str,
+        ref: str,
+        output: str,
+        *,
+        relative: bool = False,
+    ) -> np.ndarray:
+        """Per-draw difference from ``ref`` over time; shape ``(n, t)``.
+
+        Draw ``i`` of ``scenario`` is paired with draw ``i`` of ``ref`` (the same
+        parameters), so the spread is the uncertainty in the *effect*, not the
+        spread of two independent ensembles. Absolute is scenario − ref;
+        ``relative=True`` divides by the ref draw (``nan`` where it is zero).
+        """
+        if ref not in self.series:
+            raise KeyError(f"Unknown ref scenario {ref!r}. Known: {list(self.series)}.")
+        scen_v = self.samples(scenario, output)
+        ref_v = self.samples(ref, output)
+        diff: np.ndarray = np.asarray(scen_v - ref_v)
+        if not relative:
+            return diff
+        with np.errstate(divide="ignore", invalid="ignore"):
+            rel: np.ndarray = np.where(ref_v == 0.0, np.nan, diff / ref_v)
+        return rel
+
     def differences(
         self,
         ref: str,
@@ -114,13 +141,10 @@ class PosteriorRuns:
                 continue
             cols: dict[str, np.ndarray] = {}
             for result_name, src_name in outputs.items():
-                scen_v = self.samples(scen, src_name)[:, t_idx]
-                ref_v = self.samples(ref, src_name)[:, t_idx]
-                diff = scen_v - ref_v
+                diff = self.difference(scen, ref, src_name)[:, t_idx]
                 cols[result_name] = np.quantile(diff, q_arr, axis=0)
                 if relative:
-                    with np.errstate(divide="ignore", invalid="ignore"):
-                        rel = np.where(ref_v == 0.0, np.nan, diff / ref_v)
+                    rel = self.difference(scen, ref, src_name, relative=True)[:, t_idx]
                     cols[f"{result_name}_relative"] = np.quantile(rel, q_arr, axis=0)
             frame = pd.DataFrame(cols, index=q_labels)
             frame.index.name = "quantile"

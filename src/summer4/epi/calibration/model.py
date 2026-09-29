@@ -421,9 +421,12 @@ class BayesianModel:
     ) -> Any:
         """Batched forward runs under scenarios; see :class:`PosteriorRuns`.
 
-        ``draws`` is an ``arviz.InferenceData``, a mapping of constrained site
-        arrays with leading axis ``n``, or (later) ``Candidates`` via ``.params``.
-        ``scenarios`` maps names to ``None`` (baseline) or :class:`Scenario`.
+        ``draws`` is an ``arviz.InferenceData``, a ``wf.MCMCRun`` (its draws), a
+        ``wf.OptimizeRun`` (its best points), ``wf.Candidates`` from any stage
+        (via ``.params``), or a mapping of constrained site arrays with leading
+        axis ``n``. ``scenarios`` maps names to ``None`` (baseline) or
+        :class:`Scenario`. Draw the result with ``wf.plot_spaghetti``,
+        ``wf.plot_ribbons`` and ``wf.plot_scenarios``.
         """
         from summer4.epi.calibration.posterior_runs import run_posterior
 

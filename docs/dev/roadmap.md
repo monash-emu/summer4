@@ -74,11 +74,11 @@ Two conventions that are easy to get wrong:
 <!-- roadmap:current -->
 | Field | Value |
 | --- | --- |
-| Step | 28 |
+| Step | 16 |
 | Status | next |
-| Branch | `feat/calib-outputs` |
+| Branch | `feat/foi-susceptibility` |
 | Cut from | `main` |
-| Last landed | `feat/calib-composable` |
+| Last landed | `feat/calib-outputs` |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -126,7 +126,7 @@ before step 15 lands. Each handoff below names its successor explicitly;
 | 13 | F | WP10 | `feat/epi-priors-likelihoods` | `plans/tb-ports-feature-completeness.plan.md` | 10.1 | done | — |
 | 14 | F | WP10 | `feat/epi-sampling` | `plans/tb-ports-feature-completeness.plan.md` | 10.2 | done | — |
 | 15 | F | WP10 | `feat/epi-posterior-runs` | `plans/tb-ports-feature-completeness.plan.md` | 10.3 | done | KI18 KI19 KI20 KI21 TM8 |
-| 16 | G | WP17 | `feat/foi-susceptibility` | `plans/wp17-foi-susceptibility.plan.md` | Whole | planned | — |
+| 16 | G | WP17 | `feat/foi-susceptibility` | `plans/wp17-foi-susceptibility.plan.md` | Whole | next | — |
 | 17 | G | WP9 | `feat/contact-survey-data` | `plans/wp9-contact-surveys.plan.md` | Step 17 | planned | — |
 | 18 | G | WP9 | `feat/contact-matrix-adaptation` | `plans/wp9-contact-surveys.plan.md` | Step 18 | planned | — |
 | 19 | G | WP9 | `docs/textbook-16-19` | `plans/wp9-contact-surveys.plan.md` | Step 19 | planned | — |
@@ -138,7 +138,7 @@ before step 15 lands. Each handoff below names its successor explicitly;
 | 25 | J | WP19 | `feat/calib-multistart` | `plans/calibration-toolkit.plan.md` | Step 25 | done | CW5 CW6 |
 | 26 | J | WP19 | `feat/calib-gradient-free` | `plans/calibration-toolkit.plan.md` | Step 26 | done | CW7 |
 | 27 | J | WP19 | `feat/calib-seeded-mcmc` | `plans/calibration-toolkit.plan.md` | Step 27 | done | CW8 CW9 |
-| 28 | J | WP19 | `feat/calib-outputs` | `plans/calibration-toolkit.plan.md` | Step 28 | next | CW10 CW11 |
+| 28 | J | WP19 | `feat/calib-outputs` | `plans/calibration-toolkit.plan.md` | Step 28 | done | CW10 CW11 |
 | 29 | K | CP1 | `feat/solve-composable` | `plans/solve-composable.plan.md` | Whole | done | CX1 CX2 CX3 CX4 CX5 |
 | 30 | K | CP2 | `feat/calib-composable` | `plans/calib-composable.plan.md` | Whole | done | CX16 CX17 CX18 CX19 CX24 |
 <!-- /roadmap:steps -->
@@ -1113,6 +1113,57 @@ the chapter onto it, and moves chapter 15 from `partial` to `full` — the last
 textbook chapter outside the contact-survey block. It is independent of phases
 B–F but is cheapest after step 8, whose selector-keyed weights it reuses.
 
+### What the previous worker left you
+
+Phase J (WP19) is finished: the calibration workflow ledger reads **11 of
+11**. Nothing in step 28 touches `summer4.epi.infection` or chapter 15, so
+this step's plan stands as written.
+
+- **What landed.** `wf.plot_spaghetti`, `wf.plot_ribbons`,
+  `wf.plot_scenarios` (over `bm.posterior_runs`), `wf.plot_design`,
+  `wf.plot_optimisation`, `wf.plot_chains` (the stages) and `wf.add_targets`,
+  in `src/summer4/epi/calibration/workflow/plots.py`; plus
+  `PosteriorRuns.difference(scenario, ref, output, relative=)`. Every figure
+  is Plotly and takes `fig=` to layer onto an existing one. Plotly is imported
+  lazily and is in the `calibration` extra. Plan record:
+  `plans/calib-outputs.plan.md`. User gate: `25-calibration-workflow.ipynb`.
+- **Deviations from the toolkit plan.** `plot_chains` takes an `MCMCRun`
+  (also a numpyro `MCMC` or a `(chain, draw)` mapping); `plot_optimisation`
+  takes an `OptimizeRun`; the targets overlay is its own public piece
+  (`add_targets`, matched to an output by `Target.key`). `Candidates.from_idata`
+  and `posterior_runs` accepting `Candidates` / run objects had already landed
+  (steps 24 and 30). The branch was stacked on `feat/calib-composable`; PR #48
+  still targets it and needs retargeting to `main`.
+- **What turned out untrue.** The plan's gate assertion "the posterior median
+  covers the targets" is not a meaningful check: `posterior_runs` returns
+  trajectory bands, not posterior-predictive intervals, so noisy observations
+  can sit outside the band (at day 0 it has zero width). Notebook 25 states
+  this instead of asserting it. Also, on the ridge model a 40% distancing cut
+  does not only shrink the epidemic: for about half the draws it flattens and
+  delays it, so the paired difference goes positive weeks later.
+- **futureplans notes written.** `posterior-predictive-observation-noise.md`
+  (likelihoods cannot be sampled; ties to composability `CX20`) and
+  `posterior-runs-calendar-axis.md` (`PosteriorRuns.times` drops the `Epoch`,
+  so the figures use model time).
+- **Which Phase J stages to reach for first.** For a new calibration:
+  `wf.lhs` → `wf.evaluate` → `wf.plot_design` to see where the good fits lie;
+  `wf.optimize(bm, design.best(16))` + `wf.plot_optimisation` for a set of
+  fits; `bm.posterior_runs(run, scenarios=...)` + `wf.plot_spaghetti` to see
+  whether those fits agree beyond the data. Only when they disagree is
+  `bm.sample(NUTS(...), init=fitted.candidates.best(4), stop=wf.StopRule())`
+  + `wf.plot_chains` + `wf.plot_ribbons` / `wf.plot_scenarios` worth its
+  compile time (every MCMC chunk recompiles:
+  `futureplans/mcmc-chunk-recompile.md`). `wf.CMAES` is for gradient-free
+  models; `wf.warmup_until` only when NUTS warmup is the bottleneck.
+- **`docs-strict` was already failing when step 28 finished**, in
+  `docs/summer2/12-concurrent-diseases.ipynb`, and not because of step 28 (whose
+  `src` changes are only in `summer4.epi.calibration`): a plan-level
+  `SavePlan(requests=..., ts=TS)` is ignored under `solver="euler"` — 81
+  requested times come back as the 401-point `dt` grid. Reproduced on this
+  branch with a two-compartment model. It most likely came in with step 29's
+  solver backends (`f85d718`), but that has not been bisected. Fix it (with a
+  regression test) before relying on `docs-strict` as a gate.
+
 ### Read first
 
 1. `AGENTS.md`
@@ -1806,6 +1857,10 @@ defaults as shipped and whether R-hat is meaningful for the ensemble kernels
 ---
 
 ## Step 28 — `feat/calib-outputs`
+
+**Landed:** feat/calib-outputs, PR #48, 2026-09-29. Cut from
+`origin/feat/calib-composable` (PR #45 was not yet merged) and opened against
+it; #45 has since merged, so retarget #48 to `main` before merging it.
 
 ### Summary
 
