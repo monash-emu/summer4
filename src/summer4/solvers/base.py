@@ -90,6 +90,17 @@ class SolveSpec:
             raise ValueError("SolveSpec needs steps for a default save grid.")
         return self.t0 + self.dt * np.arange(int(self.steps) + 1, dtype=np.float64)
 
+    def save_ts(self, plan: Any) -> NDArray[np.float64]:
+        """The grid for requests without their own ``ts``: ``plan.ts``, else :meth:`default_ts`.
+
+        Every backend and ``CompiledModel.assemble_result`` must group
+        requests on this same grid, or a plan-level ``SavePlan(ts=...)`` is lost.
+        """
+        plan_ts = getattr(plan, "ts", None)
+        if plan_ts is not None:
+            return np.asarray(plan_ts, dtype=np.float64)
+        return self.default_ts()
+
 
 @dataclass(frozen=True, slots=True)
 class SolveOutput:

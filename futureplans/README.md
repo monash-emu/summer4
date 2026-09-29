@@ -33,8 +33,6 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
 - [`foi-multi-property-mixing.md`](foi-multi-property-mixing.md) —
   `ForceOfInfection.group_by` is one property; multi-axis mixing is homogeneous
   after further `stratify`.
-- [`foi-susceptibility-surface.md`](foi-susceptibility-surface.md) —
-  infectiousness has `ForceOfInfection(infectiousness=...)`; susceptibility does not.
 - [`next-generation-matrix-r0.md`](next-generation-matrix-r0.md) —
   unstratified $R_t$ is ported; no next-generation-matrix / spectral $R_0$ helper.
 - [`propertydata-dense-unstack.md`](propertydata-dense-unstack.md) — opt-in

@@ -23,6 +23,7 @@ from summer4.epi.infection import (
     InfectiousnessNormalize,
     apply_compartment_weights,
     coerce_compartment_weights,
+    split_susceptibility,
 )
 from summer4.epi.mixing import MixingMatrix, MixingNormalize
 from summer4.flows.rates import Param
@@ -51,4 +52,5 @@ __all__ = [
     "apply_compartment_weights",
     "coerce_compartment_weights",
     "priors_from_frame",
+    "split_susceptibility",
 ]
