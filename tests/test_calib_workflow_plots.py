@@ -158,6 +158,8 @@ def test_spaghetti_subsamples_distinct_draws(setup: dict[str, Any]) -> None:
     all_draws = runs.samples("faster recovery", "infectious")
     rows = [int(np.flatnonzero(np.all(all_draws == line, axis=1))[0]) for line in lines]
     assert len(set(rows)) == 5
+    # Hover shows each line's index among all draws, not among the five shown.
+    np.testing.assert_array_equal(np.unique(fig.data[0].customdata), rows)
     assert fig.data[0].name == "faster recovery: 5 draws"
 
 

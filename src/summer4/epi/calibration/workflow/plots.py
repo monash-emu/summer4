@@ -127,12 +127,14 @@ def add_targets(
     return fig
 
 
-def _gapped(times: np.ndarray, traj: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Rows of ``traj`` joined into one line with ``nan`` gaps; plus the row index per point."""
+def _gapped(
+    times: np.ndarray, traj: np.ndarray, rows: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Rows of ``traj`` joined into one line with ``nan`` gaps; plus each point's draw index."""
     n, t = traj.shape
     x = np.tile(np.append(times, np.nan), n)
     y = np.concatenate([traj, np.full((n, 1), np.nan)], axis=1).reshape(-1)
-    draw = np.repeat(np.arange(n), t + 1)
+    draw = np.repeat(rows, t + 1)
     return x, y, draw
 
 
@@ -160,12 +162,14 @@ def plot_spaghetti(
     """
     scen = runs.scenario_names[0] if scenario is None else scenario
     traj = np.asarray(runs.samples(scen, output), dtype=float)
+    rows = np.arange(traj.shape[0])
     if n is not None and int(n) < traj.shape[0]:
         rng = np.random.default_rng(int(seed))
-        traj = traj[np.sort(rng.choice(traj.shape[0], size=int(n), replace=False))]
+        rows = np.sort(rng.choice(traj.shape[0], size=int(n), replace=False))
+        traj = traj[rows]
     fig, created = _new_or(fig)
     colour = color or _palette()[len(fig.data) % len(_palette())]
-    x, y, draw = _gapped(np.asarray(runs.times, dtype=float), traj)
+    x, y, draw = _gapped(np.asarray(runs.times, dtype=float), traj, rows)
     fig.add_scatter(
         x=x,
         y=y,
