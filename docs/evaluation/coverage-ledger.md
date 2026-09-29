@@ -115,10 +115,10 @@ published as written.
 | 13 | Mixing and transmission types | `full` | None | `textbook/13-mixing-and-transmission-types.ipynb` |
 | 14 | Assortative mixing | `full` | None | `textbook/14-assortative-mixing.ipynb` |
 | 15 | Susceptibility and infectiousness matrices | `partial` | No FOI susceptibility surface symmetric to infectiousness | `textbook/15-susceptibility-infectiousness-matrices.ipynb` |
-| 16 | Thinking about contact surveys | `none` | Contact-survey data (WP9) | — |
-| 17 | Understanding empiric contact data | `none` | Contact-survey data | — |
-| 18 | Implementing empiric survey data | `none` | Contact-survey data | — |
-| 19 | Adapting mixing matrices | `none` | Contact-survey data, matrix scaling | — |
+| 16 | Thinking about contact surveys | `full` | None | `textbook/16-contact-surveys.ipynb` |
+| 17 | Understanding empiric contact data | `full` | None | `textbook/17-empiric-surveys.ipynb` |
+| 18 | Implementing empiric survey data | `full` | None | `textbook/18-empiric-contact-model.ipynb` |
+| 19 | Adapting mixing matrices | `full` | None | `textbook/19-adapting-mixing-matrices.ipynb` |
 | 20 | Calibration and uncertainty | `full` | — | `textbook/20-calibration.ipynb` |
 <!-- /ledger:textbook -->
 
@@ -210,9 +210,9 @@ ported on this stack), the summer2 pages under `docs/summer2/`, and
 WP5, WP6 and the textbook catch-up sweep
 (`plans/textbook-catchup.plan.md`) are **applied** on this stack.
 
-WP9 now has a detailed plan, `plans/wp9-contact-surveys.plan.md`; the paragraph
-in *The path to 100%* below is its scope statement, not its design. Every
-remaining package is planned.
+WP9 is **applied** (`plans/wp9-contact-surveys.plan.md`, roadmap steps 17–19);
+the paragraph in *The path to 100%* below is its scope statement, not its
+design. Every remaining package is planned.
 
 WP10 remains planned in
 `plans/tb-ports-feature-completeness.plan.md`. WP12–WP16 and WP18 have shipped.
@@ -226,7 +226,7 @@ package closes is recorded, by row ID, in {doc}`tb-ports`.
 | WP5 | Time-varying function library | `plans/time-varying.plan.md` (5.1–5.5) | **Applied.** `Time()`, `summer4.timevarying`, `summer4.data`, summer2 time-varying page |
 | WP6 | Force of infection and mixing | `plans/epi-infection-mixing.plan.md` (6.1–6.6) | **Applied.** `GroupedRate`, `Reduce`, `summer4.epi` (`MixingMatrix`, `ForceOfInfection`, `EpiModel`) (`EpiModel` later removed: `plans/remove-epimodel.plan.md`) |
 | — | Textbook / docs catch-up | `plans/textbook-catchup.plan.md` (C1–C4) | **Applied.** Ports for unblocked chapters and summer2 pages; evaluation prose refresh |
-| WP9 | Contact survey data | `plans/wp9-contact-surveys.plan.md` | Settled there: `ContactMatrix` loading and validation, rebinning, reciprocity, population adaptation, scaling, textbook 16-19. **Loading, validation and inspection applied** (roadmap step 17: `ContactMatrix`, `SettingStack`); **rebinning, reciprocity correction, population adaptation, scaling and `to_mixing` applied** (step 18: `Rebin`, `ScaledContacts`). No survey data ships; notebooks embed the extract they use |
+| WP9 | Contact survey data | `plans/wp9-contact-surveys.plan.md` | **Applied.** `ContactMatrix`, `SettingStack`, `Rebin`, `ScaledContacts` in `summer4.epi` (roadmap steps 17–19); textbook 16–19 ported. No survey data ships; pages embed the extract they use |
 | WP10 | Calibration | `plans/tb-ports-feature-completeness.plan.md` | Settled there: priors, likelihoods on `Target`, numpyro samplers (NUTS and gradient-free ensemble), MAP, posterior runs; lives in `summer4.epi` |
 | WP12 | Pinnable release | `plans/wp12-release.plan.md` | **Applied.** First tag `v0.2.0a1`; current tag `v0.2.0a5`. JAX is a core dependency; `frames` declares polars and pyarrow. Downstream smoke CI is step 3 of {doc}`../dev/roadmap` |
 | WP13 | Rate-tree math and tabular time series | `plans/tb-ports-feature-completeness.plan.md` | **Applied.** Math nodes, vector-valued table interpolation, `Lookup`, ageing sugar |
@@ -336,7 +336,8 @@ ported at `docs/textbook/07-numerical-solutions.ipynb`.
 **Unblocks:** textbook 16, 17, 18, 19
 
 Loading, validating, inspecting and scaling empirical contact matrices.
-Depends on WP6.
+Depends on WP6. **Applied:** `summer4.epi.ContactMatrix` and friends; textbook
+16–19 are ported.
 
 ### WP10 — Calibration
 

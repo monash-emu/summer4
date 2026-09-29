@@ -47,3 +47,7 @@ Tier 3 ships: `summer4.epi` provides `MixingMatrix` and `ForceOfInfection`.
 WP3 (initial population / population split) is applied; chapter 13 is unblocked
 for porting. Chapters 14–15 are ported (15 partial — no first-class
 susceptibility surface).
+
+Tier 4 ships: `summer4.epi.ContactMatrix` loads, validates, rebins,
+symmetrises, adapts and scales empirical contact matrices, and chapters 16–19
+are ported on it.

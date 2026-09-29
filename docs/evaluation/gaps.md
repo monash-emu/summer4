@@ -86,10 +86,11 @@ See `futureplans/foi-susceptibility-surface.md`.
 
 ## Priority 3 — blocks the remaining chapters
 
-### 3.1 Contact-survey data handling
+### 3.1 Contact-survey data handling — closed
 
-Loading, validating, inspecting and scaling empirical contact matrices.
-Chapters 16–19 (WP9). Depends on WP6 (applied).
+Loading, validating, inspecting and scaling empirical contact matrices:
+`summer4.epi.ContactMatrix`, `SettingStack`, `Rebin` and `ScaledContacts`
+(WP9, roadmap steps 17–18). Chapters 16–19 are ported.
 
 ### 3.2 Calibration
 
