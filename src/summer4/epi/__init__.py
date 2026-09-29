@@ -17,7 +17,15 @@ from summer4.epi.calibration import (
     Uniform,
     priors_from_frame,
 )
-from summer4.epi.contacts import ContactMatrix, Reciprocity, SettingStack, band_label
+from summer4.epi.contacts import (
+    ContactAdaptation,
+    ContactMatrix,
+    Rebin,
+    Reciprocity,
+    ScaledContacts,
+    SettingStack,
+    band_label,
+)
 from summer4.epi.infection import (
     FOIKind,
     ForceOfInfection,
@@ -32,6 +40,7 @@ __all__ = [
     "AggregateHow",
     "BayesianModel",
     "Beta",
+    "ContactAdaptation",
     "ContactMatrix",
     "FOIKind",
     "ForceOfInfection",
@@ -46,8 +55,10 @@ __all__ = [
     "Param",
     "Poisson",
     "PosteriorRuns",
+    "Rebin",
     "Reciprocity",
     "SampleKind",
+    "ScaledContacts",
     "Scenario",
     "SettingStack",
     "TruncatedNormal",

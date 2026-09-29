@@ -19,3 +19,12 @@ mixing stack.
 vector field, so that stack is not rebuilt on every call. `resolved_matrix`
 still row-normalises the gathered matrix on every call when
 `normalize="rows"`. Hoisting that normalisation is still open.
+
+**After roadmap step 18:** contact matrices reach `MixingMatrix` through
+`ContactMatrix.to_mixing` / `ScaledContacts.to_mixing`, which default to
+`normalize="none"`, so the per-call row normalisation does not apply to them. A
+`ScaledContacts` matrix is a constant plus one `ArrayConst * factor` term per
+scaled setting; with a `step(Time(), ...)` factor it is step-stage by nature,
+with a `Param` factor it is param-only and would benefit from the same hoisting
+this note asks for. `check_reciprocal=True` on such a matrix runs a host
+callback every evaluation — leave it off inside calibration.
