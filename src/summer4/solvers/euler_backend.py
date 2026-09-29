@@ -219,7 +219,7 @@ class Euler:
         t0 = float(spec.t0)
 
         prepared = params if isinstance(params, Prepared) else model.prepare(params)
-        groups = group_requests(plan, spec.default_ts())
+        groups = group_requests(plan, spec.save_ts(plan))
 
         y_arr, rebox = unpack_state(y0, model.pmap)
         saved: dict[str, Any] = {}
