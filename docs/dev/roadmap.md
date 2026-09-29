@@ -126,7 +126,7 @@ before step 15 lands. Each handoff below names its successor explicitly;
 | 13 | F | WP10 | `feat/epi-priors-likelihoods` | `plans/tb-ports-feature-completeness.plan.md` | 10.1 | done | — |
 | 14 | F | WP10 | `feat/epi-sampling` | `plans/tb-ports-feature-completeness.plan.md` | 10.2 | done | — |
 | 15 | F | WP10 | `feat/epi-posterior-runs` | `plans/tb-ports-feature-completeness.plan.md` | 10.3 | done | KI18 KI19 KI20 KI21 TM8 |
-| 16 | G | WP17 | `feat/foi-susceptibility` | `plans/wp17-foi-susceptibility.plan.md` | Whole | planned | — |
+| 16 | G | WP17 | `feat/foi-susceptibility` | `plans/wp17-foi-susceptibility.plan.md` | Whole | done | — |
 | 17 | G | WP9 | `feat/contact-survey-data` | `plans/wp9-contact-surveys.plan.md` | Step 17 | planned | — |
 | 18 | G | WP9 | `feat/contact-matrix-adaptation` | `plans/wp9-contact-surveys.plan.md` | Step 18 | planned | — |
 | 19 | G | WP9 | `docs/textbook-16-19` | `plans/wp9-contact-surveys.plan.md` | Step 19 | planned | — |
@@ -1102,6 +1102,8 @@ finished; both port repositories are now unblocked end to end.
 
 ## Step 16 — `feat/foi-susceptibility`
 
+**Landed:** feat/foi-susceptibility, PR #50, 2026-09-29.
+
 ### Summary
 
 The force of infection owns infectiousness weights but has no symmetric
@@ -1152,6 +1154,45 @@ in, validation that names the offending value when a matrix is not square or a
 band is out of order, and inspection including reciprocity error. It carries one
 open question that must be settled with the user before coding — where the survey
 data itself comes from.
+
+### What the previous worker left you
+
+Step 16 (PR #50) shipped `ForceOfInfection(susceptibility=...)` and moved
+textbook row 15 to `full`. It was built in parallel with step 28 and merges
+after it. What you should know:
+
+- **Contact structure stays in the matrix; the people stay on the force of
+  infection.** Chapter 15 now argues this in the prose. When `ContactMatrix`
+  feeds `MixingMatrix`, do not fold susceptibility or infectiousness into the
+  survey matrix (and `normalize="rows"` would divide a row scale back out). Use
+  `ForceOfInfection(susceptibility=...)` / `infectiousness=` beside it.
+- **Susceptibility semantics.** It multiplies λ after mixing and is never
+  normalised. Pairs keyed on a single trait of `group_by` scale the per-group
+  λ, and the capture under the FOI's name includes them. Any other selector
+  makes the rate compartment-aligned, and the capture excludes those weights.
+  `ForceOfInfection.per_compartment` and `summer4.epi.split_susceptibility`
+  expose the split. `captured()` refuses per-compartment mode. Compartments
+  lacking `group_by` get NaN in that mode (see the plan below).
+- **Deviation from the plan.** WP17 Part B's "same compile digest as
+  `Multiply`" is impossible: digests are structural. The tests assert
+  numerical equality instead, and assert that the digests differ with the
+  reason in the test docstring. Decisions are in
+  `plans/foi-susceptibility.plan.md`.
+- **A step-29 regression, fixed in a separate PR #49 (also cherry-picked into
+  #50).** Step 29 dropped `SavePlan(ts=...)`: runs saved on every step.
+  `docs/summer2/12-concurrent-diseases.ipynb` then fails `docs-strict`. The fix
+  is `SolveSpec.save_ts(plan)`. If your `docs-strict` fails on that page, #49
+  has not merged yet.
+- **Untrue before this step:** `docs/evaluation/index.md` and
+  `docs-coverage.md` quoted 14 textbook chapters and chapter 20 as blocked,
+  but chapter 20 was already `full`. Both now say 16 of 20; chapters 16–19
+  (your WP9 block) are the only ones left.
+- `CX13` (`apply_compartment_weights` / `coerce_compartment_weights` exported
+  but undocumented) stays open. The susceptibility surface now uses them and
+  the `eval_child` contract is in the docstring, but no user-facing page
+  calls them directly.
+- No `futureplans/` notes were written; `foi-susceptibility-surface.md` was
+  deleted.
 
 ### Read first
 
