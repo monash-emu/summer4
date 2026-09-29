@@ -74,11 +74,11 @@ Two conventions that are easy to get wrong:
 <!-- roadmap:current -->
 | Field | Value |
 | --- | --- |
-| Step | 18 |
+| Step | 19 |
 | Status | next |
-| Branch | `feat/contact-matrix-adaptation` |
-| Cut from | `feat/contact-survey-data` |
-| Last landed | `feat/contact-survey-data` |
+| Branch | `docs/textbook-16-19` |
+| Cut from | `feat/contact-matrix-adaptation` |
+| Last landed | `feat/contact-matrix-adaptation` |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -128,8 +128,8 @@ before step 15 lands. Each handoff below names its successor explicitly;
 | 15 | F | WP10 | `feat/epi-posterior-runs` | `plans/tb-ports-feature-completeness.plan.md` | 10.3 | done | KI18 KI19 KI20 KI21 TM8 |
 | 16 | G | WP17 | `feat/foi-susceptibility` | `plans/wp17-foi-susceptibility.plan.md` | Whole | planned | — |
 | 17 | G | WP9 | `feat/contact-survey-data` | `plans/wp9-contact-surveys.plan.md` | Step 17 | done | — |
-| 18 | G | WP9 | `feat/contact-matrix-adaptation` | `plans/wp9-contact-surveys.plan.md` | Step 18 | next | — |
-| 19 | G | WP9 | `docs/textbook-16-19` | `plans/wp9-contact-surveys.plan.md` | Step 19 | planned | — |
+| 18 | G | WP9 | `feat/contact-matrix-adaptation` | `plans/wp9-contact-surveys.plan.md` | Step 18 | done | — |
+| 19 | G | WP9 | `docs/textbook-16-19` | `plans/wp9-contact-surveys.plan.md` | Step 19 | next | — |
 | 20 | H | — | *(new repo)* | `plans/tb-macro-summer4-port.plan.md` | Whole | planned | — |
 | 21 | H | — | *(new repo)* | `plans/kiribati-tb-summer4-port.plan.md` | Whole | planned | — |
 | 22 | I | WP18 | `feat/rate-array-dispatch` | `plans/rate-dispatch-and-defer.plan.md` | Step 22 | done | — |
@@ -1187,6 +1187,8 @@ steps 18 and 19 depend on it.
 
 ## Step 18 — `feat/contact-matrix-adaptation`
 
+**Landed:** feat/contact-matrix-adaptation, PR #47, 2026-09-29.
+
 ### Summary
 
 A survey matrix is never in the shape a model needs: its age bands differ, it is
@@ -1263,6 +1265,30 @@ mixing matrices — onto the API steps 17 and 18 built. It is documentation only
 but it is the proof that WP9 actually closed the gap: the chapters are the
 acceptance test. It moves four textbook rows from `none` to `full`, which is the
 largest single move left in the textbook ledger.
+
+### What the previous worker left you
+
+Step 18 landed as `feat/contact-matrix-adaptation`, PR #47
+(`plans/contact-matrix-adaptation.plan.md`), stacked on step 17 (PR #46).
+
+- **Data decision (step 17, user, 2026-09-29): ship no data, embed the
+  extract.** The chapters embed the POLYMOD Great Britain matrix (Mossong et
+  al. 2008, CC BY) as the source textbook transcribes it, with its UK 2006 and
+  India populations, and say so. Nothing is fetched at docs build time.
+- The API the chapters need: `ContactMatrix.from_array(PUBLISHED.T, bands,
+  prop=, source_population=)` (the published table is contact-by-participant:
+  transpose it), `total()`, `reciprocity_error(population)`,
+  `to_mixing()` (defaults to `normalize="none"`), `rebin`, `symmetrise`, and
+  `adapt(population, kind="density")` — which *is* chapter 19's adjustment
+  ($c_{ij}$ times the ratio of population shares of band $j$). `"frequency"` is
+  the other convention and the default. `to_pandas()` is the plotting seam
+  (`frame.plot(kind="imshow")` under the pandas Plotly backend).
+- **Deviations:** `scale(RateOps)` returns a `ScaledContacts` (with
+  `matrix()` and `to_mixing()`) rather than a bare expression; `Rebin` is public
+  with `population_bands=`. `futureplans/mixing-matrix-per-call-normalisation.md`
+  gained an *after step 18* paragraph. Nothing deferred.
+- **Roadmap on this stack:** as step 17's handoff says, step 28 is `planned`
+  here only to keep one `next`; take `main`'s rows for 28 and 16 at merge.
 
 ### Read first
 
