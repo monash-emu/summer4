@@ -74,11 +74,11 @@ Two conventions that are easy to get wrong:
 <!-- roadmap:current -->
 | Field | Value |
 | --- | --- |
-| Step | 28 |
+| Step | 18 |
 | Status | next |
-| Branch | `feat/calib-outputs` |
-| Cut from | `main` |
-| Last landed | `feat/calib-composable` |
+| Branch | `feat/contact-matrix-adaptation` |
+| Cut from | `feat/contact-survey-data` |
+| Last landed | `feat/contact-survey-data` |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -127,8 +127,8 @@ before step 15 lands. Each handoff below names its successor explicitly;
 | 14 | F | WP10 | `feat/epi-sampling` | `plans/tb-ports-feature-completeness.plan.md` | 10.2 | done | — |
 | 15 | F | WP10 | `feat/epi-posterior-runs` | `plans/tb-ports-feature-completeness.plan.md` | 10.3 | done | KI18 KI19 KI20 KI21 TM8 |
 | 16 | G | WP17 | `feat/foi-susceptibility` | `plans/wp17-foi-susceptibility.plan.md` | Whole | planned | — |
-| 17 | G | WP9 | `feat/contact-survey-data` | `plans/wp9-contact-surveys.plan.md` | Step 17 | planned | — |
-| 18 | G | WP9 | `feat/contact-matrix-adaptation` | `plans/wp9-contact-surveys.plan.md` | Step 18 | planned | — |
+| 17 | G | WP9 | `feat/contact-survey-data` | `plans/wp9-contact-surveys.plan.md` | Step 17 | done | — |
+| 18 | G | WP9 | `feat/contact-matrix-adaptation` | `plans/wp9-contact-surveys.plan.md` | Step 18 | next | — |
 | 19 | G | WP9 | `docs/textbook-16-19` | `plans/wp9-contact-surveys.plan.md` | Step 19 | planned | — |
 | 20 | H | — | *(new repo)* | `plans/tb-macro-summer4-port.plan.md` | Whole | planned | — |
 | 21 | H | — | *(new repo)* | `plans/kiribati-tb-summer4-port.plan.md` | Whole | planned | — |
@@ -138,7 +138,7 @@ before step 15 lands. Each handoff below names its successor explicitly;
 | 25 | J | WP19 | `feat/calib-multistart` | `plans/calibration-toolkit.plan.md` | Step 25 | done | CW5 CW6 |
 | 26 | J | WP19 | `feat/calib-gradient-free` | `plans/calibration-toolkit.plan.md` | Step 26 | done | CW7 |
 | 27 | J | WP19 | `feat/calib-seeded-mcmc` | `plans/calibration-toolkit.plan.md` | Step 27 | done | CW8 CW9 |
-| 28 | J | WP19 | `feat/calib-outputs` | `plans/calibration-toolkit.plan.md` | Step 28 | next | CW10 CW11 |
+| 28 | J | WP19 | `feat/calib-outputs` | `plans/calibration-toolkit.plan.md` | Step 28 | planned | CW10 CW11 |
 | 29 | K | CP1 | `feat/solve-composable` | `plans/solve-composable.plan.md` | Whole | done | CX1 CX2 CX3 CX4 CX5 |
 | 30 | K | CP2 | `feat/calib-composable` | `plans/calib-composable.plan.md` | Whole | done | CX16 CX17 CX18 CX19 CX24 |
 <!-- /roadmap:steps -->
@@ -1143,6 +1143,8 @@ Set step 16 `done`, step 17 `next`.
 
 ## Step 17 — `feat/contact-survey-data`
 
+**Landed:** feat/contact-survey-data, PR #46, 2026-09-29.
+
 ### Summary
 
 Textbook chapters 16 to 19 are the four chapters summer4 cannot publish at all:
@@ -1194,6 +1196,34 @@ reciprocity correction, adaptation to another population under both density and
 frequency conventions, calibratable scaling for interventions, and conversion to
 the `MixingMatrix` the force of infection already accepts. Everything must
 survive `jit`, since intervention scaling is a calibration target.
+
+### What the previous worker left you
+
+Step 17 landed as `feat/contact-survey-data`, PR #46
+(`plans/contact-survey-data.plan.md`).
+
+- **The data question is answered (user, 2026-09-29): option 1 — ship no data,
+  embed the extract.** summer4 ships loaders plus a synthetic fixture,
+  `tests/helpers/contacts.py` (asymmetric 3 × 3 with hand-computed totals, mean
+  and reciprocity, and a three-setting stack that sums to it). Notebooks and
+  textbook chapters embed the small public extract they need inline — the
+  POLYMOD Great Britain matrix (Mossong et al. 2008, CC BY) as transcribed in
+  the summer textbook (BSD-2-Clause) chapter 17, with that textbook's UK 2006
+  and India populations — and state source and licence. **Nothing is fetched
+  at docs build time.** Steps 18 and 19 keep it that way.
+- `ContactMatrix`, `SettingStack`, `Reciprocity` and `band_label` live in
+  `src/summer4/epi/contacts.py`; `summer4.data.frame_columns` is the generic
+  frame reader. `SettingStack.map(fn)` exists so this step's transformations
+  apply per setting without a loop in every method.
+- **Deviations:** no `ContactMatrix.plot` (no plotting seam, `CX9`); use
+  `to_pandas()`, recorded in `futureplans/trace-plot-backend-coupling.md`. The
+  notebook is `examples/notebooks/26-contact-matrices.ipynb`, parts A–D;
+  extend it with this step's parts rather than starting another.
+- **Roadmap on this stack.** Steps 17–19 were done ahead of the landing order,
+  stacked on `main` while steps 28 and 16 were still open. To keep exactly one
+  step `next`, step 17's handoff also set step 28 from `next` to `planned` on
+  this branch only. When the stack merges (after 28 and 16), take `main`'s rows
+  for 28 and 16 (both `done`) and this stack's rows for 17–19.
 
 ### Read first
 
