@@ -22,6 +22,11 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
 
 - [`mcmc-chunk-recompile.md`](mcmc-chunk-recompile.md) — every `sample_until`
   chunk pays a full XLA compile inside numpyro's `MCMC.run`.
+- [`posterior-predictive-observation-noise.md`](posterior-predictive-observation-noise.md)
+  — `posterior_runs` / `wf.plot_ribbons` show trajectory bands, not
+  posterior-predictive intervals; likelihoods cannot be sampled.
+- [`posterior-runs-calendar-axis.md`](posterior-runs-calendar-axis.md) —
+  `PosteriorRuns.times` drops the `Epoch`, so calibration figures use model time.
 
 - [`state-ledgers-flow-integral.md`](state-ledgers-flow-integral.md) — opt-in
   exact flow accumulation via `State.ledgers` (post-hoc trapezoid is not the
