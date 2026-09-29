@@ -74,11 +74,11 @@ Two conventions that are easy to get wrong:
 <!-- roadmap:current -->
 | Field | Value |
 | --- | --- |
-| Step | 19 |
+| Step | 20 |
 | Status | next |
-| Branch | `docs/textbook-16-19` |
-| Cut from | `feat/contact-matrix-adaptation` |
-| Last landed | `feat/contact-matrix-adaptation` |
+| Branch | *(new repo)* |
+| Cut from | n/a |
+| Last landed | `docs/textbook-16-19` |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -129,8 +129,8 @@ before step 15 lands. Each handoff below names its successor explicitly;
 | 16 | G | WP17 | `feat/foi-susceptibility` | `plans/wp17-foi-susceptibility.plan.md` | Whole | planned | — |
 | 17 | G | WP9 | `feat/contact-survey-data` | `plans/wp9-contact-surveys.plan.md` | Step 17 | done | — |
 | 18 | G | WP9 | `feat/contact-matrix-adaptation` | `plans/wp9-contact-surveys.plan.md` | Step 18 | done | — |
-| 19 | G | WP9 | `docs/textbook-16-19` | `plans/wp9-contact-surveys.plan.md` | Step 19 | next | — |
-| 20 | H | — | *(new repo)* | `plans/tb-macro-summer4-port.plan.md` | Whole | planned | — |
+| 19 | G | WP9 | `docs/textbook-16-19` | `plans/wp9-contact-surveys.plan.md` | Step 19 | done | — |
+| 20 | H | — | *(new repo)* | `plans/tb-macro-summer4-port.plan.md` | Whole | next | — |
 | 21 | H | — | *(new repo)* | `plans/kiribati-tb-summer4-port.plan.md` | Whole | planned | — |
 | 22 | I | WP18 | `feat/rate-array-dispatch` | `plans/rate-dispatch-and-defer.plan.md` | Step 22 | done | — |
 | 23 | I | WP18 | `feat/rate-defer` | `plans/rate-dispatch-and-defer.plan.md` | Step 23 | done | — |
@@ -1257,6 +1257,8 @@ Set step 18 `done`, step 19 `next`.
 
 ## Step 19 — `docs/textbook-16-19`
 
+**Landed:** docs/textbook-16-19, PR #52, 2026-09-29.
+
 ### Summary
 
 This step ports the four blocked textbook chapters — thinking about contact
@@ -1331,6 +1333,29 @@ library before anything else is judged. It can start as soon as step 2 has
 tagged — the model is implementable with hand-written glue at that point — and
 each later summer4 package becomes a swap in this repo that must keep the
 goldens green.
+
+### What the previous worker left you
+
+Step 19 landed as `docs/textbook-16-19`, PR #52, closing Track G's WP9 block
+(steps 17–19: PRs #46, #47, #52, stacked in that order).
+
+- Textbook chapters 16–19 are ported (`docs/textbook/16-contact-surveys.ipynb`
+  to `19-adapting-mixing-matrices.ipynb`) and their ledger rows are `full`. The
+  ledger reads 19 of 20 chapters `full`; chapter 15 reaches `full` with step 16
+  (`feat/foi-susceptibility`), which was still open when this stack was built.
+- **Data decision (step 17):** no survey data ships; every page embeds the
+  POLYMOD extract it uses. Nothing is fetched at docs build time.
+- **`docs-strict` was red on `main`** when this step was done: PR #44 (step 29)
+  made `run` ignore a plan-level `SavePlan.ts`, which broke
+  `docs/summer2/12-concurrent-diseases.ipynb`. The fix is PR #51
+  (`fix/saveplan-ts`); with it, `docs-strict` builds cleanly with all four new
+  chapters. Land #51 before or with this stack.
+- **Roadmap on this stack:** step 28 is `planned` on these branches only (see
+  step 18's handoff). At merge, take `main`'s rows for 28 and 16.
+- Noticed, not fixed: the API reference (`docs/api/`) documents no
+  `summer4.epi` module at all, and its *What is not here* paragraph still says
+  there is no mixing matrix or force of infection; `docs/index.md` and
+  `docs/evaluation/user-satisfaction.md` still describe WP3 and WP10 as missing.
 
 ### Read first
 

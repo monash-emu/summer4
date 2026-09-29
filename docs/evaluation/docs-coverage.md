@@ -39,10 +39,8 @@ summary:
 
 | Outcome | Chapters | Count |
 |---|---|---|
-| Ported in full | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 | 14 |
+| Ported in full | 1–14, 16, 17, 18, 19, 20 | 19 |
 | Ported, modelling content partial | 15 (no FOI susceptibility surface) | 1 |
-| Blocked on contact-survey data (WP9) | 16, 17, 18, 19 | 4 |
-| Blocked on calibration (WP10) | 20 | 1 |
 
 Ported paths live under `docs/textbook/` (see the ledger `Ported` column).
 Chapter 10 notes unstratified $R_t$ without a next-generation-matrix helper.
@@ -62,10 +60,12 @@ Textbook chapters under `docs/textbook/figures/` already include SVGs for
 ported chapters 3–6 and 8 (BSD-2-Clause). Remaining chapters that embed
 diagrams (especially 12–19 when unblocked) still need copies or redraws.
 
-### 3. No contact-survey data layer
+### 3. Contact-survey data layer — closed
 
-Chapters 16–19 load empirical contact matrices, inspect them and scale them
-against population data. WP9; depends on WP6 (applied).
+Chapters 16–19 load empirical contact matrices, inspect them and adapt them to
+population data through {class}`~summer4.epi.ContactMatrix` (WP9, roadmap
+steps 17–19). summer4 ships no survey data; each chapter embeds the POLYMOD
+extract it uses.
 
 ### 4. Documentation infrastructure — closed
 

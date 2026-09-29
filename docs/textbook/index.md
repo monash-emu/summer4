@@ -33,6 +33,10 @@ are already ported). This tree holds the published notebooks only.
 13-mixing-and-transmission-types
 14-assortative-mixing
 15-susceptibility-infectiousness-matrices
+16-contact-surveys
+17-empiric-surveys
+18-empiric-contact-model
+19-adapting-mixing-matrices
 20-calibration
 porting
 roadmap
