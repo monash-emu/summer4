@@ -1271,7 +1271,7 @@ class CompiledModel:
         from summer4.results.result import Result
         from summer4.time import Epoch, TimeAxis, TimeAxisKind
 
-        default_ts = spec.default_ts()
+        default_ts = spec.save_ts(plan)
         groups = group_requests(plan, default_ts)
         key_to_group = {key: g for g in groups for key in g.keys}
         axis_epoch = epoch if isinstance(epoch, Epoch) else epoch
