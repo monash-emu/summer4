@@ -199,7 +199,7 @@ class Diffrax:
 
         prepared = params if isinstance(params, Prepared) else model.prepare(params)
         y_arr, _rebox = unpack_state(y0, model.pmap)
-        groups = group_requests(plan, spec.default_ts())
+        groups = group_requests(plan, spec.save_ts(plan))
 
         term = diffrax.ODETerm(vf_cls(model))
         subs: dict[str, Any] = {}
