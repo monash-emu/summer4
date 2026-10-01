@@ -234,6 +234,47 @@ def _norm_sigmoid(x: Any, sharpness: float) -> Any:
     return (uncorrected(x) - offset) * scale
 
 
+# Up to this many knots, a knot search compares ``x`` with every knot in one fused op.
+# Longer tables use an unrolled binary search (``log2(n)`` straight-line steps).
+_COMPARE_ALL_MAX_KNOTS = 1024
+
+
+def _knot_index(xs: Any, x: Any, side: str) -> Any:
+    """``jnp.searchsorted(xs, x, side=side)`` without a ``while`` loop.
+
+    ``jnp.searchsorted``'s default ``method="scan"`` lowers to an XLA ``while``
+    loop: a binary search that runs as one small kernel per iteration in every
+    vector-field call, and again in every recomputation of the reverse pass.
+    ``"compare_all"`` (short tables) and ``"scan_unrolled"`` (long tables)
+    give the same indices as straight-line code that XLA fuses.
+    """
+    import jax.numpy as jnp
+
+    method = "compare_all" if xs.shape[-1] <= _COMPARE_ALL_MAX_KNOTS else "scan_unrolled"
+    return jnp.searchsorted(xs, x, side=side, method=method)
+
+
+def _linear_interp(x: Any, xs: Any, vals: Any) -> Any:
+    """``jnp.interp(x, xs, vals)`` (constant beyond the ends), using :func:`_knot_index`."""
+    import jax.numpy as jnp
+    from jax import lax
+
+    dtype = jnp.result_type(x, xs, float)
+    x = jnp.asarray(x, dtype=dtype)
+    xs = jnp.asarray(xs, dtype=dtype)
+    vals = jnp.asarray(vals, dtype=jnp.result_type(vals, float))
+    i = jnp.clip(_knot_index(xs, x, "right"), 1, xs.shape[0] - 1)
+    df = vals[i] - vals[i - 1]
+    dx = xs[i] - xs[i - 1]
+    delta = x - xs[i - 1]
+    # As jnp.interp: a zero-width knot interval takes the left value, with finite gradients.
+    epsilon = np.spacing(np.finfo(dtype).eps)
+    dx0 = lax.abs(dx) <= epsilon
+    f = jnp.where(dx0, vals[i - 1], vals[i - 1] + (delta / jnp.where(dx0, 1, dx)) * df)
+    f = jnp.where(x < xs[0], vals[0], f)
+    return jnp.where(x > xs[-1], vals[-1], f)
+
+
 def _eval_interp(
     kind: object,
     breakpoints: Any,
@@ -251,23 +292,23 @@ def _eval_interp(
     vals = jnp.asarray(values)
     x_arr = jnp.asarray(x)
     if resolved is InterpKind.LINEAR:
-        # One ``interp`` for every column. ``vmap`` stays a single equation, so
+        # One interpolation for every column. ``vmap`` stays a single equation, so
         # the program does not grow with the number of knots or columns.
         if vals.ndim == 2:
 
             def _column(col: Any) -> Any:
-                return jnp.interp(x_arr, xs, col)
+                return _linear_interp(x_arr, xs, col)
 
             return jax.vmap(_column, in_axes=1, out_axes=0)(vals)
-        return jnp.interp(x_arr, xs, vals)
+        return _linear_interp(x_arr, xs, vals)
     if resolved is InterpKind.STEP:
-        idx = jnp.searchsorted(xs, x_arr, side="right")
+        idx = _knot_index(xs, x_arr, "right")
         return vals[idx]
     # sigmoidal — clamp outside the knot range, blend inside.
     lo = xs[0]
     hi = xs[-1]
     # Find left knot index in [0, n-2] for interior points.
-    raw = jnp.searchsorted(xs, x_arr, side="right") - 1
+    raw = _knot_index(xs, x_arr, "right") - 1
     idx = jnp.clip(raw, 0, xs.shape[0] - 2)
     x0 = xs[idx]
     x1 = xs[idx + 1]

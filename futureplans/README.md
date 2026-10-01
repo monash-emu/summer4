@@ -54,3 +54,15 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
   fused compartment scatters: src-gather fusion tried and reverted (AD
   slice→pad); remaining rate-alignment / FOI gathers; mul bucket is not a
   missing matmul.
+- [`interp-knot-search-while-loop.md`](interp-knot-search-while-loop.md) — `_eval_interp`'s
+  `searchsorted` lowered to a `while` loop per vector-field call; loop-free prototype on
+  `perf/gradient-performance` (small gain, identical answers).
+- [`model-discontinuity-times.md`](model-discontinuity-times.md) — expose `Lookup`/step
+  discontinuity times for `PIDController(jump_ts=)`; 25x more accurate Kiribati gradients.
+- [`bayesian-model-save-grid.md`](bayesian-model-save-grid.md) — `BayesianModel` saves every
+  `dt` step; no public way to save only the target times (small gain).
+- [`diffrax-default-checkpoints.md`](diffrax-default-checkpoints.md) — diffrax's default
+  `sqrt(2 * max_steps)` checkpoints recompute the forward solve; 1.1–1.2x from
+  `checkpoints=1024`.
+- [`stability-limited-solver-choice.md`](stability-limited-solver-choice.md) — TB-scale models
+  are stability-limited; Bosh3 + PI + `jump_ts` beats Dopri5 (1.4x gradient, no NaN grads).
