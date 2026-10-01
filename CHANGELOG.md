@@ -9,6 +9,21 @@ Install from the matching git tag (see
 [Installation](docs/getting-started/installation.md)). Narrative release notes
 for the Sphinx site live under [docs/releases/](docs/releases/).
 
+## [Unreleased]
+
+### Fixed
+
+- `PropertyData.keep(sel)` now replaces every compartment where `sel` is not
+  true. It was implemented as `where(~sel)`, and because selectors are
+  three-valued, compartments where `sel`'s property is absent matched neither
+  side and were kept. On a ragged map this over-counted `Reduce(where=sel)`
+  and the `infectious=` and `denominator=` pools of `ForceOfInfection`; for
+  example `Reduce(sum_over=..., where=programme["active"])` also summed every
+  compartment with no `programme` axis. Rectangular maps were unaffected.
+  The age-stratified SEIRS case study now uses `keep` instead of
+  `where(~sel)`, and the ragged-stratification guide shows why the two differ
+  (`fix/keep-absent-rows`).
+
 ## [0.2.0a5] — 2026-09-28
 
 Tag: [`v0.2.0a5`](https://github.com/monash-emu/summer4/releases/tag/v0.2.0a5)

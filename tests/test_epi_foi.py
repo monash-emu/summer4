@@ -539,3 +539,30 @@ def test_param_is_field_ref() -> None:
     p = Param("beta")
     assert isinstance(p, FieldRef)
     assert p.path == ("beta",)
+
+
+def test_foi_infectious_and_denominator_skip_absent_rows_on_ragged_map() -> None:
+    """Regression: ragged rows without the selector's property must not join either pool."""
+    pytest.importorskip("jax")
+    kind = Property("kind", ("population", "programme"))
+    state = Property("state", ("S", "I"))
+    programme = Property("programme", ("waiting", "active"))
+    pop = Property("pop", ("all",))
+    pmap = (
+        PropertyMap.from_property(kind)
+        .stratify(state, where=kind["population"])
+        .stratify(programme, where=kind["programme"])
+        .stratify(pop)
+    )
+    y = np.array([99990.0, 10.0, 1.0, 0.0])
+    m = FlowModel(pmap)
+    foi = ForceOfInfection(
+        "infection",
+        infectious=state["I"],
+        denominator=state["S"] | state["I"],
+        group_by=pop,
+        contact_rate=Param("beta"),
+    )
+    m.add_flow(TransitionFlow("inf", state["S"], state["I"], foi))
+    mass = np.asarray(m.compile().observe(0.0, y, {"beta": 1.0}).flows["inf"])
+    np.testing.assert_allclose(mass, [99990.0 * 10.0 / 100000.0])
