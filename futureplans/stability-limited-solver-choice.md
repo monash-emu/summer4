@@ -24,8 +24,8 @@ posterior points; `outputs/bench/levers_all.json`, `levers_confirm.json`, `nan_r
 | Dopri5, PI 0.4/0.3 | 582 + 50 | 1.11 / 1.13 | 0.3% / 2.2% | 43 |
 | Dopri5, PI + `jump_ts` | 705 + 35 | 0.89 / 0.92 | 0.03% / 0.16% | 43 |
 | Tsit5, PI + `jump_ts` | 725 + 37 | 1.05 / 0.95 | 0.05% / 0.7% | 27 |
-| Bosh3, PI + `jump_ts` | 905 + 94 | 1.30 / 1.21 | 0.2% / 0.3% | 0 |
-| Bosh3, PI + `jump_ts`, 1024 checkpoints | 905 + 94 | 1.44 / 1.30 | 0.2% / 0.3% | 0 |
+| Bosh3, PI + `jump_ts` | 905 + 94 | 1.30 / 1.21 | 0.12% / 0.29% | 0 |
+| Bosh3, PI + `jump_ts`, 1024 checkpoints | 905 + 94 | 1.44 / 1.30 | 0.12% / 0.29% | 0 |
 | Kvaerno5 (implicit), `jump_ts` | 281 + 6 | 0.07 / 0.03 | 2% / 15% | – |
 
 Bosh3 needs three new vector-field evaluations per step against Dopri5's six, and its
