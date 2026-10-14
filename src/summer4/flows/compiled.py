@@ -683,35 +683,17 @@ def _fuse_scatter_add(
 
 def _collect_capture_meta(expr: RateOps) -> dict[str, tuple[Property, ...]]:
     """Walk a rate tree for nodes that expose ``__capture_meta__``."""
-    from summer4.flows.rates import BinOp, GaussianPulse, Interp, UnaryOp
+    from summer4.flows.rates import rate_children
 
     out: dict[str, tuple[Property, ...]] = {}
     meta_fn = getattr(expr, "__capture_meta__", None)
     if callable(meta_fn):
         name, props = meta_fn()
         out[name] = props
-    match expr:
-        case BinOp(left=left, right=right):
-            out.update(_collect_capture_meta(left))
-            out.update(_collect_capture_meta(right))
-        case UnaryOp(arg=arg):
-            out.update(_collect_capture_meta(arg))
-        case Interp(breakpoints=breakpoints, values=values, arg=arg):
-            for bp in breakpoints:
-                out.update(_collect_capture_meta(bp))
-            for value in values:
-                out.update(_collect_capture_meta(value))
-            out.update(_collect_capture_meta(arg))
-        case GaussianPulse(arg=arg, centre=centre, width=width, height=height):
-            out.update(_collect_capture_meta(arg))
-            out.update(_collect_capture_meta(centre))
-            out.update(_collect_capture_meta(width))
-            out.update(_collect_capture_meta(height))
-        case _:
-            custom = getattr(expr, "__capture_children__", None)
-            if callable(custom):
-                for child in custom():
-                    out.update(_collect_capture_meta(child))
+    custom = getattr(expr, "__capture_children__", None)
+    children = custom() if callable(custom) else rate_children(expr)
+    for child in children:
+        out.update(_collect_capture_meta(child))
     return out
 
 

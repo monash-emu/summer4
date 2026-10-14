@@ -924,36 +924,58 @@ def _normalize_adjust(adjust: AdjustSpec) -> tuple[Adjustment, ...]:
     return tuple(as_adjust(item) for item in adjust)
 
 
-def _flow_refs(expr: RateOps) -> set[str]:
+def rate_children(expr: RateOps) -> tuple[RateOps, ...]:
+    """The rate-expression children of ``expr``: the one child walk every pass shares.
+
+    Built-in nodes list their children here. Any other node returns what its
+    ``__rate_children__()`` hook returns, or ``()`` when it defines none. A custom
+    node with rate-expression children therefore needs ``__rate_children__`` and
+    ``__rate_bytes__``.
+
+    - ``BinOp``: ``left``, ``right``.
+    - ``UnaryOp``: ``arg``.
+    - ``Interp``: ``*breakpoints``, ``*values``, ``arg``.
+    - ``GaussianPulse``: ``arg``, ``centre``, ``width``, ``height``.
+    - ``TableInterp``: ``arg``. The knot arrays are constants.
+    - ``Lookup``: ``table``, ``index``.
+    - ``Capture``: ``inner``.
+    - ``Defer``: positional arguments, then keyword values.
+    - Leaves (``Const``, ``Time``, ``FieldRef``, ``FlowRef``, ``Reduce``, ``ArrayConst``): none.
+    """
     match expr:
-        case FlowRef(name=name):
-            return {name}
         case BinOp(left=left, right=right):
-            return _flow_refs(left) | _flow_refs(right)
+            return (left, right)
         case UnaryOp(arg=arg):
-            return _flow_refs(arg)
+            return (arg,)
         case Interp(breakpoints=breakpoints, values=values, arg=arg):
-            refs: set[str] = set()
-            for bp in breakpoints:
-                refs |= _flow_refs(bp)
-            for value in values:
-                refs |= _flow_refs(value)
-            return refs | _flow_refs(arg)
+            return (*breakpoints, *values, arg)
         case GaussianPulse(arg=arg, centre=centre, width=width, height=height):
-            return _flow_refs(arg) | _flow_refs(centre) | _flow_refs(width) | _flow_refs(height)
-        case Time() | Const() | FieldRef() | Reduce() | ArrayConst():
-            return set()
+            return (arg, centre, width, height)
         case TableInterp(arg=arg):
-            return _flow_refs(arg)
-        case Lookup(index=index):
-            return _flow_refs(index)
+            return (arg,)
+        case Lookup(table=table, index=index):
+            return (table, index)
         case Capture(inner=inner):
-            return _flow_refs(inner)
+            return (inner,)
+        case Time() | Const() | FieldRef() | FlowRef() | Reduce() | ArrayConst():
+            return ()
         case _:
-            custom = getattr(expr, "__flow_refs__", None)
-            if callable(custom):
-                return set(custom())
-            return set()
+            hook = getattr(expr, "__rate_children__", None)
+            if callable(hook):
+                return tuple(hook())
+            return ()
+
+
+def _flow_refs(expr: RateOps) -> set[str]:
+    if isinstance(expr, FlowRef):
+        return {expr.name}
+    custom = getattr(expr, "__flow_refs__", None)
+    if callable(custom):
+        return set(custom())
+    refs: set[str] = set()
+    for child in rate_children(expr):
+        refs |= _flow_refs(child)
+    return refs
 
 
 def _adjust_flow_refs(adj: Adjustment) -> set[str]:
@@ -973,40 +995,15 @@ def _flow_rate_refs(rate: RateOps, adjust: Sequence[Adjustment]) -> set[str]:
 
 
 def _field_paths(expr: RateOps) -> set[tuple[str, ...]]:
-    match expr:
-        case FieldRef(path=path):
-            return {path}
-        case BinOp(left=left, right=right):
-            return _field_paths(left) | _field_paths(right)
-        case UnaryOp(arg=arg):
-            return _field_paths(arg)
-        case Interp(breakpoints=breakpoints, values=values, arg=arg):
-            paths: set[tuple[str, ...]] = set()
-            for bp in breakpoints:
-                paths |= _field_paths(bp)
-            for value in values:
-                paths |= _field_paths(value)
-            return paths | _field_paths(arg)
-        case GaussianPulse(arg=arg, centre=centre, width=width, height=height):
-            return (
-                _field_paths(arg)
-                | _field_paths(centre)
-                | _field_paths(width)
-                | _field_paths(height)
-            )
-        case Time() | Const() | FlowRef() | Reduce() | ArrayConst():
-            return set()
-        case TableInterp(arg=arg):
-            return _field_paths(arg)
-        case Lookup(table=table, index=index):
-            return _field_paths(table) | _field_paths(index)
-        case Capture(inner=inner):
-            return _field_paths(inner)
-        case _:
-            custom = getattr(expr, "__field_paths__", None)
-            if callable(custom):
-                return set(custom())
-            return set()
+    if isinstance(expr, FieldRef):
+        return {expr.path}
+    custom = getattr(expr, "__field_paths__", None)
+    if callable(custom):
+        return set(custom())
+    paths: set[tuple[str, ...]] = set()
+    for child in rate_children(expr):
+        paths |= _field_paths(child)
+    return paths
 
 
 def _adjust_field_paths(adj: Adjustment) -> set[tuple[str, ...]]:
