@@ -9,7 +9,10 @@ Implements Step 34 of `unified-lazy-idiom.plan.md`.
   int equals its `str`.
 - Section D's jitted runner evaluates `vector_field` once per rebuild, not a full `run`. This keeps
   the notebook fast; the trace count depends only on the model's digest.
-- `plans/output-defer.plan.md` was not edited. The brief's "Also fix" asks for a Deviations
-  correction there, but the brief's Constraints list does not include that file, and `AGENTS.md`
-  and the roadmap treat committed plans as historical records. The roadmap's *Corrections to
-  committed plans* table is the designated place for it.
+- In a follow-up at the orchestrator's direction, `plans/output-defer.plan.md` gained the
+  four-test bullet, and the CX7 evidence anchor was moved to
+  `src/summer4/flows/rates.py::def _callable_key`.
+- Notebook 26's title cell puts the step 32, 33 and 34 sentences in separate paragraphs, in step
+  order, rather than adjacent.
+- Post-solve `defer(named(f, ...))(outputs...)` is accepted, but post-solve nodes are not
+  digested, so the name has no effect there. That path is untested; steps 36–38 revisit it.
