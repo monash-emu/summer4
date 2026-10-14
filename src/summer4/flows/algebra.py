@@ -92,7 +92,7 @@ BINARY_OPS: dict[str, Callable[[Any, Any], Any]] = {
 # Ops that are neither in the two seed dicts (``sin``, ``cos``, …).
 _OP_IMPL: dict[str, Callable[..., Any]] = {}
 
-DispatchMode = Literal["symbolic", "output", "value"]
+DispatchMode = Literal["symbolic", "output", "value", "output_expr"]
 
 
 def canonical_op(name: str) -> str:
@@ -161,6 +161,15 @@ def operands_are_mixed(inputs: tuple[Any, ...]) -> bool:
 
 
 def _apply_mode(mode: DispatchMode, canonical: str, inputs: tuple[Any, ...]) -> Any:
+    # Checked first: an OutputExpr may legitimately mix with RateOps (a parameter
+    # scale), which ``operands_are_mixed`` would otherwise refuse.
+    if mode == "output_expr":
+        from summer4.results import outputset
+
+        if len(inputs) == 1:
+            kid = outputset._coerce(inputs[0])
+            return outputset.OutputExpr(kind="unary", op=canonical, kids=(kid,))
+        return outputset._binary(canonical, inputs[0], inputs[1])
     if operands_are_mixed(inputs):
         from summer4.flows.rates import _MIXED_EXPR
 

@@ -15,9 +15,9 @@ concrete time axis, as :meth:`~summer4.results.output.Output.cumulative` does.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal
 
 from summer4.results.output import Output
 from summer4.results.plan import (
@@ -167,6 +167,26 @@ class OutputExpr:
 
     def __rpow__(self, other: object) -> OutputExpr:
         return _binary("pow", other, self)
+
+    # Ahead of ndarray's own operators, so ``ndarray * ref`` reaches
+    # ``__array_ufunc__`` rather than an object-array loop.
+    __array_priority__: ClassVar[int] = 1000
+
+    def __array_ufunc__(self, ufunc: Any, method: str, *inputs: Any, **kwargs: Any) -> Any:
+        from summer4.flows.algebra import dispatch_ufunc
+
+        return dispatch_ufunc(ufunc, method, inputs, kwargs, mode="output_expr")
+
+    def __array_function__(
+        self,
+        func: Any,
+        types: Any,
+        args: tuple[Any, ...],
+        kwargs: Mapping[str, Any],
+    ) -> Any:
+        from summer4.flows.algebra import dispatch_array_function
+
+        return dispatch_array_function(func, types, args, kwargs, mode="output_expr")
 
 
 def _coerce(value: object) -> OutputExpr:
