@@ -1,5 +1,6 @@
 <!--
-Accepted 2026-10-14. Historical record: do not edit. Corrections go in the
+Accepted 2026-10-14; amended before merge the same day so that all coding is
+delegated to Cursor (Execution model). Historical record once merged: do not edit. Corrections go in the
 roadmap's "Corrections to committed plans" table; position lives in
 docs/dev/roadmap.md (steps 31-45).
 -->
@@ -60,6 +61,8 @@ The old doors are deprecated (`DeprecationWarning` naming the replacement) and r
 - The old doors are deprecated, then removed.
 - Phase M has full scope.
 - Each step is run by an orchestrator session with tiered workers.
+- All coding is delegated to Cursor (`cursor-delegate`); Claude orchestrates and checks
+  (amended before merge).
 
 ## Type expressibility (answering the user's question)
 
@@ -101,68 +104,116 @@ Net: more is typed after unification than before.
 Step 43 opens with a go/no-go spike. The fallback is two top-level types, `Expr` (≤ step) and
 `PostExpr`, which at least restores today's distinction.
 
-## Execution model: tiered workers
+## Execution model: tiered workers, all coding in Cursor
 
 Step 0 adds this as a section *Running a step with tiered workers* in `docs/dev/roadmap.md`,
 under *How to run a step*.
 
-The session told "next step" is the **orchestrator**. It may run on any model, and it does not
-implement.
+**All coding is delegated to Cursor.** Every change a step makes to source, tests, notebooks or
+docs content is written by Cursor's local agent, through
+`/Users/s/delegates/bin/cursor-delegate` (the `delegate-to-cursor` skill). It is never written by
+a Claude subagent or by the orchestrator. Claude has two roles:
+
+- **orchestrator**: summary, branch, briefs, checks, commits, PR, handoff and roadmap edits;
+- **checker**: read-only review.
+
+If Cursor cannot run (`cursor-delegate` exits 2: not installed or not logged in), stop and ask the
+user to run `~/.local/bin/cursor-agent login`. Do not fall back to a Claude implementer.
+
+**Tier map.** A step's `### Worker` tier names a Cursor model:
+
+| Tier | `cursor-delegate --model` |
+|---|---|
+| haiku | `claude-haiku-5-5-thinking-high` |
+| sonnet | `claude-sonnet-5-5-high` |
+| opus | `claude-opus-5-5-high` |
+
+If an id disappears from `cursor-agent models`, use the nearest model of the same family and
+tier, and record the substitution in the handoff.
+
+The session told "next step" is the **orchestrator**. It may run on any model, and it writes no
+step code itself.
 
 1. **Present the step's *Summary*** to the user before any tool use.
 2. **Cut the branch** from *Cut from*, and record the base SHA.
-3. **Spawn the implementer** with `Agent(model=<step's ### Worker tier>)` and this prompt:
+3. **Delegate the implementation to Cursor.**
+   - Write the brief to `.delegations/briefs/step-N-<tier>.md`. `.delegations/` is gitignored.
+     Cursor sees none of the conversation, so the brief is self-contained:
 
-   > You are implementing roadmap step N of summer4. Read `AGENTS.md`, then `docs/dev/roadmap.md`
-   > § Step N (*What the previous worker left you*, *Read first*, *Do*, *Files*), then
-   > `plans/unified-lazy-idiom.plan.md` § Step N. Work only on branch `<branch>`; commit as you go.
-   > Run only the targeted pytest files the step names (`pixi run pytest tests/<file>.py -q`) plus
-   > `pixi run lint` and `pixi run format-check`. Do not edit the roadmap step table, *Current
-   > position* or any *Handoff*. Do not push, open a PR, or delete, skip or loosen an existing test
-   > unless the step names that test. Finish by reporting:
-   > - the files changed;
-   > - the commands you ran and their results;
-   > - every deviation from the plan, with the reason.
+     > You are implementing roadmap step N of summer4, in this checkout, on branch `<branch>`
+     > (already checked out). Read `AGENTS.md`, then `docs/dev/roadmap.md` § Step N (*What the
+     > previous worker left you*, *Read first*, *Do*, *Files*), then
+     > `plans/unified-lazy-idiom.plan.md` § Step N. Change only the files the step's *Files* line
+     > names, plus its step plan, tests and notebook. Run the targeted pytest files the step names
+     > (`pixi run pytest tests/<file>.py -q`), plus `pixi run lint` and `pixi run format-check`.
+     > Do not edit the roadmap step table, *Current position* or any *Handoff*. Do not commit,
+     > push, or open a PR. Do not delete, skip or loosen an existing test unless the step names
+     > that test. In the DELEGATE REPORT list:
+     > - the files changed;
+     > - the commands you ran and their results;
+     > - every deviation from the plan, with the reason.
 
+     On an escalated attempt, append the checker's findings and the `wip/` branch name ("reuse
+     what is correct").
+   - Run it in the background:
+     `/Users/s/delegates/bin/cursor-delegate -w <repo> --allow-shell --model <tier id> --timeout 3600 -f .delegations/briefs/step-N-<tier>.md`.
+     Note the `chat_id` and the receipt directory it prints.
+   - Exit codes:
+     - **124** (timeout): resume once with
+       `cursor-delegate --resume <chat_id> -w <repo> --allow-shell "Continue the task; finish with the DELEGATE REPORT."`.
+       A second timeout counts as a FAIL.
+     - **1** (Cursor error): counts as a FAIL.
+     - **2** (setup): stop, as above.
+   - **Verify; don't trust the report.**
+     - Read `<receipt>/diff.patch` and `git diff`.
+     - Rerun the targeted tests yourself.
+     - Then commit the working tree yourself, excluding `.delegations/`, with a message ending
+       `(Cursor <model id>)`.
+   - A step that needs ordered commits (step 35: the characterisation test first) is two
+     delegations, with the orchestrator committing after each one.
 4. **Run the checks.**
    - Light checks, locally: `lint`, `format-check`, `check-notebooks`, `check-branch`, `coverage`,
      `roadmap`, `composability`.
-   - Heavy checks (`pixi run test`, `test-all`, `-e docs docs-strict`): these belong on the
-     shared Mac mini (`~/.devq/CLAUDE-devq.md`) once a summer4 checkout exists there. When it
-     does, push the branch and run them with
-     `mini build -C <mini checkout> -- bash -lc 'git fetch && git checkout <branch> && git pull --ff-only && pixi run test && pixi run test-all && pixi run -e docs docs-strict'`.
-     On 2026-10-14 there was no checkout on the mini, so they run locally until one exists.
+   - Heavy checks: `pixi run test`, `test-all`, `-e docs docs-strict`.
+     - These belong on the shared Mac mini (`~/.devq/CLAUDE-devq.md`) once a summer4 checkout
+       exists there. When it does, push the branch and run them with
+       `mini build -C <mini checkout> -- bash -lc 'git fetch && git checkout <branch> && git pull --ff-only && pixi run test && pixi run test-all && pixi run -e docs docs-strict'`.
+     - On 2026-10-14 there was no checkout on the mini, so they run locally until one exists.
    - A red check counts as a FAIL, with the log as the finding.
-5. **Spawn the checker** with a fresh `Agent(model=<checker tier>)`. The checker is one tier above
-   the implementer, minimum sonnet: haiku→sonnet, sonnet→opus, opus→opus (fresh context). Pass it:
+5. **Spawn the checker.** It is a Claude subagent: `Agent(model=<checker tier>)`, with a fresh
+   context. The checker reviews only; it never edits files. It is one tier above the implementer,
+   minimum sonnet: haiku→sonnet, sonnet→opus, opus→opus (fresh context). Pass it:
    - the step's roadmap and plan sections;
    - `git diff <base>...HEAD`;
+   - Cursor's DELEGATE REPORT;
    - the step's `### Sanity check` list;
    - this instruction:
 
    > Verify each item by reading code or running the named targeted tests. Also verify:
    > - (a) the changed files are within the step's *Files* line plus `plans/`, `tests/`, the
-   >   phase notebook and the docs it names;
+   >   phase notebook and the docs it names, and nothing under `.delegations/` is committed;
    > - (b) no existing test was deleted, skipped or loosened except those the step names
    >   (`git diff <base>...HEAD -- tests/`);
    > - (c) new tests assert the step's claims, not just execution;
    > - (d) no new `# type: ignore`, `pytest.skip`, `xfail`, bare `except`, or digest keyed on
    >   `id(` outside `_callable_key`;
-   > - (e) the notebook section follows the acceptance style below.
+   > - (e) the notebook section follows the acceptance style below;
+   > - (f) every deviation in the DELEGATE REPORT is recorded in the step plan.
    >
    > Reply `VERDICT: PASS` or `VERDICT: FAIL`, then numbered findings, each citing a checklist item
    > and a file:line.
 
 6. **On FAIL, escalate.**
-   - Push the attempt to `wip/<slug>-<tier>`.
+   - Commit the attempt and push it to `wip/<slug>-<tier>`.
    - Run `git reset --hard <base>` on the step branch.
-   - Respawn the implementer one tier up, with the findings and the wip branch ("reuse what is
-     correct").
+   - Delegate again to Cursor one tier up (haiku→sonnet→opus), in a new chat, with the findings
+     and the wip branch.
    - After an opus failure, stop and ask the user.
 7. **On PASS, hand off.**
    - Open the PR first, with the user-gate checklist; the `**Landed:**` line needs the PR number.
-   - Then make the handoff commit: the standard handoff, plus the line
-     `**Worker:** <tier>; checker <tier>; attempts <n> (<tiers tried>).` under `**Landed:**`.
+   - Then make the handoff commit: the standard handoff, plus this line under `**Landed:**`:
+     `**Worker:** Cursor <model id> (<tier>); checker <tier>; attempts <n> (<models tried>); receipts <.delegations ids>.`
+   - Receipts stay local (gitignored), but their ids let the user find them.
    - **Stop for the user gate.** Do not merge.
 
 **Acceptance notebook style.** Follow the signed-off style of notebooks 22 and 24 (memory
@@ -272,7 +323,10 @@ Branch `docs/unified-lazy-idiom-plan`, from `origin/main`.
 10. **Mini checkout path.** Ask the user for it and record it in the tiering section. (Answer:
     no checkout on the mini yet; the heavy checks run locally until one exists.)
 
-11. **Checks and PR.** Run `pixi run roadmap`, `pixi run composability`, `pixi run coverage` and
+11. **Cursor delegation (amended before merge).** All coding is delegated to Cursor (see
+    *Execution model*). Add `.delegations/` to `.gitignore`, so receipts and briefs are never
+    committed.
+12. **Checks and PR.** Run `pixi run roadmap`, `pixi run composability`, `pixi run coverage` and
     `pixi run pytest tests/test_roadmap.py tests/test_composability_survey.py -q`, then open the
     PR.
 
@@ -461,7 +515,8 @@ only `__rate_children__` and `__rate_bytes__`. It fixes FlowRefs being lost unde
 - the new `tests/test_rate_children.py`.
 
 **Do.**
-1. **Characterisation test first, committed green on the old code, in its own commit.**
+1. **Characterisation test first, committed green on the old code, in its own commit.** This
+   is its own Cursor delegation. The orchestrator commits it before delegating items 2–11.
    `tests/test_rate_children.py` builds a corpus of about 15 expressions: one per built-in node,
    plus nested Defer, a FOI, Capture in Defer, and Capture in TableInterp. For each it records:
    - `_flow_refs`;

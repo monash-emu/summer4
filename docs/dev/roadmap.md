@@ -73,83 +73,125 @@ Two conventions that are easy to get wrong:
 
 ## Running a step with tiered workers
 
-Steps that carry a `### Worker` section (31 onward) are run by an
-**orchestrator**. The orchestrator is the session told "next step". It may run
-on any model, and it does not write the step's code itself. It hands the work
-to an implementer subagent at the named tier, and has a fresh checker subagent
-one tier up verify it. Haiku is used where a step is mechanical, and the tier
-steps up only when the checker fails the work. The plan behind this is
-`plans/unified-lazy-idiom.plan.md` (*Execution model*).
+Steps that carry a `### Worker` section (31 onward) are run this way. The plan behind it is
+`plans/unified-lazy-idiom.plan.md` (*Execution model*). Haiku-tier models are used where a step is
+mechanical, and the tier steps up only when an independent checker fails the work.
+
+**All coding is delegated to Cursor.** Every change a step makes to source, tests, notebooks or
+docs content is written by Cursor's local agent, through
+`/Users/s/delegates/bin/cursor-delegate` (the `delegate-to-cursor` skill). It is never written by
+a Claude subagent or by the orchestrator. Claude has two roles:
+
+- **orchestrator**: summary, branch, briefs, checks, commits, PR, handoff and roadmap edits;
+- **checker**: read-only review.
+
+If Cursor cannot run (`cursor-delegate` exits 2: not installed or not logged in), stop and ask the
+user to run `~/.local/bin/cursor-agent login`. Do not fall back to a Claude implementer.
+
+**Tier map.** A step's `### Worker` tier names a Cursor model:
+
+| Tier | `cursor-delegate --model` |
+|---|---|
+| haiku | `claude-haiku-5-5-thinking-high` |
+| sonnet | `claude-sonnet-5-5-high` |
+| opus | `claude-opus-5-5-high` |
+
+If an id disappears from `cursor-agent models`, use the nearest model of the same family and
+tier, and record the substitution in the handoff.
+
+The session told "next step" is the **orchestrator**. It may run on any model, and it writes no
+step code itself.
 
 1. **Present the step's *Summary*** to the user before any tool use, as in
    [How to run a step](#how-to-run-a-step).
-2. **Cut the branch** named in the step table from *Cut from*. Record the base
-   SHA.
-3. **Spawn the implementer** with `Agent(model=<Worker tier>)` and this prompt:
+2. **Cut the branch** from *Cut from*, and record the base SHA.
+3. **Delegate the implementation to Cursor.**
+   - Write the brief to `.delegations/briefs/step-N-<tier>.md`. `.delegations/` is gitignored.
+     Cursor sees none of the conversation, so the brief is self-contained:
 
-   > You are implementing roadmap step N of summer4. Read `AGENTS.md`, then
-   > `docs/dev/roadmap.md` § Step N (*What the previous worker left you*,
-   > *Read first*, *Do*, *Files*), then `plans/unified-lazy-idiom.plan.md`
-   > § Step N. Work only on branch `<branch>`; commit as you go. Run only the
-   > targeted pytest files the step names (`pixi run pytest tests/<file>.py -q`)
-   > plus `pixi run lint` and `pixi run format-check`. Do not edit the roadmap
-   > step table, *Current position* or any *Handoff*. Do not push, open a PR,
-   > or delete, skip or loosen an existing test unless the step names that
-   > test. Finish by reporting: the files changed; the commands you ran and
-   > their results; every deviation from the plan, with the reason.
+     > You are implementing roadmap step N of summer4, in this checkout, on branch `<branch>`
+     > (already checked out). Read `AGENTS.md`, then `docs/dev/roadmap.md` § Step N (*What the
+     > previous worker left you*, *Read first*, *Do*, *Files*), then
+     > `plans/unified-lazy-idiom.plan.md` § Step N. Change only the files the step's *Files* line
+     > names, plus its step plan, tests and notebook. Run the targeted pytest files the step names
+     > (`pixi run pytest tests/<file>.py -q`), plus `pixi run lint` and `pixi run format-check`.
+     > Do not edit the roadmap step table, *Current position* or any *Handoff*. Do not commit,
+     > push, or open a PR. Do not delete, skip or loosen an existing test unless the step names
+     > that test. In the DELEGATE REPORT list:
+     > - the files changed;
+     > - the commands you ran and their results;
+     > - every deviation from the plan, with the reason.
 
-4. **Run the exit checks yourself.** The light checks (`lint`, `format-check`,
-   `check-notebooks`, `check-branch`, `coverage`, `roadmap`, `composability`)
-   always run locally. The heavy checks (`pixi run test`, `pixi run test-all`,
-   `pixi run -e docs docs-strict`) belong on the shared Mac mini
-   (`mini build -C <checkout> -- ...`). **No summer4 checkout exists on the mini
-   yet (2026-10-14), so run them locally** until one does. Once one exists,
-   record its path here. A red check counts as a FAIL, with the log as the
-   finding.
-5. **Spawn the checker** with a fresh `Agent(model=<Checker tier>)`. The
-   checker is one tier above the implementer, and at least sonnet:
-   haiku→sonnet, sonnet→opus, opus→opus in a fresh context. Give it the step's
-   roadmap section, the plan section, `git diff <base>...HEAD`, the step's
-   `### Sanity check` list, and this instruction:
+     On an escalated attempt, append the checker's findings and the `wip/` branch name ("reuse
+     what is correct").
+   - Run it in the background:
+     `/Users/s/delegates/bin/cursor-delegate -w <repo> --allow-shell --model <tier id> --timeout 3600 -f .delegations/briefs/step-N-<tier>.md`.
+     Note the `chat_id` and the receipt directory it prints.
+   - Exit codes:
+     - **124** (timeout): resume once with
+       `cursor-delegate --resume <chat_id> -w <repo> --allow-shell "Continue the task; finish with the DELEGATE REPORT."`.
+       A second timeout counts as a FAIL.
+     - **1** (Cursor error): counts as a FAIL.
+     - **2** (setup): stop, as above.
+   - **Verify; don't trust the report.**
+     - Read `<receipt>/diff.patch` and `git diff`.
+     - Rerun the targeted tests yourself.
+     - Then commit the working tree yourself, excluding `.delegations/`, with a message ending
+       `(Cursor <model id>)`.
+   - A step that needs ordered commits (step 35: the characterisation test first) is two
+     delegations, with the orchestrator committing after each one.
+4. **Run the checks.**
+   - Light checks, locally: `lint`, `format-check`, `check-notebooks`, `check-branch`, `coverage`,
+     `roadmap`, `composability`.
+   - Heavy checks: `pixi run test`, `test-all`, `-e docs docs-strict`.
+     - These belong on the shared Mac mini (`~/.devq/CLAUDE-devq.md`) once a summer4 checkout
+       exists there. When it does, push the branch and run them with
+       `mini build -C <mini checkout> -- bash -lc 'git fetch && git checkout <branch> && git pull --ff-only && pixi run test && pixi run test-all && pixi run -e docs docs-strict'`.
+     - On 2026-10-14 there was no checkout on the mini, so they run locally until one exists.
+   - A red check counts as a FAIL, with the log as the finding.
+5. **Spawn the checker.** It is a Claude subagent: `Agent(model=<checker tier>)`, with a fresh
+   context. The checker reviews only; it never edits files. It is one tier above the implementer,
+   minimum sonnet: haiku→sonnet, sonnet→opus, opus→opus (fresh context). Pass it:
+   - the step's roadmap and plan sections;
+   - `git diff <base>...HEAD`;
+   - Cursor's DELEGATE REPORT;
+   - the step's `### Sanity check` list;
+   - this instruction:
 
-   > Verify each Sanity check item by reading code or running the named
-   > targeted tests. Also verify, for every step:
+   > Verify each item by reading code or running the named targeted tests. Also verify:
+   > - (a) the changed files are within the step's *Files* line plus `plans/`, `tests/`, the
+   >   phase notebook and the docs it names, and nothing under `.delegations/` is committed;
+   > - (b) no existing test was deleted, skipped or loosened except those the step names
+   >   (`git diff <base>...HEAD -- tests/`);
+   > - (c) new tests assert the step's claims, not just execution;
+   > - (d) no new `# type: ignore`, `pytest.skip`, `xfail`, bare `except`, or digest keyed on
+   >   `id(` outside `_callable_key`;
+   > - (e) the notebook section has a *What to check* box, a titled plot or a displayed object, and no asserts;
+   > - (f) every deviation in the DELEGATE REPORT is recorded in the step plan.
    >
-   > - (a) the changed files are within the step's *Files* line, plus
-   >   `plans/`, `tests/`, the phase notebook and the docs it names;
-   > - (b) no existing test was deleted, skipped or loosened except those the
-   >   step names (`git diff <base>...HEAD -- tests/`);
-   > - (c) the new tests assert the step's claims, not just execution;
-   > - (d) there is no new `# type: ignore`, `pytest.skip`, `xfail`, bare
-   >   `except`, or digest keyed on `id(` outside `_callable_key`;
-   > - (e) the notebook section has a *What to check* box, a titled plot or a
-   >   displayed object, and no asserts.
-   >
-   > Reply `VERDICT: PASS` or `VERDICT: FAIL`, then numbered findings, each
-   > citing a checklist item and a file:line.
+   > Reply `VERDICT: PASS` or `VERDICT: FAIL`, then numbered findings, each citing a checklist item
+   > and a file:line.
 
 6. **On FAIL, escalate.**
-   - Push the attempt to `wip/<slug>-<tier>` so it is kept.
+   - Commit the attempt and push it to `wip/<slug>-<tier>`.
    - Run `git reset --hard <base>` on the step branch.
-   - Respawn the implementer one tier up (haiku→sonnet→opus). Give it the
-     checker's findings and the wip branch name: "reuse what is correct".
-   - If an opus attempt fails, stop and ask the user.
+   - Delegate again to Cursor one tier up (haiku→sonnet→opus), in a new chat, with the findings
+     and the wip branch.
+   - After an opus failure, stop and ask the user.
 7. **On PASS, hand off.**
-   - Open the PR first, because the `**Landed:**` line needs its number.
-   - Make the handoff commit. It is the standard handoff, plus a line under
-     `**Landed:**`:
-     `**Worker:** <tier>; checker <tier>; attempts <n> (<tiers tried>).`
-     This builds a record of where haiku is enough.
+   - Open the PR first, with the user-gate checklist; the `**Landed:**` line needs the PR number.
+   - Then make the handoff commit: the standard handoff, plus this line under `**Landed:**`:
+     `**Worker:** Cursor <model id> (<tier>); checker <tier>; attempts <n> (<models tried>); receipts <.delegations ids>.`
+   - Receipts stay local (gitignored), but their ids let the user find them.
    - **Stop for the user gate.** Do not merge.
 
-Gate notebooks for these steps are **acceptance** notebooks, in the style of
-notebooks 22 and 24:
+Gate notebooks for these steps are **acceptance** notebooks, in the style of notebooks 22 and 24:
 
 - a *What to check* box per section;
 - a titled Plotly plot or a displayed object;
-- no asserts: the asserts live in `tests/`.
+- no asserts; the asserts live in `tests/`.
 
-Each step that touches `src/` also writes a short step plan,
+Each step that touches `src/` also has Cursor write a short step plan,
 `plans/<branch-slug>.plan.md`, so that `check-branch` sees a plan change.
 `plans/unified-lazy-idiom.plan.md` itself is never edited after it lands.
 
@@ -187,7 +229,8 @@ outputs and anything else computed from a parameter. **Phase L** (steps 31–35,
 step 28**. **Phase M** (steps 36–44, `CP6`) makes the rate tree the only
 expression type and lands **after step 28, before Track G resumes**. Step 45
 removes the deprecated doors and stays `blocked` until a release is cut after
-step 44. These steps are run with [tiered workers](#running-a-step-with-tiered-workers).
+step 44. These steps are run with [tiered workers](#running-a-step-with-tiered-workers):
+all coding is delegated to Cursor, and Claude orchestrates and checks.
 
 **Landing order after step 14.** Step numbers are not the landing order here.
 The order is fixed as:
@@ -2158,16 +2201,18 @@ notebook `26-lazy-idiom-bridges.ipynb`.
   `plans/unified-lazy-idiom.plan.md` (the user chose to run Phase L before step
   28, and Phase M after it). Read that plan's *Context* and *Execution model*
   first.
-- **This is the first step run with tiered workers.** Follow [Running a step
-  with tiered workers](#running-a-step-with-tiered-workers) exactly. Record the
-  worker line in the handoff, because it is the first data point on how far
-  haiku gets.
+- **This is the first step run with tiered workers, with Cursor writing all
+  the code.** Follow
+  [Running a step with tiered workers](#running-a-step-with-tiered-workers)
+  exactly. Record the worker line in the handoff, because it is the first data
+  point on how far the haiku tier gets.
 - There is no checkout on the mini yet, so the heavy checks run locally.
 
 ### Worker
 
-Implementer: **haiku**. Checker: **sonnet**. Escalate per [Running a step with
-tiered workers](#running-a-step-with-tiered-workers).
+Implementer: **haiku**, delegated to Cursor
+(`--model claude-haiku-5-5-thinking-high`). Checker: **sonnet**.
+Escalate per [Running a step with tiered workers](#running-a-step-with-tiered-workers).
 
 ### Files
 
@@ -2234,8 +2279,9 @@ It lands on `feat/output-ufuncs` and closes `CX27`.
 
 ### Worker
 
-Implementer: **haiku**. Checker: **sonnet**. Escalate per [Running a step with
-tiered workers](#running-a-step-with-tiered-workers).
+Implementer: **haiku**, delegated to Cursor
+(`--model claude-haiku-5-5-thinking-high`). Checker: **sonnet**.
+Escalate per [Running a step with tiered workers](#running-a-step-with-tiered-workers).
 
 ### Files
 
@@ -2302,8 +2348,9 @@ incidence). It lands on `feat/output-defer` and closes `CX28`.
 
 ### Worker
 
-Implementer: **haiku**. Checker: **sonnet**. Escalate per [Running a step with
-tiered workers](#running-a-step-with-tiered-workers).
+Implementer: **haiku**, delegated to Cursor
+(`--model claude-haiku-5-5-thinking-high`). Checker: **sonnet**.
+Escalate per [Running a step with tiered workers](#running-a-step-with-tiered-workers).
 
 ### Files
 
@@ -2371,8 +2418,9 @@ same contract as `defer(name=)`. It lands on `feat/named-callables` and closes
 
 ### Worker
 
-Implementer: **haiku**. Checker: **sonnet**. Escalate per [Running a step with
-tiered workers](#running-a-step-with-tiered-workers).
+Implementer: **haiku**, delegated to Cursor
+(`--model claude-haiku-5-5-thinking-high`). Checker: **sonnet**.
+Escalate per [Running a step with tiered workers](#running-a-step-with-tiered-workers).
 
 ### Files
 
@@ -2442,8 +2490,9 @@ lands on `fix/rate-children-fold` and closes `CX29`, which finishes Phase L.
 
 ### Worker
 
-Implementer: **sonnet**. Checker: **opus**. Escalate per [Running a step with
-tiered workers](#running-a-step-with-tiered-workers).
+Implementer: **sonnet**, delegated to Cursor (`--model claude-sonnet-5-5-high`).
+Checker: **opus**. Escalate per [Running a step with tiered
+workers](#running-a-step-with-tiered-workers).
 
 ### Files
 
@@ -2462,7 +2511,9 @@ tiered workers](#running-a-step-with-tiered-workers).
 
 ### Do
 
-Follow `plans/unified-lazy-idiom.plan.md` § *Step 35* exactly. Where it and this
+Follow `plans/unified-lazy-idiom.plan.md` § *Step 35* exactly. Delegate it to Cursor
+as **two** tasks: first the characterisation test (commit it), then the
+refactor. Where it and this
 section disagree, this section wins, and the correction is recorded in
 [Corrections to committed plans](#corrections-to-committed-plans).
 
@@ -2517,8 +2568,9 @@ lands on `feat/stage-lattice` and creates the Phase M gate notebook
 
 ### Worker
 
-Implementer: **haiku**. Checker: **sonnet**. Escalate per [Running a step with
-tiered workers](#running-a-step-with-tiered-workers).
+Implementer: **haiku**, delegated to Cursor
+(`--model claude-haiku-5-5-thinking-high`). Checker: **sonnet**.
+Escalate per [Running a step with tiered workers](#running-a-step-with-tiered-workers).
 
 ### Files
 
@@ -2585,8 +2637,9 @@ Post-solve quantities become `RateOps` nodes: `Saved(quantity)`,
 
 ### Worker
 
-Implementer: **sonnet**. Checker: **opus**. Escalate per [Running a step with
-tiered workers](#running-a-step-with-tiered-workers).
+Implementer: **sonnet**, delegated to Cursor (`--model claude-sonnet-5-5-high`).
+Checker: **opus**. Escalate per [Running a step with tiered
+workers](#running-a-step-with-tiered-workers).
 
 ### Files
 
@@ -2654,8 +2707,9 @@ escape for the nine reserved names. Save specs dispatch `np.*`. It lands on
 
 ### Worker
 
-Implementer: **sonnet**. Checker: **opus**. Escalate per [Running a step with
-tiered workers](#running-a-step-with-tiered-workers).
+Implementer: **sonnet**, delegated to Cursor (`--model claude-sonnet-5-5-high`).
+Checker: **opus**. Escalate per [Running a step with tiered
+workers](#running-a-step-with-tiered-workers).
 
 ### Files
 
@@ -2731,8 +2785,9 @@ hoisting. It lands on `feat/shared-nodes-and-fields`.
 
 ### Worker
 
-Implementer: **sonnet**. Checker: **opus**. Escalate per [Running a step with
-tiered workers](#running-a-step-with-tiered-workers).
+Implementer: **sonnet**, delegated to Cursor (`--model claude-sonnet-5-5-high`).
+Checker: **opus**. Escalate per [Running a step with tiered
+workers](#running-a-step-with-tiered-workers).
 
 ### Files
 
@@ -2797,8 +2852,9 @@ are deprecated. It lands on `feat/save-expressions` and closes `CX32`.
 
 ### Worker
 
-Implementer: **sonnet**. Checker: **opus**. Escalate per [Running a step with
-tiered workers](#running-a-step-with-tiered-workers).
+Implementer: **sonnet**, delegated to Cursor (`--model claude-sonnet-5-5-high`).
+Checker: **opus**. Escalate per [Running a step with tiered
+workers](#running-a-step-with-tiered-workers).
 
 ### Files
 
@@ -2865,8 +2921,9 @@ back. `derived_fn` models keep today's exact behaviour, R3 included, until step
 
 ### Worker
 
-Implementer: **sonnet**. Checker: **opus**. Escalate per [Running a step with
-tiered workers](#running-a-step-with-tiered-workers).
+Implementer: **sonnet**, delegated to Cursor (`--model claude-sonnet-5-5-high`).
+Checker: **opus**. Escalate per [Running a step with tiered
+workers](#running-a-step-with-tiered-workers).
 
 ### Files
 
@@ -2937,8 +2994,9 @@ closes `CX33` and `CX11`.
 
 ### Worker
 
-Implementer: **sonnet**. Checker: **opus**. Escalate per [Running a step with
-tiered workers](#running-a-step-with-tiered-workers).
+Implementer: **sonnet**, delegated to Cursor (`--model claude-sonnet-5-5-high`).
+Checker: **opus**. Escalate per [Running a step with tiered
+workers](#running-a-step-with-tiered-workers).
 
 ### Files
 
@@ -3008,8 +3066,9 @@ step opens with a go/no-go spike. It lands on `feat/typed-stages` and closes
 
 ### Worker
 
-Implementer: **opus**. Checker: **opus (fresh context)**. Escalate per [Running
-a step with tiered workers](#running-a-step-with-tiered-workers).
+Implementer: **opus**, delegated to Cursor (`--model claude-opus-5-5-high`).
+Checker: **opus (fresh context)**. Escalate per [Running a step with tiered
+workers](#running-a-step-with-tiered-workers).
 
 ### Files
 
@@ -3080,8 +3139,9 @@ M user gate. It lands on `docs/unified-lazy-idiom` and finishes Phase M.
 
 ### Worker
 
-Implementer: **sonnet**. Checker: **opus**. Escalate per [Running a step with
-tiered workers](#running-a-step-with-tiered-workers).
+Implementer: **sonnet**, delegated to Cursor (`--model claude-sonnet-5-5-high`).
+Checker: **opus**. Escalate per [Running a step with tiered
+workers](#running-a-step-with-tiered-workers).
 
 ### Files
 
@@ -3148,8 +3208,9 @@ on `chore/remove-deprecated-doors`.
 
 ### Worker
 
-Implementer: **haiku**. Checker: **sonnet**. Escalate per [Running a step with
-tiered workers](#running-a-step-with-tiered-workers).
+Implementer: **haiku**, delegated to Cursor
+(`--model claude-haiku-5-5-thinking-high`). Checker: **sonnet**.
+Escalate per [Running a step with tiered workers](#running-a-step-with-tiered-workers).
 
 ### Files
 
