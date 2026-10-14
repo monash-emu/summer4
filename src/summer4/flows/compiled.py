@@ -38,6 +38,7 @@ from summer4.flows.rates import (
     UnaryOp,
     _adjust_bytes,
     _adjust_field_paths,
+    _callable_key,
     _field_paths,
     _flow_rate_refs,
     _lookup_path,
@@ -777,10 +778,10 @@ def _model_digest(
     for name in order:
         hasher.update(_flow_digest(flows[name], edge_maps[name]))
     hasher.update(b"df")
-    hasher.update(str(id(derived_fn) if derived_fn is not None else 0).encode())
+    hasher.update(_callable_key(derived_fn).encode() if derived_fn is not None else b"0")
     hasher.update(repr(computed_paths).encode())
     hasher.update(b"pf")
-    hasher.update(str(id(prepare_fn) if prepare_fn is not None else 0).encode())
+    hasher.update(_callable_key(prepare_fn).encode() if prepare_fn is not None else b"0")
     hasher.update(b"hoist1" if hoist else b"hoist0")
     hasher.update(b"fuse1" if fuse_compartment_updates else b"fuse0")
     hasher.update(init_plan.digest_bytes() if init_plan is not None else b"noinit")

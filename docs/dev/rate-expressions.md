@@ -209,6 +209,17 @@ documented as a static argument for callers who jit, and diffrax's `filter_jit`
 caches internally. A bare `cm.run(...)` in a script pays no summer4-level
 cache miss at all.
 
+**Naming a callable removes the rebuild cost.** Every callable hook accepts
+`named(fn, "key")`: `Transform`, `SaveFn`, `derived_fn`, `prepare_fn`, the
+callable base value of an `InitialPopulation`, and a `ForceOfInfection` `kind`.
+The wrapper forwards every call to `fn` unchanged, and its digest keys on
+`"key"` instead of `id(fn)`, so a model rebuilt with a fresh closure hits the
+cache. The contract is the same as `defer(fn, name=...)`: passing a name
+asserts that every function given that name is the same program. A wrong name
+gives a wrong answer, silently, so give one name only to functions that compute
+the same program for every captured value. Leave the bare function when you
+cannot make that promise.
+
 ### 2. `derived_fn` — arbitrary code, once per step, named outputs
 
 `compile(derived_fn=...)` runs `derived_fn(params, y=, t=)` before the rates

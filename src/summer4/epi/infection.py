@@ -329,7 +329,7 @@ class ForceOfInfection(RateOps):
         return paths
 
     def __rate_bytes__(self) -> bytes:
-        from summer4.flows.rates import _rate_bytes, _selector_bytes
+        from summer4.flows.rates import _callable_key, _rate_bytes, _selector_bytes
 
         body = b"foi" + self.name.encode() + self.group_by.name.encode()
         body += _selector_bytes(self.infectious)
@@ -337,7 +337,7 @@ class ForceOfInfection(RateOps):
         if isinstance(self.kind, FOIKind):
             body += repr(self.kind.value).encode()
         else:
-            body += repr(id(self.kind)).encode()
+            body += _callable_key(self.kind).encode()
         body += repr(
             None if self.normalize_infectiousness is None else self.normalize_infectiousness.value
         ).encode()

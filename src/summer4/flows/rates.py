@@ -316,6 +316,64 @@ class Capture(RateOps):
     inner: RateOps
 
 
+@dataclass(frozen=True)
+class Named:
+    """A callable with a stable digest key. ``named(fn, name)`` builds one.
+
+    Every hook that takes a callable accepts a ``Named``: :class:`Transform`,
+    :class:`~summer4.results.plan.SaveFn`, ``derived_fn`` and ``prepare_fn`` on
+    :meth:`~summer4.flows.compiled.FlowModel.compile`, the callable base value
+    of an :class:`~summer4.flows.initial.InitialPopulation`, and the ``kind``
+    of a :class:`~summer4.epi.infection.ForceOfInfection`.
+
+    ``Named`` forwards every call, with its arguments unchanged, to ``fn``.
+    The only difference from the bare function is the jit-cache digest: it
+    keys on ``name`` rather than on ``id(fn)``. A rebuilt model whose hook is
+    a fresh closure therefore reuses a compiled program instead of missing
+    the cache.
+
+    **The contract.** Passing a name asserts that every function given that
+    name is the same program. Two functions with different captured values
+    must not share a name. If they do, the second model silently returns the
+    first model's numbers. This is the same contract as ``defer(fn, name=)``:
+    a wrong name is a wrong answer, not a slower run. When in doubt, leave the
+    bare function, which is keyed by identity and is always correct.
+
+    Build instances with :func:`named`. Direct construction validates the same
+    arguments.
+
+    Raises:
+        TypeError: if ``fn`` is not callable, or ``name`` is not a string.
+        ValueError: if ``name`` is empty.
+    """
+
+    fn: Callable[..., Any]
+    name: str
+
+    def __post_init__(self) -> None:
+        if not callable(self.fn):
+            raise TypeError(f"named() wraps a callable, got {type(self.fn).__name__}.")
+        if not isinstance(self.name, str):
+            raise TypeError(f"named() needs a string name, got {type(self.name).__name__}.")
+        if not self.name:
+            raise ValueError("named() needs a non-empty name.")
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        return self.fn(*args, **kwargs)
+
+
+def named(fn: Callable[..., Any], name: str) -> Named:
+    """Wrap ``fn`` so the jit-cache digest keys on ``name``. See :class:`Named`."""
+    return Named(fn, name)
+
+
+def _callable_key(fn: object) -> str:
+    """Digest key for a callable hook: ``n:<name>`` for a :class:`Named`, else its identity."""
+    if isinstance(fn, Named):
+        return "n:" + fn.name
+    return str(id(fn))
+
+
 @dataclass(frozen=True, slots=True)
 class Defer(RateOps):
     """Call ``fn`` on evaluated rate arguments. The general escape hatch.
@@ -329,7 +387,8 @@ class Defer(RateOps):
 
     ``name`` is optional and affects only the jit-cache digest. The default
     key is ``id(fn)``, which keeps two closures with the same source and
-    different captured values from sharing a compiled program. Passing
+    different captured values from sharing a compiled program. If ``fn`` is a
+    :func:`named` wrapper, the default key is its name instead. Passing
     ``name=`` asserts that those calls are the same program. A wrong name is
     a wrong answer, not a slower run.
 
@@ -391,7 +450,7 @@ class Defer(RateOps):
         # Identity, not ``__qualname__``. Every lambda is ``<lambda>``; keying
         # on the name would make two different closures share a jit cache entry
         # and silently return the first one's numbers.
-        key = self.name if self.name is not None else str(id(self.fn))
+        key = self.name if self.name is not None else _callable_key(self.fn)
         parts = [b"defer", key.encode()]
         for child in self.args:
             parts.append(_rate_bytes(child))
@@ -1000,6 +1059,8 @@ def derived_return_schema(derived_fn: Callable[..., Any] | None) -> type | None:
     """
     if derived_fn is None:
         return None
+    if isinstance(derived_fn, Named):
+        derived_fn = derived_fn.fn
     raw = getattr(derived_fn, "__annotations__", {}).get("return")
     if isinstance(raw, type) and _is_namedtuple_class(raw):
         return raw
@@ -1146,6 +1207,7 @@ def _rate_bytes(expr: RateOps) -> bytes:
 
 def _adjust_bytes(adj: Adjustment) -> bytes:
     if isinstance(adj, Transform):
-        return b"tf" + str(id(adj.fn)).encode() + b"".join(_rate_bytes(arg) for arg in adj.args)
+        key = _callable_key(adj.fn).encode()
+        return b"tf" + key + b"".join(_rate_bytes(arg) for arg in adj.args)
     kind = b"ow" if isinstance(adj, Overwrite) else b"mul"
     return kind + _rate_bytes(adj.value)
