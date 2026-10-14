@@ -6,7 +6,7 @@ import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any, Literal, NamedTuple, cast, get_type_hints
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple, cast, get_type_hints
 
 import numpy as np
 
@@ -25,6 +25,9 @@ from summer4.selectors import (
     Selector,
     Source,
 )
+
+if TYPE_CHECKING:
+    from summer4.results.outputset import OutputExpr
 
 type FlowReduce = Literal["identity", "sum"] | tuple[Literal["sum_over"], str]
 type Adjustment = Multiply | Overwrite | Transform
@@ -406,7 +409,7 @@ def _eval_defer(expr: Defer, *, eval_child: Callable[[RateOps], Any], **_: Any) 
     return expr.fn(*args, **kwargs)
 
 
-def defer(fn: Callable[..., Any], *, name: str | None = None) -> Callable[..., Any]:
+def defer(fn: Callable[..., Any], *, name: str | None = None) -> Callable[..., Defer | OutputExpr]:
     """Wrap ``fn`` so calling it builds a :class:`Defer` node, or a post-solve node.
 
     ``defer(f)(Time(), Param("amp"))`` is the documented spelling.
@@ -437,7 +440,7 @@ def defer(fn: Callable[..., Any], *, name: str | None = None) -> Callable[..., A
     a rate node and cannot hold an output. Use ``defer(f)(...)``.
     """
 
-    def wrapped(*args: object, **kwargs: object) -> Any:
+    def wrapped(*args: object, **kwargs: object) -> Defer | OutputExpr:
         from summer4.results import outputset
 
         values = (*args, *kwargs.values())

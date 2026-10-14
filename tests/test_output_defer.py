@@ -22,11 +22,13 @@ from summer4 import (
     PropertyData,
     PropertyMap,
     Result,
+    Time,
     TimeAxis,
     TransitionFlow,
     defer,
     eval_closed,
 )
+from summer4.results.outputset import OutputExpr
 
 KERNEL_WEEKS = 26
 GAMMA_SHAPE = 4.0
@@ -211,6 +213,31 @@ def test_wrong_shape_raises_type_error_naming_the_function() -> None:
         outputs.evaluate(_series_result("inc", _incidence(5)), {"delay": 2.0})
     assert "(3,)" in str(info.value)
     assert "(5,)" in str(info.value)
+
+
+def test_mixed_time_and_output_arguments_raise_value_error_at_evaluate() -> None:
+    def add_time(t: Any, series: Any) -> Any:
+        return jnp.asarray(t) + _raw(series)
+
+    outputs = OutputSet()
+    outputs["inc"] = Compartments()
+    outputs["mixed"] = defer(add_time)(Time(), outputs.ref("inc"))
+    with pytest.raises(ValueError, match="depends on time"):
+        outputs.evaluate(_series_result("inc", _incidence(5)), {"delay": 2.0})
+
+
+def test_array_return_without_an_output_argument_raises_type_error() -> None:
+    # No public spelling reaches this branch: a leaf, a ref, or any expression built on one
+    # evaluates to an Output. A parameter-only OutputExpr, built directly, does.
+    def constant_array(value: Any) -> Any:
+        return jnp.ones(3) * value
+
+    outputs = OutputSet()
+    outputs["inc"] = Compartments()
+    outputs["flat"] = defer(constant_array)(OutputExpr(kind="param", param=Param("scale")))
+    with pytest.raises(TypeError, match="constant_array") as info:
+        outputs.evaluate(_series_result("inc", _incidence(5)), {"scale": 2.0})
+    assert "no Output argument" in str(info.value)
 
 
 def test_all_parameter_defer_still_builds_a_rate_node() -> None:
