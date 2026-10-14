@@ -200,11 +200,11 @@ Each step that touches `src/` also has Cursor write a short step plan,
 <!-- roadmap:current -->
 | Field | Value |
 | --- | --- |
-| Step | 34 |
+| Step | 35 |
 | Status | next |
-| Branch | `feat/named-callables` |
-| Cut from | `feat/output-defer` (stacked; see step 32) |
-| Last landed | `feat/output-defer` (PR #57, stacked on #56 and #55; all awaiting the user gate) |
+| Branch | `fix/rate-children-fold` |
+| Cut from | `feat/named-callables` (stacked; see step 32) |
+| Last landed | `feat/named-callables` (PR #58, stacked on #57, #56, #55; all awaiting the user gate) |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -280,8 +280,8 @@ before step 15 lands. Each handoff below names its successor explicitly;
 | 31 | L | CP5 | `fix/likelihood-scale-expr` | `plans/unified-lazy-idiom.plan.md` | Step 31 | done | CX26 |
 | 32 | L | CP5 | `feat/output-ufuncs` | `plans/unified-lazy-idiom.plan.md` | Step 32 | done | CX27 |
 | 33 | L | CP5 | `feat/output-defer` | `plans/unified-lazy-idiom.plan.md` | Step 33 | done | CX28 |
-| 34 | L | CP5 | `feat/named-callables` | `plans/unified-lazy-idiom.plan.md` | Step 34 | next | CX7 |
-| 35 | L | CP5 | `fix/rate-children-fold` | `plans/unified-lazy-idiom.plan.md` | Step 35 | planned | CX29 |
+| 34 | L | CP5 | `feat/named-callables` | `plans/unified-lazy-idiom.plan.md` | Step 34 | done | CX7 |
+| 35 | L | CP5 | `fix/rate-children-fold` | `plans/unified-lazy-idiom.plan.md` | Step 35 | next | CX29 |
 | 36 | M | CP6 | `feat/stage-lattice` | `plans/unified-lazy-idiom.plan.md` | Step 36 | planned | — |
 | 37 | M | CP6 | `feat/post-stage-nodes` | `plans/unified-lazy-idiom.plan.md` | Step 37 | planned | — |
 | 38 | M | CP6 | `feat/outputset-on-rate-nodes` | `plans/unified-lazy-idiom.plan.md` | Step 38 | planned | CX30 |
@@ -2455,6 +2455,9 @@ Set step 33 `done`, step 34 `next`.
 
 ## Step 34 — `feat/named-callables`
 
+**Landed:** feat/named-callables, PR #58, 2026-10-15.
+**Worker:** Cursor claude-haiku-5-5-thinking-high (haiku); checker sonnet; attempts 1 (haiku, two resumes for brief-permitted doc fixes); receipts 20261015-071856.
+
 ### Summary
 
 `named(fn, "seasonal")` gives any callable hook a stable digest key: Transform,
@@ -2550,6 +2553,19 @@ needs only `__rate_children__` and `__rate_bytes__`. This fixes `FlowRef`s lost
 under `ForceOfInfection` (never topologically ordered) and capture metadata lost
 under `TableInterp` / `Lookup`. A characterisation test is committed first. It
 lands on `fix/rate-children-fold` and closes `CX29`, which finishes Phase L.
+
+### What the previous worker left you
+
+- **Stacked:** cut from `feat/named-callables` (PR #58, on #57, #56, #55).
+- `_callable_key` (`src/summer4/flows/rates.py`) is the only place a digest keys on a callable.
+  `ForceOfInfection.__rate_bytes__` now uses it for a callable `kind`. Leave `__rate_bytes__`
+  alone in this step: the refold must not change `_rate_bytes` or `_eval_rate`.
+- **Run this step as two Cursor delegations** (briefs `step-35a-sonnet.md` and
+  `step-35b-sonnet.md`). Commit the characterisation test after the first, before delegating the
+  refactor.
+- The 35b brief also carries two cosmetic notebook-26 title-cell fixes from the step 34 review.
+- **Lesson from step 34:** a brief's "Also fix" list must also widen its *Constraints* file list.
+  Otherwise a careful implementer refuses the edit, rightly.
 
 ### Worker
 
