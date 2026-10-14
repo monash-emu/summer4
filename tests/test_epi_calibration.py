@@ -41,6 +41,7 @@ from summer4.epi.calibration import (
     priors_from_frame,
 )
 from summer4.epi.calibration.likelihoods import AggregateHow, resolve_scale
+from summer4.flows.rates import Time
 
 
 class _Rates(NamedTuple):
@@ -230,6 +231,56 @@ def test_hierarchical_sd_resolves_from_params() -> None:
     assert float(resolve_scale(lik.sd, params)) == 12.0
     lik_param = NormalLikelihood(sd=Param("sigma"))
     assert float(resolve_scale(lik_param.sd, {"sigma": 0.25})) == 0.25
+
+
+def test_rate_expression_scale_resolves_from_params() -> None:
+    assert float(resolve_scale(Param("a") * 2, {"a": 1.5})) == 3.0
+
+
+def test_rate_expression_scale_is_jittable_and_differentiable() -> None:
+    expr = np.exp(Param("log_k"))
+    expected = float(np.exp(0.3))
+
+    @jax.jit
+    def scale(log_k: Any) -> Any:
+        return resolve_scale(expr, {"log_k": log_k})
+
+    def scale_of(log_k: Any) -> Any:
+        return resolve_scale(expr, {"log_k": log_k})
+
+    np.testing.assert_allclose(float(scale(jnp.asarray(0.3))), expected, rtol=1e-5)
+    grad = float(jax.grad(scale_of)(jnp.asarray(0.3)))
+    assert np.isfinite(grad)
+    np.testing.assert_allclose(grad, expected, rtol=1e-5)
+
+
+def test_time_dependent_scale_is_rejected() -> None:
+    with pytest.raises(ValueError):
+        resolve_scale(Time(), {})
+
+
+def test_rate_expression_sd_matches_float_sd() -> None:
+    observed = jnp.asarray([1.0, 2.0, 3.0])
+    predicted = jnp.asarray([1.1, 1.9, 3.2])
+    expr = NormalLikelihood(sd=Param("s") * 2)
+    float_sd = NormalLikelihood(sd=1.0)
+    np.testing.assert_allclose(
+        float(expr.log_prob(observed, predicted, {"s": 0.5})),
+        float(float_sd.log_prob(observed, predicted, {})),
+        rtol=1e-5,
+    )
+
+
+def test_rate_expression_dispersion_matches_float_dispersion() -> None:
+    observed = jnp.asarray([3.0, 5.0, 8.0])
+    predicted = jnp.asarray([4.0, 6.0, 7.0])
+    expr = NegativeBinomial(dispersion=np.exp(Param("log_k")))
+    float_k = NegativeBinomial(dispersion=float(np.exp(0.3)))
+    np.testing.assert_allclose(
+        float(expr.log_prob(observed, predicted, {"log_k": 0.3})),
+        float(float_k.log_prob(observed, predicted, {})),
+        rtol=1e-5,
+    )
 
 
 def test_targetset_log_likelihood_matches_hand_mean() -> None:
