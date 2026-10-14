@@ -13,3 +13,9 @@ halves, or (b) the user can declare a static path through derived params so
 those FieldRefs remain hoistable.
 
 See `docs/dev/run-stages.md` (R3) and `summer4.flows.stages.rate_stage`.
+
+**Scheduled (2026-10-14):** roadmap steps 39 (`field_refs`, shared-node
+evaluation) and 41 (`derived_fn` deprecated) in
+`plans/unified-lazy-idiom.plan.md` take route (b): new-idiom models read
+parameters through `FieldRef` and derived values through `field_refs(defer(...))`,
+so their parameter work hoists. Step 41 marks this note done.

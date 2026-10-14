@@ -44,9 +44,11 @@ Follow this exactly. It assumes you know nothing about the project.
    in the body: every notebook the step ships or unblocks, and the claim to
    check in each. **The notebooks are a blocking manual sign-off** — the branch
    is not merged until the user has run them (`pixi run notebook`). Each gate
-   notebook is summer2 documentation style: an explanation of the claim, a
-   titled plot of it, and an assertion of the same claim. A notebook that only
-   asserts is not a user gate.
+   notebook is an **acceptance** notebook: it explains the claim, and for each
+   section gives a *What to check* box attached to a titled plot or a displayed
+   object. An assertion is not user acceptance; the claim's assertions live in
+   `tests/`. (This replaces the older "a titled plot and an assertion of the
+   same claim" wording; notebooks 22 and 24 are the signed-off examples.)
 8. Make the *Handoff* commit last, on this branch, before the merge. It is one
    commit, `Hand off after step N: <slug>.`, and it does four things:
 
@@ -69,16 +71,98 @@ Two conventions that are easy to get wrong:
   been taken by a step that landed out of order, use the next free two-digit
   prefix and correct this file in the same commit.
 
+## Running a step with tiered workers
+
+Steps that carry a `### Worker` section (31 onward) are run by an
+**orchestrator**. The orchestrator is the session told "next step". It may run
+on any model, and it does not write the step's code itself. It hands the work
+to an implementer subagent at the named tier, and has a fresh checker subagent
+one tier up verify it. Haiku is used where a step is mechanical, and the tier
+steps up only when the checker fails the work. The plan behind this is
+`plans/unified-lazy-idiom.plan.md` (*Execution model*).
+
+1. **Present the step's *Summary*** to the user before any tool use, as in
+   [How to run a step](#how-to-run-a-step).
+2. **Cut the branch** named in the step table from *Cut from*. Record the base
+   SHA.
+3. **Spawn the implementer** with `Agent(model=<Worker tier>)` and this prompt:
+
+   > You are implementing roadmap step N of summer4. Read `AGENTS.md`, then
+   > `docs/dev/roadmap.md` § Step N (*What the previous worker left you*,
+   > *Read first*, *Do*, *Files*), then `plans/unified-lazy-idiom.plan.md`
+   > § Step N. Work only on branch `<branch>`; commit as you go. Run only the
+   > targeted pytest files the step names (`pixi run pytest tests/<file>.py -q`)
+   > plus `pixi run lint` and `pixi run format-check`. Do not edit the roadmap
+   > step table, *Current position* or any *Handoff*. Do not push, open a PR,
+   > or delete, skip or loosen an existing test unless the step names that
+   > test. Finish by reporting: the files changed; the commands you ran and
+   > their results; every deviation from the plan, with the reason.
+
+4. **Run the exit checks yourself.** The light checks (`lint`, `format-check`,
+   `check-notebooks`, `check-branch`, `coverage`, `roadmap`, `composability`)
+   always run locally. The heavy checks (`pixi run test`, `pixi run test-all`,
+   `pixi run -e docs docs-strict`) belong on the shared Mac mini
+   (`mini build -C <checkout> -- ...`). **No summer4 checkout exists on the mini
+   yet (2026-10-14), so run them locally** until one does. Once one exists,
+   record its path here. A red check counts as a FAIL, with the log as the
+   finding.
+5. **Spawn the checker** with a fresh `Agent(model=<Checker tier>)`. The
+   checker is one tier above the implementer, and at least sonnet:
+   haiku→sonnet, sonnet→opus, opus→opus in a fresh context. Give it the step's
+   roadmap section, the plan section, `git diff <base>...HEAD`, the step's
+   `### Sanity check` list, and this instruction:
+
+   > Verify each Sanity check item by reading code or running the named
+   > targeted tests. Also verify, for every step:
+   >
+   > - (a) the changed files are within the step's *Files* line, plus
+   >   `plans/`, `tests/`, the phase notebook and the docs it names;
+   > - (b) no existing test was deleted, skipped or loosened except those the
+   >   step names (`git diff <base>...HEAD -- tests/`);
+   > - (c) the new tests assert the step's claims, not just execution;
+   > - (d) there is no new `# type: ignore`, `pytest.skip`, `xfail`, bare
+   >   `except`, or digest keyed on `id(` outside `_callable_key`;
+   > - (e) the notebook section has a *What to check* box, a titled plot or a
+   >   displayed object, and no asserts.
+   >
+   > Reply `VERDICT: PASS` or `VERDICT: FAIL`, then numbered findings, each
+   > citing a checklist item and a file:line.
+
+6. **On FAIL, escalate.**
+   - Push the attempt to `wip/<slug>-<tier>` so it is kept.
+   - Run `git reset --hard <base>` on the step branch.
+   - Respawn the implementer one tier up (haiku→sonnet→opus). Give it the
+     checker's findings and the wip branch name: "reuse what is correct".
+   - If an opus attempt fails, stop and ask the user.
+7. **On PASS, hand off.**
+   - Open the PR first, because the `**Landed:**` line needs its number.
+   - Make the handoff commit. It is the standard handoff, plus a line under
+     `**Landed:**`:
+     `**Worker:** <tier>; checker <tier>; attempts <n> (<tiers tried>).`
+     This builds a record of where haiku is enough.
+   - **Stop for the user gate.** Do not merge.
+
+Gate notebooks for these steps are **acceptance** notebooks, in the style of
+notebooks 22 and 24:
+
+- a *What to check* box per section;
+- a titled Plotly plot or a displayed object;
+- no asserts: the asserts live in `tests/`.
+
+Each step that touches `src/` also writes a short step plan,
+`plans/<branch-slug>.plan.md`, so that `check-branch` sees a plan change.
+`plans/unified-lazy-idiom.plan.md` itself is never edited after it lands.
+
 ## Current position
 
 <!-- roadmap:current -->
 | Field | Value |
 | --- | --- |
-| Step | 28 |
+| Step | 31 |
 | Status | next |
-| Branch | `feat/calib-outputs` |
+| Branch | `fix/likelihood-scale-expr` |
 | Cut from | `main` |
-| Last landed | `feat/calib-composable` |
+| Last landed | `fix/saveplan-ts-grid` |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -96,11 +180,20 @@ findings and name `CP` packages. Step 29 (`CP1`) was inserted on 2026-09-28,
 after step 27, and lands before step 28; step 30 (`CP2`) was inserted on
 2026-09-28 after step 29, also before step 28.
 
+**Phases L and M** (steps 31–45) are the staged unification of summer4's lazy
+idioms (`plans/unified-lazy-idiom.plan.md`): one way to write rates, derived
+outputs and anything else computed from a parameter. **Phase L** (steps 31–35,
+`CP5`) is additive bridges and was inserted on 2026-10-14 to land **before
+step 28**. **Phase M** (steps 36–44, `CP6`) makes the rate tree the only
+expression type and lands **after step 28, before Track G resumes**. Step 45
+removes the deprecated doors and stays `blocked` until a release is cut after
+step 44. These steps are run with [tiered workers](#running-a-step-with-tiered-workers).
+
 **Landing order after step 14.** Step numbers are not the landing order here.
 The order is fixed as:
 
 ```text
-14 → 15 → 24 → 25 → 26 → 27 → 29 → 30 → 28 → 16 → 17 → 18 → 19
+14 → 15 → 24 → 25 → 26 → 27 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 28 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 16 → 17 → 18 → 19 → 45
 ```
 
 Phase J comes **directly after step 15** and before Track G resumes at step 16.
@@ -138,9 +231,24 @@ before step 15 lands. Each handoff below names its successor explicitly;
 | 25 | J | WP19 | `feat/calib-multistart` | `plans/calibration-toolkit.plan.md` | Step 25 | done | CW5 CW6 |
 | 26 | J | WP19 | `feat/calib-gradient-free` | `plans/calibration-toolkit.plan.md` | Step 26 | done | CW7 |
 | 27 | J | WP19 | `feat/calib-seeded-mcmc` | `plans/calibration-toolkit.plan.md` | Step 27 | done | CW8 CW9 |
-| 28 | J | WP19 | `feat/calib-outputs` | `plans/calibration-toolkit.plan.md` | Step 28 | next | CW10 CW11 |
+| 28 | J | WP19 | `feat/calib-outputs` | `plans/calibration-toolkit.plan.md` | Step 28 | planned | CW10 CW11 |
 | 29 | K | CP1 | `feat/solve-composable` | `plans/solve-composable.plan.md` | Whole | done | CX1 CX2 CX3 CX4 CX5 |
 | 30 | K | CP2 | `feat/calib-composable` | `plans/calib-composable.plan.md` | Whole | done | CX16 CX17 CX18 CX19 CX24 |
+| 31 | L | CP5 | `fix/likelihood-scale-expr` | `plans/unified-lazy-idiom.plan.md` | Step 31 | next | CX26 |
+| 32 | L | CP5 | `feat/output-ufuncs` | `plans/unified-lazy-idiom.plan.md` | Step 32 | planned | CX27 |
+| 33 | L | CP5 | `feat/output-defer` | `plans/unified-lazy-idiom.plan.md` | Step 33 | planned | CX28 |
+| 34 | L | CP5 | `feat/named-callables` | `plans/unified-lazy-idiom.plan.md` | Step 34 | planned | CX7 |
+| 35 | L | CP5 | `fix/rate-children-fold` | `plans/unified-lazy-idiom.plan.md` | Step 35 | planned | CX29 |
+| 36 | M | CP6 | `feat/stage-lattice` | `plans/unified-lazy-idiom.plan.md` | Step 36 | planned | — |
+| 37 | M | CP6 | `feat/post-stage-nodes` | `plans/unified-lazy-idiom.plan.md` | Step 37 | planned | — |
+| 38 | M | CP6 | `feat/outputset-on-rate-nodes` | `plans/unified-lazy-idiom.plan.md` | Step 38 | planned | CX30 |
+| 39 | M | CP6 | `feat/shared-nodes-and-fields` | `plans/unified-lazy-idiom.plan.md` | Step 39 | planned | — |
+| 40 | M | CP6 | `feat/save-expressions` | `plans/unified-lazy-idiom.plan.md` | Step 40 | planned | CX32 |
+| 41 | M | CP6 | `feat/derived-fn-deprecation` | `plans/unified-lazy-idiom.plan.md` | Step 41 | planned | CX31 |
+| 42 | M | CP6 | `feat/callable-doors` | `plans/unified-lazy-idiom.plan.md` | Step 42 | planned | CX33 CX11 |
+| 43 | M | CP6 | `feat/typed-stages` | `plans/unified-lazy-idiom.plan.md` | Step 43 | planned | CX34 |
+| 44 | M | CP6 | `docs/unified-lazy-idiom` | `plans/unified-lazy-idiom.plan.md` | Step 44 | planned | — |
+| 45 | M | — | `chore/remove-deprecated-doors` | `plans/unified-lazy-idiom.plan.md` | Step 45 | blocked | — |
 <!-- /roadmap:steps -->
 
 `Closes` lists row IDs of {doc}`../evaluation/tb-ports` (and, where a step moves
@@ -1113,6 +1221,16 @@ the chapter onto it, and moves chapter 15 from `partial` to `full` — the last
 textbook chapter outside the contact-survey block. It is independent of phases
 B–F but is cheapest after step 8, whose selector-keyed weights it reuses.
 
+### What the previous worker left you
+
+- **Phases L and M (steps 31–44) land before you.** Step 35 replaced the
+  per-pass child walks with one `rate_children`, so where
+  `plans/wp17-foi-susceptibility.plan.md` (around lines 54 and 111) says to
+  extend `ForceOfInfection.__field_paths__`, extend
+  `ForceOfInfection.__rate_children__` instead. Its `__field_paths__` and
+  `__flow_refs__` no longer exist. Check the Phase M handoffs for anything
+  else that changed in `summer4.epi.infection`.
+
 ### Read first
 
 1. `AGENTS.md`
@@ -1258,7 +1376,8 @@ gate:** all four chapters.
 ### Handoff
 
 Set step 19 `done`, step 20 `next`. Track G is finished; the only textbook row
-still short of `full` should be none.
+still short of `full` should be none. Then, once a release has been cut after
+step 44, step 45 `next` (it is `blocked` until then).
 
 ---
 
@@ -1864,7 +1983,18 @@ notebook composes every stage, plus two shorter compositions. It lands on
   `23-solve-backends.ipynb`. `CX1`–`CX5` are `done` in the composability
   survey.
 - Your gate notebook is **`25-calibration-workflow.ipynb`** (23 went to step
-  29, 24 to step 30).
+  29, 24 to step 30; 26 is Phase L's, 27 is reserved for Phase M).
+- **Phase L (steps 31–35) landed before you.** Its spellings are available in
+  notebook 25:
+  - `defer(f)(outputs.ref(...), Param(...))` applies a function to outputs;
+  - `np.*` and the named helpers work on `outputs.ref(...)`;
+  - likelihood `sd=` / `dispersion=` take expressions such as
+    `np.exp(Param("log_k"))`;
+  - `named(fn, name)` keys a callable for the jit cache.
+
+  Phase M (steps 36–44) rewrites `OutputSet` internals after you and will
+  update notebook 25's calls. Assert values, not node classes, in any test you
+  add.
 - **Step 30 (`CP2`) landed before you** (PR #45). The entry points now return
   run objects: `wf.optimize` → `wf.OptimizeRun` (`.candidates`, `.loss_trace`,
   `.best_params`, `.extend()`, cumulative `.history`); `bm.find_map` → the same
@@ -1908,8 +2038,8 @@ ledger must then read *Calibration workflow rows complete today: **11 of
 
 ### Handoff
 
-Set step 28 `done`, step 16 `next` (Track G resumes — see *Landing order
-after step 14*). Phase J is finished; record which stages users should reach
+Set step 28 `done`, step 36 `next` (Phase M of the lazy-idiom unification;
+Track G resumes at step 16 after step 44 — see *Landing order after step 14*). Phase J is finished; record which stages users should reach
 for first.
 
 
@@ -2006,6 +2136,1070 @@ and `pixi run -e docs docs-strict` (the textbook chapter 20 calls change).
 Set step 30 `done`, step 28 `next`. Record in step 28's *What the previous
 worker left you* that `sample` / `find_map` / `optimize` now return run
 objects (`.idata`, `.best_params`, `.candidates`).
+
+(Re-sequenced 2026-10-14: step 31 `next`. Phase L, steps 31–35, was inserted
+ahead of step 28, which now follows step 35.)
+
+---
+
+## Step 31 — `fix/likelihood-scale-expr`
+
+### Summary
+
+Likelihood `sd=` and `dispersion=` accept any parameter-only rate expression,
+such as `np.exp(Param("log_k"))`, not only a bare `Param`. `resolve_scale`
+routes every `RateOps` through `eval_closed`. It lands on
+`fix/likelihood-scale-expr` and closes `CX26`. It also creates the Phase L gate
+notebook `26-lazy-idiom-bridges.ipynb`.
+
+### What the previous worker left you
+
+- **This step was inserted on 2026-10-14**, ahead of step 28, by the plan
+  `plans/unified-lazy-idiom.plan.md` (the user chose to run Phase L before step
+  28, and Phase M after it). Read that plan's *Context* and *Execution model*
+  first.
+- **This is the first step run with tiered workers.** Follow [Running a step
+  with tiered workers](#running-a-step-with-tiered-workers) exactly. Record the
+  worker line in the handoff, because it is the first data point on how far
+  haiku gets.
+- There is no checkout on the mini yet, so the heavy checks run locally.
+
+### Worker
+
+Implementer: **haiku**. Checker: **sonnet**. Escalate per [Running a step with
+tiered workers](#running-a-step-with-tiered-workers).
+
+### Files
+
+`src/summer4/epi/calibration/likelihoods.py`, `tests/test_epi_calibration.py`,
+`examples/notebooks/26-lazy-idiom-bridges.ipynb` (new),
+`plans/likelihood-scale-expr.plan.md` (new step plan).
+
+### Read first
+
+1. `AGENTS.md`
+2. `plans/unified-lazy-idiom.plan.md`: *Execution model*, then § *Step 31*
+3. {doc}`../evaluation/composability`: rows `CX26` and packages `CP5` / `CP6`
+4. Every file in *Files* that already exists, at the lines the plan cites
+
+### Do
+
+Follow `plans/unified-lazy-idiom.plan.md` § *Step 31* exactly. Where it and this
+section disagree, this section wins, and the correction is recorded in
+[Corrections to committed plans](#corrections-to-committed-plans).
+
+Write the step plan `plans/likelihood-scale-expr.plan.md`: one line saying
+"Implements Step 31 of `unified-lazy-idiom.plan.md`", followed by every
+deviation and its reason.
+
+Notebook: `26-lazy-idiom-bridges.ipynb` section A (new notebook), in the
+acceptance style: a *What to check* box per section, a titled Plotly plot or a
+displayed object, and no asserts (asserts live in `tests/`).
+
+Set the closed findings to `done` in {doc}`../evaluation/composability` in the
+same commit as the code, then run `pixi run composability-write`.
+
+Cut from: `main`. Merges into: `main`.
+
+### Sanity check
+
+The checker verifies these items, plus the checklist every step gets (see
+[Running a step with tiered workers](#running-a-step-with-tiered-workers)):
+
+- No branch of `resolve_scale` returns a `RateOps`.
+- The existing `Prior`/`FieldRef` tests are untouched and green.
+- `resolve_scale(Param("a")*2, {"a": 1.5}) == 3.0` is tested, and so are the
+  jit, grad and `Time()`-raises cases.
+- CX26 is `done` in the composability survey.
+
+### Exit checks
+
+The [standard checks](#exit-checks-every-step), plus `pixi run composability`.
+**User gate:** `26-lazy-idiom-bridges.ipynb` section A (new notebook).
+
+### Handoff
+
+Set step 31 `done`, step 32 `next`.
+
+---
+
+## Step 32 — `feat/output-ufuncs`
+
+### Summary
+
+`np.exp`, `np.sin`, `np.maximum`, `np.clip` and the named helpers (`tanh`,
+`maximum`, ...) work on `outputs.ref(...)`. They use the shared `algebra`
+dispatch in a new `output_expr` mode. `Param("s") * outputs.ref("x")` works too.
+It lands on `feat/output-ufuncs` and closes `CX27`.
+
+### Worker
+
+Implementer: **haiku**. Checker: **sonnet**. Escalate per [Running a step with
+tiered workers](#running-a-step-with-tiered-workers).
+
+### Files
+
+`src/summer4/flows/algebra.py`, `src/summer4/flows/rates.py`,
+`src/summer4/results/outputset.py`, `tests/test_output_expr_dispatch.py` (new),
+notebook 26, `plans/output-ufuncs.plan.md` (new).
+
+### Read first
+
+1. `AGENTS.md`
+2. `plans/unified-lazy-idiom.plan.md`: *Execution model*, then § *Step 32*
+3. {doc}`../evaluation/composability`: rows `CX27` and packages `CP5` / `CP6`
+4. Every file in *Files* that already exists, at the lines the plan cites
+
+### Do
+
+Follow `plans/unified-lazy-idiom.plan.md` § *Step 32* exactly. Where it and this
+section disagree, this section wins, and the correction is recorded in
+[Corrections to committed plans](#corrections-to-committed-plans).
+
+Write the step plan `plans/output-ufuncs.plan.md`: one line saying "Implements
+Step 32 of `unified-lazy-idiom.plan.md`", followed by every deviation and its
+reason.
+
+Notebook: `26-lazy-idiom-bridges.ipynb` section B, in the acceptance style: a
+*What to check* box per section, a titled Plotly plot or a displayed object, and
+no asserts (asserts live in `tests/`).
+
+Set the closed findings to `done` in {doc}`../evaluation/composability` in the
+same commit as the code, then run `pixi run composability-write`.
+
+Cut from: `main`. Merges into: `main`.
+
+### Sanity check
+
+The checker verifies these items, plus the checklist every step gets (see
+[Running a step with tiered workers](#running-a-step-with-tiered-workers)):
+
+- `DENY_OPS` still refuses comparisons.
+- No new alias map was introduced.
+- The ndarray-left and RateOps-left cases are tested.
+- The tests assert evaluated values, not node classes or `kind` strings.
+- CX27 is `done`.
+
+### Exit checks
+
+The [standard checks](#exit-checks-every-step), plus `pixi run composability`.
+**User gate:** `26-lazy-idiom-bridges.ipynb` section B.
+
+### Handoff
+
+Set step 32 `done`, step 33 `next`.
+
+---
+
+## Step 33 — `feat/output-defer`
+
+### Summary
+
+`defer(f)(outputs.ref("incidence"), Param("delay"))` builds a post-solve node.
+It is the port of summer2's `Function(f, [DerivedOutput(...), Parameter(...)])`,
+with a documented return contract. The gate model gains notifications (delayed
+incidence). It lands on `feat/output-defer` and closes `CX28`.
+
+### Worker
+
+Implementer: **haiku**. Checker: **sonnet**. Escalate per [Running a step with
+tiered workers](#running-a-step-with-tiered-workers).
+
+### Files
+
+`src/summer4/flows/rates.py` (`defer`), `src/summer4/results/outputset.py`,
+`tests/test_output_defer.py` (new), notebook 26, `plans/output-defer.plan.md`
+(new).
+
+### Read first
+
+1. `AGENTS.md`
+2. `plans/unified-lazy-idiom.plan.md`: *Execution model*, then § *Step 33*
+3. {doc}`../evaluation/composability`: rows `CX28` and packages `CP5` / `CP6`
+4. Every file in *Files* that already exists, at the lines the plan cites
+
+### Do
+
+Follow `plans/unified-lazy-idiom.plan.md` § *Step 33* exactly. Where it and this
+section disagree, this section wins, and the correction is recorded in
+[Corrections to committed plans](#corrections-to-committed-plans).
+
+Write the step plan `plans/output-defer.plan.md`: one line saying "Implements
+Step 33 of `unified-lazy-idiom.plan.md`", followed by every deviation and its
+reason.
+
+Notebook: `26-lazy-idiom-bridges.ipynb` section C, in the acceptance style: a
+*What to check* box per section, a titled Plotly plot or a displayed object, and
+no asserts (asserts live in `tests/`).
+
+Set the closed findings to `done` in {doc}`../evaluation/composability` in the
+same commit as the code, then run `pixi run composability-write`.
+
+Cut from: `main`. Merges into: `main`.
+
+### Sanity check
+
+The checker verifies these items, plus the checklist every step gets (see
+[Running a step with tiered workers](#running-a-step-with-tiered-workers)):
+
+- `tests/test_rate_defer.py` is untouched and green.
+- Both return branches (an `Output`, and a same-shape array) are tested, plus
+  the bad-shape error.
+- An output passed as a keyword argument is saved by `plan()`.
+- CX28 is `done`.
+
+### Exit checks
+
+The [standard checks](#exit-checks-every-step), plus `pixi run composability`.
+**User gate:** `26-lazy-idiom-bridges.ipynb` section C.
+
+### Handoff
+
+Set step 33 `done`, step 34 `next`.
+
+---
+
+## Step 34 — `feat/named-callables`
+
+### Summary
+
+`named(fn, "seasonal")` gives any callable hook a stable digest key: Transform,
+SaveFn, derived_fn, prepare_fn, InitialPopulation callables and FOI `kind`.
+Rebuilding a model with a fresh closure therefore hits the jit cache, under the
+same contract as `defer(name=)`. It lands on `feat/named-callables` and closes
+`CX7`.
+
+### Worker
+
+Implementer: **haiku**. Checker: **sonnet**. Escalate per [Running a step with
+tiered workers](#running-a-step-with-tiered-workers).
+
+### Files
+
+`src/summer4/flows/rates.py`, `compiled.py`, `initial.py`, `flows/__init__.py`,
+`src/summer4/__init__.py`, `src/summer4/results/plan.py`,
+`src/summer4/epi/infection.py`, `docs/dev/rate-expressions.md`,
+`tests/test_named_callables.py` (new), notebook 26,
+`plans/named-callables.plan.md` (new).
+
+### Read first
+
+1. `AGENTS.md`
+2. `plans/unified-lazy-idiom.plan.md`: *Execution model*, then § *Step 34*
+3. {doc}`../evaluation/composability`: rows `CX7` and packages `CP5` / `CP6`
+4. Every file in *Files* that already exists, at the lines the plan cites
+
+### Do
+
+Follow `plans/unified-lazy-idiom.plan.md` § *Step 34* exactly. Where it and this
+section disagree, this section wins, and the correction is recorded in
+[Corrections to committed plans](#corrections-to-committed-plans).
+
+Write the step plan `plans/named-callables.plan.md`: one line saying "Implements
+Step 34 of `unified-lazy-idiom.plan.md`", followed by every deviation and its
+reason.
+
+Notebook: `26-lazy-idiom-bridges.ipynb` section D, in the acceptance style: a
+*What to check* box per section, a titled Plotly plot or a displayed object, and
+no asserts (asserts live in `tests/`).
+
+Set the closed findings to `done` in {doc}`../evaluation/composability` in the
+same commit as the code, then run `pixi run composability-write`.
+
+Cut from: `main`. Merges into: `main`.
+
+### Sanity check
+
+The checker verifies these items, plus the checklist every step gets (see
+[Running a step with tiered workers](#running-a-step-with-tiered-workers)):
+
+- Every digest that keys on a callable goes through `_callable_key`. The
+  remaining `id(` uses (hoist slots, the jit cache) are allowed.
+- `tests/test_rate_dispatch.py` goldens are green.
+- `derived_fn=named(f, "d")` still validates its `ComputedValue` schema.
+- CX7 is `done`.
+
+### Exit checks
+
+The [standard checks](#exit-checks-every-step), plus `pixi run composability`.
+**User gate:** `26-lazy-idiom-bridges.ipynb` section D.
+
+### Handoff
+
+Set step 34 `done`, step 35 `next`.
+
+---
+
+## Step 35 — `fix/rate-children-fold`
+
+### Summary
+
+One `rate_children(expr)` replaces the duplicated child walks, so a custom node
+needs only `__rate_children__` and `__rate_bytes__`. This fixes `FlowRef`s lost
+under `ForceOfInfection` (never topologically ordered) and capture metadata lost
+under `TableInterp` / `Lookup`. A characterisation test is committed first. It
+lands on `fix/rate-children-fold` and closes `CX29`, which finishes Phase L.
+
+### Worker
+
+Implementer: **sonnet**. Checker: **opus**. Escalate per [Running a step with
+tiered workers](#running-a-step-with-tiered-workers).
+
+### Files
+
+`src/summer4/flows/rates.py`, `stages.py`, `compiled.py`, `flows/__init__.py`,
+`src/summer4/epi/infection.py`, `docs/dev/rate-expressions.md`,
+`docs/cookbook/01-custom-rates.ipynb`,
+`examples/notebooks/14-custom-rate-nodes.ipynb`, `tests/test_rate_children.py`
+(new), notebook 26, `plans/rate-children-fold.plan.md` (new).
+
+### Read first
+
+1. `AGENTS.md`
+2. `plans/unified-lazy-idiom.plan.md`: *Execution model*, then § *Step 35*
+3. {doc}`../evaluation/composability`: rows `CX29` and packages `CP5` / `CP6`
+4. Every file in *Files* that already exists, at the lines the plan cites
+
+### Do
+
+Follow `plans/unified-lazy-idiom.plan.md` § *Step 35* exactly. Where it and this
+section disagree, this section wins, and the correction is recorded in
+[Corrections to committed plans](#corrections-to-committed-plans).
+
+Write the step plan `plans/rate-children-fold.plan.md`: one line saying
+"Implements Step 35 of `unified-lazy-idiom.plan.md`", followed by every
+deviation and its reason.
+
+Notebook: `26-lazy-idiom-bridges.ipynb` section E, in the acceptance style: a
+*What to check* box per section, a titled Plotly plot or a displayed object, and
+no asserts (asserts live in `tests/`).
+
+Set the closed findings to `done` in {doc}`../evaluation/composability` in the
+same commit as the code, then run `pixi run composability-write`.
+
+Cut from: `main`. Merges into: `main`.
+
+### Sanity check
+
+The checker verifies these items, plus the checklist every step gets (see
+[Running a step with tiered workers](#running-a-step-with-tiered-workers)):
+
+- The characterisation commit precedes the refactor (`git log`), and its later
+  diff touches only lines marked `# fixed in step 35`.
+- The `tests/test_rate_dispatch.py` goldens are green.
+- `test_hoisting.py` and `test_rate_defer.py` are untouched.
+- `ForceOfInfection` has `__rate_stage__` returning `"step"`, so a
+  parameter-only FOI is never hoisted whole.
+- CX29 is `done`.
+
+### Exit checks
+
+The [standard checks](#exit-checks-every-step), plus `pixi run composability`.
+**User gate:** `26-lazy-idiom-bridges.ipynb` section E.
+
+### Handoff
+
+Set step 35 `done`, step 28 `next`. Phase L is finished. Record in step 28's
+*What the previous worker left you* which Phase L spellings notebook 25 may use,
+and the worker-tier tally for steps 31–35.
+
+---
+
+## Step 36 — `feat/stage-lattice`
+
+### Summary
+
+Stages become an ordered lattice `run < step < post` with one `join_stages`
+helper. A `"post"` stage is rejected in flow rates, initial populations and
+`eval_closed`. No post-solve nodes exist yet, so this is a pure widening. It
+lands on `feat/stage-lattice` and creates the Phase M gate notebook
+`27-unified-lazy-idiom.ipynb`, which holds the gate model in the old idioms.
+
+### Worker
+
+Implementer: **haiku**. Checker: **sonnet**. Escalate per [Running a step with
+tiered workers](#running-a-step-with-tiered-workers).
+
+### Files
+
+`src/summer4/flows/stages.py`, `rates.py`, `compiled.py`,
+`docs/dev/run-stages.md`, `tests/test_stage_lattice.py` (new),
+`examples/notebooks/27-unified-lazy-idiom.ipynb` (new),
+`plans/stage-lattice.plan.md` (new).
+
+### Read first
+
+1. `AGENTS.md`
+2. `plans/unified-lazy-idiom.plan.md`: *Execution model*, then § *Step 36*
+3. {doc}`../evaluation/composability`: rows `CX30`–`CX34` and packages `CP5` /
+   `CP6`
+4. Every file in *Files* that already exists, at the lines the plan cites
+
+### Do
+
+Follow `plans/unified-lazy-idiom.plan.md` § *Step 36* exactly. Where it and this
+section disagree, this section wins, and the correction is recorded in
+[Corrections to committed plans](#corrections-to-committed-plans).
+
+Write the step plan `plans/stage-lattice.plan.md`: one line saying "Implements
+Step 36 of `unified-lazy-idiom.plan.md`", followed by every deviation and its
+reason.
+
+Notebook: `27-unified-lazy-idiom.ipynb` section A (new notebook), in the
+acceptance style: a *What to check* box per section, a titled Plotly plot or a
+displayed object, and no asserts (asserts live in `tests/`).
+
+Cut from: `main`. Merges into: `main`.
+
+### Sanity check
+
+The checker verifies these items, plus the checklist every step gets (see
+[Running a step with tiered workers](#running-a-step-with-tiered-workers)):
+
+- No `"step" if ... else "run"`-style binary join remains in `stages.py` or
+  `rates.py`.
+- The hoist conditions (`== "run"`) and the `!= "run"` checks in `eval_closed`
+  and `initial.py` are unchanged.
+- The `hoist=False` equivalence tests are green.
+
+### Exit checks
+
+The [standard checks](#exit-checks-every-step), plus `pixi run composability`.
+**User gate:** `27-unified-lazy-idiom.ipynb` section A (new notebook).
+
+### Handoff
+
+Set step 36 `done`, step 37 `next`.
+
+---
+
+## Step 37 — `feat/post-stage-nodes`
+
+### Summary
+
+Post-solve quantities become `RateOps` nodes: `Saved(quantity)`,
+`OutputRef(name)` and `PostOp(method, arg, ...)`. They live in the new module
+`summer4.results.expr`, with an `eval_post` evaluator proven at parity with
+`OutputSet.evaluate`. `OutputSet` itself is not switched yet. It lands on
+`feat/post-stage-nodes`.
+
+### Worker
+
+Implementer: **sonnet**. Checker: **opus**. Escalate per [Running a step with
+tiered workers](#running-a-step-with-tiered-workers).
+
+### Files
+
+`src/summer4/results/expr.py` (new), `src/summer4/results/outputset.py` (import
+`_CALLS` only), `tests/test_post_nodes.py` (new), notebook 27,
+`plans/post-stage-nodes.plan.md` (new).
+
+### Read first
+
+1. `AGENTS.md`
+2. `plans/unified-lazy-idiom.plan.md`: *Execution model*, then § *Step 37*
+3. {doc}`../evaluation/composability`: rows `CX30`–`CX34` and packages `CP5` /
+   `CP6`
+4. Every file in *Files* that already exists, at the lines the plan cites
+
+### Do
+
+Follow `plans/unified-lazy-idiom.plan.md` § *Step 37* exactly. Where it and this
+section disagree, this section wins, and the correction is recorded in
+[Corrections to committed plans](#corrections-to-committed-plans).
+
+Write the step plan `plans/post-stage-nodes.plan.md`: one line saying
+"Implements Step 37 of `unified-lazy-idiom.plan.md`", followed by every
+deviation and its reason.
+
+Notebook: `27-unified-lazy-idiom.ipynb`: a short section showing the same output
+evaluated both ways, in the acceptance style: a *What to check* box per section,
+a titled Plotly plot or a displayed object, and no asserts (asserts live in
+`tests/`).
+
+Cut from: `main`. Merges into: `main`.
+
+### Sanity check
+
+The checker verifies these items, plus the checklist every step gets (see
+[Running a step with tiered workers](#running-a-step-with-tiered-workers)):
+
+- The parity table covers every `OutputExpr` kind: leaf, ref, const, param,
+  unary, binary, call, defer.
+- `outputset.py` behaviour is unchanged.
+- `python -c "import summer4.results.expr"` runs in a fresh interpreter (no
+  import cycle).
+
+### Exit checks
+
+The [standard checks](#exit-checks-every-step), plus `pixi run composability`.
+**User gate:** `27-unified-lazy-idiom.ipynb`: a short section showing the same
+output evaluated both ways.
+
+### Handoff
+
+Set step 37 `done`, step 38 `next`.
+
+---
+
+## Step 38 — `feat/outputset-on-rate-nodes`
+
+### Summary
+
+`OutputSet` stores and evaluates `RateOps` and `OutputExpr` is deleted, leaving
+one expression language. Post-op methods (`total`, `rolling`, ...) live on
+`RateOps` and refuse a non-post receiver. `Param("x")["total"]` is the path
+escape for the nine reserved names. Save specs dispatch `np.*`. It lands on
+`feat/outputset-on-rate-nodes` and closes `CX30`.
+
+### Worker
+
+Implementer: **sonnet**. Checker: **opus**. Escalate per [Running a step with
+tiered workers](#running-a-step-with-tiered-workers).
+
+### Files
+
+`src/summer4/flows/rates.py`, `algebra.py`, `src/summer4/results/outputset.py`,
+`plan.py`, `expr.py`, `src/summer4/epi/calibration/model.py`,
+`posterior_runs.py`, notebooks 06, 18, 24, 25, 26, 27,
+`docs/textbook/20-calibration.ipynb`, tests,
+`plans/outputset-on-rate-nodes.plan.md` (new).
+
+### Read first
+
+1. `AGENTS.md`
+2. `plans/unified-lazy-idiom.plan.md`: *Execution model*, then § *Step 38*
+3. {doc}`../evaluation/composability`: rows `CX30` and packages `CP5` / `CP6`
+4. Every file in *Files* that already exists, at the lines the plan cites
+
+### Do
+
+Follow `plans/unified-lazy-idiom.plan.md` § *Step 38* exactly. Where it and this
+section disagree, this section wins, and the correction is recorded in
+[Corrections to committed plans](#corrections-to-committed-plans).
+
+Write the step plan `plans/outputset-on-rate-nodes.plan.md`: one line saying
+"Implements Step 38 of `unified-lazy-idiom.plan.md`", followed by every
+deviation and its reason.
+
+Notebook: `27-unified-lazy-idiom.ipynb` section B, in the acceptance style: a
+*What to check* box per section, a titled Plotly plot or a displayed object, and
+no asserts (asserts live in `tests/`).
+
+Set the closed findings to `done` in {doc}`../evaluation/composability` in the
+same commit as the code, then run `pixi run composability-write`.
+
+Cut from: `main`. Merges into: `main`.
+
+### Sanity check
+
+The checker verifies these items, plus the checklist every step gets (see
+[Running a step with tiered workers](#running-a-step-with-tiered-workers)):
+
+- `grep -rnw OutputExpr src tests examples docs --exclude-dir=_build` matches
+  only `CHANGELOG.md` and `docs/releases/`.
+- In `tests/`, only the node-representation assertions at
+  `test_output_set.py:31, 135-137` changed.
+- `mypy --strict src/summer4` is green.
+- `Time().rolling(7)` raises, and `list(Param("a"))` raises rather than hanging.
+- CX30 is `done`.
+
+### Exit checks
+
+The [standard checks](#exit-checks-every-step), plus `pixi run composability`.
+**User gate:** `27-unified-lazy-idiom.ipynb` section B.
+
+### Handoff
+
+Set step 38 `done`, step 39 `next`.
+
+---
+
+## Step 39 — `feat/shared-nodes-and-fields`
+
+### Summary
+
+Two additions:
+
+- A sub-expression object used by several flows is evaluated once per
+  vector-field call, through a per-call memo.
+- `field_refs(expr, Schema)` reads fields of a structured `defer` result with
+  typed access, using the new `Item`, `StateArray()` and `Params()` nodes.
+
+Together they let a new-idiom model replace `derived_fn` and keep parameter
+hoisting. It lands on `feat/shared-nodes-and-fields`.
+
+### Worker
+
+Implementer: **sonnet**. Checker: **opus**. Escalate per [Running a step with
+tiered workers](#running-a-step-with-tiered-workers).
+
+### Files
+
+`src/summer4/flows/rates.py`, `compiled.py`, `stages.py`, `flows/__init__.py`,
+`src/summer4/__init__.py`, `tests/test_shared_nodes.py` (new), notebook 27,
+`plans/shared-nodes-and-fields.plan.md` (new).
+
+### Read first
+
+1. `AGENTS.md`
+2. `plans/unified-lazy-idiom.plan.md`: *Execution model*, then § *Step 39*
+3. {doc}`../evaluation/composability`: rows `CX30`–`CX34` and packages `CP5` /
+   `CP6`
+4. Every file in *Files* that already exists, at the lines the plan cites
+
+### Do
+
+Follow `plans/unified-lazy-idiom.plan.md` § *Step 39* exactly. Where it and this
+section disagree, this section wins, and the correction is recorded in
+[Corrections to committed plans](#corrections-to-committed-plans).
+
+Write the step plan `plans/shared-nodes-and-fields.plan.md`: one line saying
+"Implements Step 39 of `unified-lazy-idiom.plan.md`", followed by every
+deviation and its reason.
+
+Notebook: `27-unified-lazy-idiom.ipynb` section C, in the acceptance style: a
+*What to check* box per section, a titled Plotly plot or a displayed object, and
+no asserts (asserts live in `tests/`).
+
+Cut from: `main`. Merges into: `main`.
+
+### Sanity check
+
+The checker verifies these items, plus the checklist every step gets (see
+[Running a step with tiered workers](#running-a-step-with-tiered-workers)):
+
+- The memo never bypasses a hoist slot.
+- The jaxpr `sin`-count test is present and asserts exactly one equation.
+- `Params()` contributes no `_field_paths`.
+- The `hoist=False` equivalence tests are green.
+- The new-idiom equivalence test matches the `derived_fn` model for `hoist` on
+  and off.
+
+### Exit checks
+
+The [standard checks](#exit-checks-every-step), plus `pixi run composability`.
+**User gate:** `27-unified-lazy-idiom.ipynb` section C.
+
+### Handoff
+
+Set step 39 `done`, step 40 `next`.
+
+---
+
+## Step 40 — `feat/save-expressions`
+
+### Summary
+
+`outputs["foi"] = <step-stage expression>` is saved during the solve, through a
+`SavedExpr` quantity and `SaveContext.evaluate`. `SaveFn` and `ComputedValue`
+are deprecated. It lands on `feat/save-expressions` and closes `CX32`.
+
+### Worker
+
+Implementer: **sonnet**. Checker: **opus**. Escalate per [Running a step with
+tiered workers](#running-a-step-with-tiered-workers).
+
+### Files
+
+`src/summer4/results/plan.py`, `eval.py`, `outputset.py`, `expr.py`,
+`src/summer4/flows/compiled.py`, tests, notebook 27,
+`plans/save-expressions.plan.md` (new).
+
+### Read first
+
+1. `AGENTS.md`
+2. `plans/unified-lazy-idiom.plan.md`: *Execution model*, then § *Step 40*
+3. {doc}`../evaluation/composability`: rows `CX32` and packages `CP5` / `CP6`
+4. Every file in *Files* that already exists, at the lines the plan cites
+
+### Do
+
+Follow `plans/unified-lazy-idiom.plan.md` § *Step 40* exactly. Where it and this
+section disagree, this section wins, and the correction is recorded in
+[Corrections to committed plans](#corrections-to-committed-plans).
+
+Write the step plan `plans/save-expressions.plan.md`: one line saying
+"Implements Step 40 of `unified-lazy-idiom.plan.md`", followed by every
+deviation and its reason.
+
+Notebook: `27-unified-lazy-idiom.ipynb` section D, in the acceptance style: a
+*What to check* box per section, a titled Plotly plot or a displayed object, and
+no asserts (asserts live in `tests/`).
+
+Set the closed findings to `done` in {doc}`../evaluation/composability` in the
+same commit as the code, then run `pixi run composability-write`.
+
+Cut from: `main`. Merges into: `main`.
+
+### Sanity check
+
+The checker verifies these items, plus the checklist every step gets (see
+[Running a step with tiered workers](#running-a-step-with-tiered-workers)):
+
+- Both solver backends (Euler, Diffrax) are tested.
+- `SavePlan.flow_reads()` covers `SavedExpr`.
+- The deprecation warnings name the replacement.
+- Warning filters are per-file marks, not a global `pyproject.toml` entry.
+- CX32 is `done`.
+
+### Exit checks
+
+The [standard checks](#exit-checks-every-step), plus `pixi run composability`.
+**User gate:** `27-unified-lazy-idiom.ipynb` section D.
+
+### Handoff
+
+Set step 40 `done`, step 41 `next`.
+
+---
+
+## Step 41 — `feat/derived-fn-deprecation`
+
+### Summary
+
+`compile(derived_fn=...)` and `derived_refs` are deprecated in favour of
+`field_refs(defer(...))`, so any model in the new idiom gets parameter hoisting
+back. `derived_fn` models keep today's exact behaviour, R3 included, until step
+45 removes them. It lands on `feat/derived-fn-deprecation` and closes `CX31`.
+
+### Worker
+
+Implementer: **sonnet**. Checker: **opus**. Escalate per [Running a step with
+tiered workers](#running-a-step-with-tiered-workers).
+
+### Files
+
+`src/summer4/flows/compiled.py`, `stages.py`, `rates.py`,
+`docs/dev/run-stages.md`, `docs/dev/rate-expressions.md`,
+`futureplans/derived-fn-blocks-hoisting.md`, tests, notebook 27,
+`plans/derived-fn-deprecation.plan.md` (new).
+
+### Read first
+
+1. `AGENTS.md`
+2. `plans/unified-lazy-idiom.plan.md`: *Execution model*, then § *Step 41*
+3. {doc}`../evaluation/composability`: rows `CX31` and packages `CP5` / `CP6`
+4. Every file in *Files* that already exists, at the lines the plan cites
+
+### Do
+
+Follow `plans/unified-lazy-idiom.plan.md` § *Step 41* exactly. Where it and this
+section disagree, this section wins, and the correction is recorded in
+[Corrections to committed plans](#corrections-to-committed-plans).
+
+Write the step plan `plans/derived-fn-deprecation.plan.md`: one line saying
+"Implements Step 41 of `unified-lazy-idiom.plan.md`", followed by every
+deviation and its reason.
+
+Notebook: `27-unified-lazy-idiom.ipynb` section E, in the acceptance style: a
+*What to check* box per section, a titled Plotly plot or a displayed object, and
+no asserts (asserts live in `tests/`).
+
+Set the closed findings to `done` in {doc}`../evaluation/composability` in the
+same commit as the code, then run `pixi run composability-write`.
+
+Cut from: `main`. Merges into: `main`.
+
+### Sanity check
+
+The checker verifies these items, plus the checklist every step gets (see
+[Running a step with tiered workers](#running-a-step-with-tiered-workers)):
+
+- No `derived_fn` model's numbers or hoist table changed, and existing tests are
+  untouched apart from warning marks.
+- The hoisting gain for new-idiom models is asserted by a test.
+- CX31 is `done`.
+
+### Exit checks
+
+The [standard checks](#exit-checks-every-step), plus `pixi run composability`.
+**User gate:** `27-unified-lazy-idiom.ipynb` section E.
+
+### Handoff
+
+Set step 41 `done`, step 42 `next`.
+
+---
+
+## Step 42 — `feat/callable-doors`
+
+### Summary
+
+The last parameter-blind callable doors take rate-expression arguments:
+
+- InitialPopulation callables are deprecated in favour of `defer(f)(Params())`.
+- `ForceOfInfection(kind=custom_kind(fn, Param("k")))` lets a custom FOI shape
+  learn parameters.
+
+`Transform` stays (see the plan for why). It lands on `feat/callable-doors` and
+closes `CX33` and `CX11`.
+
+### Worker
+
+Implementer: **sonnet**. Checker: **opus**. Escalate per [Running a step with
+tiered workers](#running-a-step-with-tiered-workers).
+
+### Files
+
+`src/summer4/flows/initial.py`, `src/summer4/epi/infection.py`,
+`src/summer4/epi/__init__.py`, `src/summer4/flows/rates.py` (Transform docstring
+only), `docs/cookbook/01-custom-rates.ipynb`, tests, notebook 27,
+`plans/callable-doors.plan.md` (new).
+
+### Read first
+
+1. `AGENTS.md`
+2. `plans/unified-lazy-idiom.plan.md`: *Execution model*, then § *Step 42*
+3. {doc}`../evaluation/composability`: rows `CX33`, `CX11` and packages `CP5` /
+   `CP6`
+4. Every file in *Files* that already exists, at the lines the plan cites
+
+### Do
+
+Follow `plans/unified-lazy-idiom.plan.md` § *Step 42* exactly. Where it and this
+section disagree, this section wins, and the correction is recorded in
+[Corrections to committed plans](#corrections-to-committed-plans).
+
+Write the step plan `plans/callable-doors.plan.md`: one line saying "Implements
+Step 42 of `unified-lazy-idiom.plan.md`", followed by every deviation and its
+reason.
+
+Notebook: `27-unified-lazy-idiom.ipynb` section F, in the acceptance style: a
+*What to check* box per section, a titled Plotly plot or a displayed object, and
+no asserts (asserts live in `tests/`).
+
+Set the closed findings to `done` in {doc}`../evaluation/composability` in the
+same commit as the code, then run `pixi run composability-write`.
+
+Cut from: `main`. Merges into: `main`.
+
+### Sanity check
+
+The checker verifies these items, plus the checklist every step gets (see
+[Running a step with tiered workers](#running-a-step-with-tiered-workers)):
+
+- Both replacements have equality tests against the old door.
+- Transform's behaviour is unchanged (its tests are untouched).
+- A `Param` inside `custom_kind` hoists and has a finite gradient.
+- CX33 and CX11 are `done`.
+
+### Exit checks
+
+The [standard checks](#exit-checks-every-step), plus `pixi run composability`.
+**User gate:** `27-unified-lazy-idiom.ipynb` section F.
+
+### Handoff
+
+Set step 42 `done`, step 43 `next`.
+
+---
+
+## Step 43 — `feat/typed-stages`
+
+### Summary
+
+The stage becomes a type parameter, `RateOps[Run | Step | Post]`. mypy then
+rejects a post-solve expression in a rate slot, `Time()` in an initial
+population, and a step-stage likelihood scale. This answers the
+type-expressibility question: more is typed after unification than before. The
+step opens with a go/no-go spike. It lands on `feat/typed-stages` and closes
+`CX34`.
+
+### Worker
+
+Implementer: **opus**. Checker: **opus (fresh context)**. Escalate per [Running
+a step with tiered workers](#running-a-step-with-tiered-workers).
+
+### Files
+
+`src/summer4/flows/stages.py`, `rates.py`, `compiled.py`, `initial.py`,
+`edges.py`, `src/summer4/epi/infection.py`, `mixing.py`,
+`calibration/likelihoods.py`, `src/summer4/results/expr.py`, `outputset.py`,
+`tests/test_typed_stages.py` (new), `tests/typing/` (new), `tests/conftest.py`,
+`scripts/spikes/typed_stage_spike.py` (new), notebook 27,
+`plans/typed-stages.plan.md` (new).
+
+### Read first
+
+1. `AGENTS.md`
+2. `plans/unified-lazy-idiom.plan.md`: *Execution model*, then § *Step 43*
+3. {doc}`../evaluation/composability`: rows `CX34` and packages `CP5` / `CP6`
+4. Every file in *Files* that already exists, at the lines the plan cites
+
+### Do
+
+Follow `plans/unified-lazy-idiom.plan.md` § *Step 43* exactly. Where it and this
+section disagree, this section wins, and the correction is recorded in
+[Corrections to committed plans](#corrections-to-committed-plans).
+
+Write the step plan `plans/typed-stages.plan.md`: one line saying "Implements
+Step 43 of `unified-lazy-idiom.plan.md`", followed by every deviation and its
+reason.
+
+Notebook: `27-unified-lazy-idiom.ipynb` section G, in the acceptance style: a
+*What to check* box per section, a titled Plotly plot or a displayed object, and
+no asserts (asserts live in `tests/`).
+
+Set the closed findings to `done` in {doc}`../evaluation/composability` in the
+same commit as the code, then run `pixi run composability-write`.
+
+Cut from: `main`. Merges into: `main`.
+
+### Sanity check
+
+The checker verifies these items, plus the checklist every step gets (see
+[Running a step with tiered workers](#running-a-step-with-tiered-workers)):
+
+- The spike's go/no-go result is recorded in the step plan.
+- `mypy --strict src/summer4` is green.
+- The `tests/typing/` snippets cover all three rejections and one acceptance per
+  slot.
+- No `cast` was added outside `field_refs` and `derived_refs`.
+- CX34 is `done`.
+
+### Exit checks
+
+The [standard checks](#exit-checks-every-step), plus `pixi run composability`.
+**User gate:** `27-unified-lazy-idiom.ipynb` section G.
+
+### Handoff
+
+Set step 43 `done`, step 44 `next`.
+
+---
+
+## Step 44 — `docs/unified-lazy-idiom`
+
+### Summary
+
+The design docs, the summer2 migration table and the custom-rates cookbook
+describe the one idiom. `rate-expressions.md` § *Could we have a better compute
+graph?* becomes *The unified idiom*, and notebook 27 becomes the finished Phase
+M user gate. It lands on `docs/unified-lazy-idiom` and finishes Phase M.
+
+### Worker
+
+Implementer: **sonnet**. Checker: **opus**. Escalate per [Running a step with
+tiered workers](#running-a-step-with-tiered-workers).
+
+### Files
+
+`docs/dev/rate-expressions.md`, `docs/dev/run-stages.md`,
+`docs/user/07-from-summer2.md`, `docs/cookbook/01-custom-rates.ipynb`,
+`examples/notebooks/27-unified-lazy-idiom.ipynb`.
+
+### Read first
+
+1. `AGENTS.md`
+2. `plans/unified-lazy-idiom.plan.md`: *Execution model*, then § *Step 44*
+3. {doc}`../evaluation/composability`: rows `CX30`–`CX34` and packages `CP5` /
+   `CP6`
+4. Every file in *Files* that already exists, at the lines the plan cites
+
+### Do
+
+Follow `plans/unified-lazy-idiom.plan.md` § *Step 44* exactly. Where it and this
+section disagree, this section wins, and the correction is recorded in
+[Corrections to committed plans](#corrections-to-committed-plans).
+
+Notebook: `27-unified-lazy-idiom.ipynb` (final pass), in the acceptance style: a
+*What to check* box per section, a titled Plotly plot or a displayed object, and
+no asserts (asserts live in `tests/`).
+
+Cut from: `main`. Merges into: `main`.
+
+### Sanity check
+
+The checker verifies these items, plus the checklist every step gets (see
+[Running a step with tiered workers](#running-a-step-with-tiered-workers)):
+
+- No present-tense description of unlanded behaviour.
+- Every deprecated door named in the docs names its replacement.
+- `pixi run -e docs docs-strict` is green.
+
+### Exit checks
+
+The [standard checks](#exit-checks-every-step), plus `pixi run composability`.
+**User gate:** `27-unified-lazy-idiom.ipynb` (final pass).
+
+### Handoff
+
+Set step 44 `done`, step 16 `next`. Phase M is finished; Track G resumes. Step
+45 stays `blocked` until a release is cut after this step.
+
+---
+
+## Step 45 — `chore/remove-deprecated-doors`
+
+### Summary
+
+This step is **blocked until a release has been cut after step 44.** It removes
+every door in `futureplans/deprecated-lazy-doors-removal.md`:
+
+- `derived_fn`, `derived_refs`, R3 and the `params_are_static` keyword;
+- `SaveFn`;
+- `ComputedValue`;
+- InitialPopulation callables;
+- bare-callable FOI `kind`.
+
+It also migrates the remaining callers and deletes the warning marks. It lands
+on `chore/remove-deprecated-doors`.
+
+### Worker
+
+Implementer: **haiku**. Checker: **sonnet**. Escalate per [Running a step with
+tiered workers](#running-a-step-with-tiered-workers).
+
+### Files
+
+Everything named in `futureplans/deprecated-lazy-doors-removal.md`.
+
+### Read first
+
+1. `AGENTS.md`
+2. `plans/unified-lazy-idiom.plan.md`: *Execution model*, then § *Step 45*
+3. {doc}`../evaluation/composability`: rows `CX30`–`CX34` and packages `CP5` /
+   `CP6`
+4. Every file in *Files* that already exists, at the lines the plan cites
+
+### Do
+
+Follow `plans/unified-lazy-idiom.plan.md` § *Step 45* exactly. Where it and this
+section disagree, this section wins, and the correction is recorded in
+[Corrections to committed plans](#corrections-to-committed-plans).
+
+Write the step plan `plans/remove-deprecated-doors.plan.md`: one line saying
+"Implements Step 45 of `unified-lazy-idiom.plan.md`", followed by every
+deviation and its reason.
+
+Notebook: `27-unified-lazy-idiom.ipynb`: old-idiom sections become text-only
+"before" cells, in the acceptance style: a *What to check* box per section, a
+titled Plotly plot or a displayed object, and no asserts (asserts live in
+`tests/`).
+
+Cut from: `main`. Merges into: `main`.
+
+### Sanity check
+
+The checker verifies these items, plus the checklist every step gets (see
+[Running a step with tiered workers](#running-a-step-with-tiered-workers)):
+
+- The inventory is fully removed.
+- No `filterwarnings` marks for summer4 deprecations remain.
+- The release notes list each removal with its replacement.
+- `pixi run coverage` is green.
+
+### Exit checks
+
+The [standard checks](#exit-checks-every-step), plus `pixi run composability`.
+**User gate:** `27-unified-lazy-idiom.ipynb`: old-idiom sections become
+text-only "before" cells.
+
+### Handoff
+
+Set step 45 `done`. The lazy-idiom unification is complete; record the final
+tally of worker tiers across steps 31–45.
 
 ---
 

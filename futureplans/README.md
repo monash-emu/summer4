@@ -42,6 +42,13 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
   `(age × state × …)` (not first-class multi-axis `PropertyData`).
 - [`derived-fn-blocks-hoisting.md`](derived-fn-blocks-hoisting.md) — R3: a
   `derived_fn` makes every `FieldRef` step-stage and disables param hoisting.
+  Scheduled: roadmap steps 39 and 41 (`plans/unified-lazy-idiom.plan.md`).
+- [`deprecated-lazy-doors-removal.md`](deprecated-lazy-doors-removal.md) — the
+  inventory roadmap step 45 removes once the lazy-idiom deprecations have
+  shipped in a release.
+- [`rates-maximum-ndarray-inconsistency.md`](rates-maximum-ndarray-inconsistency.md)
+  — `rates.maximum(rate, ndarray)` raises while `np.maximum(rate, ndarray)`
+  builds a node.
 - [`mixing-matrix-per-call-normalisation.md`](mixing-matrix-per-call-normalisation.md)
   — `MixingMatrix.resolved_matrix` re-normalises FieldRef matrices every step.
 - [`adjustment-expanding-arrays.md`](adjustment-expanding-arrays.md) — evaluate
