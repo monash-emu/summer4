@@ -1,9 +1,10 @@
 """Observation likelihoods attached to :class:`~summer4.results.targets.Target`.
 
 Requires the ``calibration`` extra (``numpyro``) for :meth:`log_prob`. A
-likelihood scale may be a float, a :func:`~summer4.flows.rates.Param` /
-:class:`~summer4.flows.rates.FieldRef`, or a
-:class:`~summer4.epi.calibration.priors.Prior` (hierarchical target sd).
+likelihood scale may be a float, a
+:class:`~summer4.epi.calibration.priors.Prior` (hierarchical target sd), or any
+parameter-only rate expression, such as :func:`~summer4.flows.rates.Param` or
+``np.exp(Param("log_k"))``.
 
 Per-time log-densities default to a **mean** (estival's default when no time
 weights are set). Pass ``aggregate="sum"`` for a sum instead.
@@ -20,7 +21,7 @@ from numpy.typing import NDArray
 
 from summer4.enums import coerce_strenum
 from summer4.epi.calibration.priors import Prior
-from summer4.flows.rates import FieldRef, _lookup_path
+from summer4.flows.rates import RateOps, _lookup_path
 
 
 class AggregateHow(StrEnum):
@@ -44,11 +45,20 @@ def _require_numpyro() -> Any:
 
 
 def resolve_scale(spec: Any, params: Any) -> Any:
-    """Resolve a float, ``Param``/``FieldRef``, or prior-valued scale from ``params``."""
+    """Resolve a likelihood scale from ``params``.
+
+    ``spec`` may be a float, a prior (looked up by its name), or any
+    parameter-only rate expression, such as ``Param("sd")`` or
+    ``np.exp(Param("log_k"))``. A rate expression is evaluated by
+    :func:`~summer4.flows.compiled.eval_closed`, which raises ``ValueError`` if it
+    depends on time, state or a flow.
+    """
+    from summer4.flows.compiled import eval_closed
+
     if isinstance(spec, Prior):
         return _lookup_path(params, (spec.name,))
-    if isinstance(spec, FieldRef):
-        return _lookup_path(params, spec.path)
+    if isinstance(spec, RateOps):
+        return eval_closed(spec, params)
     if isinstance(spec, (int, float, np.floating)):
         return float(spec)
     # Traced JAX scalar / array already in hand.
@@ -74,9 +84,11 @@ def _coerce_aggregate(value: AggregateHowArg) -> AggregateHow:
 class Normal:
     """Independent normal observations with shared scale ``sd``.
 
-    ``sd`` may be a float, a :func:`~summer4.flows.rates.Param`, or a
-    :class:`~summer4.epi.calibration.priors.Prior` whose ``name`` is looked up
-    in ``params`` at :meth:`log_prob` time (Kiribati hierarchical target sd).
+    ``sd`` may be a float, a :class:`~summer4.epi.calibration.priors.Prior` whose
+    ``name`` is looked up in ``params`` at :meth:`log_prob` time (Kiribati
+    hierarchical target sd), or any parameter-only rate expression such as
+    ``Param("sd") * 2`` or ``np.exp(Param("log_sd"))``, evaluated at
+    :meth:`log_prob` time.
 
     ``aggregate`` collapses per-time log-densities: ``"mean"`` (default, like
     estival) or ``"sum"``.
@@ -148,7 +160,8 @@ class NegativeBinomial:
     """Negative binomial (numpyro ``NegativeBinomial2``) with concentration ``dispersion``.
 
     ``dispersion`` is numpyro's concentration (``var = mean + mean**2 / concentration``).
-    It may be a float, a ``Param``, or a prior, same as :class:`Normal.sd`.
+    It may be a float, a prior, or any parameter-only rate expression (for example
+    ``np.exp(Param("log_k"))``), same as :class:`Normal.sd`.
     Matches estival's ``NegativeBinomialTarget`` mean/variance shape.
     """
 
