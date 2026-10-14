@@ -409,7 +409,7 @@ def _eval_defer(expr: Defer, *, eval_child: Callable[[RateOps], Any], **_: Any) 
     return expr.fn(*args, **kwargs)
 
 
-def defer(fn: Callable[..., Any], *, name: str | None = None) -> Callable[..., Defer | OutputExpr]:
+def defer(fn: Callable[..., Any], *, name: str | None = None) -> Callable[..., Any]:
     """Wrap ``fn`` so calling it builds a :class:`Defer` node, or a post-solve node.
 
     ``defer(f)(Time(), Param("amp"))`` is the documented spelling.
@@ -438,6 +438,10 @@ def defer(fn: Callable[..., Any], *, name: str | None = None) -> Callable[..., D
 
     ``Defer(f, outputs.ref(...))`` called directly still raises: a :class:`Defer` is
     a rate node and cannot hold an output. Use ``defer(f)(...)``.
+
+    The returned callable is typed ``Any`` because the node type depends on the
+    arguments: a :class:`Defer` for rate arguments, an
+    :class:`~summer4.results.outputset.OutputExpr` when any argument is an output.
     """
 
     def wrapped(*args: object, **kwargs: object) -> Defer | OutputExpr:

@@ -250,5 +250,5 @@ def test_all_parameter_defer_still_builds_a_rate_node() -> None:
 
 def test_direct_defer_node_still_rejects_an_output() -> None:
     outputs = OutputSet()
-    with pytest.raises(TypeError):
+    with pytest.raises(TypeError, match="as a flow rate"):
         Defer(lambda value: value, outputs.ref("inc"))
