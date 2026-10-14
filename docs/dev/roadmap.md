@@ -200,11 +200,11 @@ Each step that touches `src/` also has Cursor write a short step plan,
 <!-- roadmap:current -->
 | Field | Value |
 | --- | --- |
-| Step | 35 |
+| Step | 28 |
 | Status | next |
-| Branch | `fix/rate-children-fold` |
-| Cut from | `feat/named-callables` (stacked; see step 32) |
-| Last landed | `feat/named-callables` (PR #58, stacked on #57, #56, #55; all awaiting the user gate) |
+| Branch | `feat/calib-outputs` |
+| Cut from | `main` once PRs #55–#59 have merged; until then `fix/rate-children-fold` |
+| Last landed | `fix/rate-children-fold` (PR #59; Phase L PRs #55–#59 are stacked and awaiting the user gate) |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -274,14 +274,14 @@ before step 15 lands. Each handoff below names its successor explicitly;
 | 25 | J | WP19 | `feat/calib-multistart` | `plans/calibration-toolkit.plan.md` | Step 25 | done | CW5 CW6 |
 | 26 | J | WP19 | `feat/calib-gradient-free` | `plans/calibration-toolkit.plan.md` | Step 26 | done | CW7 |
 | 27 | J | WP19 | `feat/calib-seeded-mcmc` | `plans/calibration-toolkit.plan.md` | Step 27 | done | CW8 CW9 |
-| 28 | J | WP19 | `feat/calib-outputs` | `plans/calibration-toolkit.plan.md` | Step 28 | planned | CW10 CW11 |
+| 28 | J | WP19 | `feat/calib-outputs` | `plans/calibration-toolkit.plan.md` | Step 28 | next | CW10 CW11 |
 | 29 | K | CP1 | `feat/solve-composable` | `plans/solve-composable.plan.md` | Whole | done | CX1 CX2 CX3 CX4 CX5 |
 | 30 | K | CP2 | `feat/calib-composable` | `plans/calib-composable.plan.md` | Whole | done | CX16 CX17 CX18 CX19 CX24 |
 | 31 | L | CP5 | `fix/likelihood-scale-expr` | `plans/unified-lazy-idiom.plan.md` | Step 31 | done | CX26 |
 | 32 | L | CP5 | `feat/output-ufuncs` | `plans/unified-lazy-idiom.plan.md` | Step 32 | done | CX27 |
 | 33 | L | CP5 | `feat/output-defer` | `plans/unified-lazy-idiom.plan.md` | Step 33 | done | CX28 |
 | 34 | L | CP5 | `feat/named-callables` | `plans/unified-lazy-idiom.plan.md` | Step 34 | done | CX7 |
-| 35 | L | CP5 | `fix/rate-children-fold` | `plans/unified-lazy-idiom.plan.md` | Step 35 | next | CX29 |
+| 35 | L | CP5 | `fix/rate-children-fold` | `plans/unified-lazy-idiom.plan.md` | Step 35 | done | CX29 |
 | 36 | M | CP6 | `feat/stage-lattice` | `plans/unified-lazy-idiom.plan.md` | Step 36 | planned | — |
 | 37 | M | CP6 | `feat/post-stage-nodes` | `plans/unified-lazy-idiom.plan.md` | Step 37 | planned | — |
 | 38 | M | CP6 | `feat/outputset-on-rate-nodes` | `plans/unified-lazy-idiom.plan.md` | Step 38 | planned | CX30 |
@@ -2028,6 +2028,22 @@ notebook composes every stage, plus two shorter compositions. It lands on
   survey.
 - Your gate notebook is **`25-calibration-workflow.ipynb`** (23 went to step
   29, 24 to step 30; 26 is Phase L's, 27 is reserved for Phase M).
+- **Phase L is finished.** PRs #55–#59 (steps 31–35) are stacked and wait for
+  the user's notebook-26 sign-off. If they have not merged when you start, cut
+  `feat/calib-outputs` from `fix/rate-children-fold`, not `main`, so you have
+  the spellings below. Retarget onto `main` once they merge.
+- **Phase L worker tally:**
+
+  | Step | Final tier | Attempts | Escalated because |
+  |---|---|---|---|
+  | 31 | haiku | 1 | — |
+  | 32 | haiku | 1 | — |
+  | 33 | opus | 3 | an unrecorded deviation, then the plan's own wrong `defer` return annotation |
+  | 34 | haiku | 1 | — |
+  | 35 | opus | 2 | sonnet's code passed; its step plan omitted the deviations |
+
+  No haiku attempt ever failed on code correctness. Every failure was
+  bookkeeping, or an error in the master plan.
 - **Phase L (steps 31–35) landed before you.** Its spellings are available in
   notebook 25:
   - `defer(f)(outputs.ref(...), Param(...))` applies a function to outputs;
@@ -2545,6 +2561,9 @@ Set step 34 `done`, step 35 `next`.
 ---
 
 ## Step 35 — `fix/rate-children-fold`
+
+**Landed:** fix/rate-children-fold, PR #59, 2026-10-15.
+**Worker:** Cursor claude-opus-5-5-high (opus); checker opus (fresh context); attempts 2 (sonnet → opus; sonnet's code passed, its step plan omitted the deviations); receipts 20261015-080724 and its resumes, plus the opus fix-up.
 
 ### Summary
 

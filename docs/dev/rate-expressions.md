@@ -112,21 +112,23 @@ alignment has to be done by hand in the callable, correctly, every time.
 
 Honest accounting, because the cost is real:
 
-- **Seven touch points per node.** Adding `Lookup` meant editing `_eval_rate`,
+- **Touch points per node.** Adding `Lookup` meant editing `_eval_rate`,
   `rate_stage`, `build_hoist_table`, `_rate_bytes`, `_flow_refs`, `_field_paths`
-  — six files-worth of `match` arms for one feature.
-- **Six dunders for extension nodes, five of them silent-defaulting.**
-  `__rate_bytes__`, `__field_paths__`, `__flow_refs__`, `__rate_stage__`,
-  `__capture_meta__`, `__capture_children__`. The last five have a fallback that
-  does something reasonable-looking and can be wrong. `__rate_bytes__` used to
-  be the sixth, and it was the dangerous one: falling back to the class name was
-  a **silent miscompile**, because two custom nodes of the same class with
-  different fields digested identically and shared a jit cache entry. It is now
-  mandatory — `register_rate_eval` rejects a class that omits it and
-  `_rate_bytes` raises rather than guessing — so that failure is an import-time
-  `TypeError` instead of wrong numbers. The remaining five fail conservatively
-  (a redundant recompile, a step-stage node that could have hoisted), not
-  silently wrong.
+  — six files-worth of `match` arms for one feature. Since step 35 the child walk is
+  one function, `rate_children`, so a new built-in node adds one arm there plus its
+  evaluator and its digest.
+- **Extension dunders.** A custom node needs `__rate_bytes__` (mandatory) and, if it
+  holds rate-expression children, `__rate_children__`. The older
+  `__field_paths__`, `__flow_refs__` and `__capture_children__` remain as overrides but
+  are no longer needed: every pass folds over `rate_children`. `__rate_stage__` and
+  `__capture_meta__` stay optional. `__rate_bytes__` used to be the dangerous one:
+  falling back to the class name was a **silent miscompile**, because two custom
+  nodes of the same class with different fields digested identically and shared a jit
+  cache entry. It is now mandatory — `register_rate_eval` rejects a class that omits
+  it and `_rate_bytes` raises rather than guessing — so that failure is an
+  import-time `TypeError` instead of wrong numbers. A node that forgets
+  `__rate_children__` fails conservatively (a `FlowRef` it holds is not ordered, a
+  parameter-only child is not hoisted), which is why the hook is worth writing.
 - **An open operator set.** NumPy ufuncs on a rate expression build a node
   (`np.sin(Param("phase"))`). The named helpers (`exp`, `log`, `tanh`, `sqrt`,
   `floor`, `maximum`, `minimum`, `clip`) remain as aliases. `jnp.sin` still
@@ -390,7 +392,8 @@ Generalising that is the real proposal behind the question. It looks like:
   `Rate[Grouping]`, or at minimum a `__grouping__()` classmethod every node
   implements) would let `mypy --strict` reject a per-age FOI used where an
   edge-aligned rate is required, instead of raising at trace time.
-- **One traversal instead of seven.** Every node already knows its children.
+- **One traversal instead of seven.** *Done in step 35 as `rate_children`; see the
+  recommendation below.* Every node already knows its children.
   A single `__children__()` on `RateOps` would let `_flow_refs`,
   `_field_paths`, `_collect_capture_meta` and the `build_hoist_table` walk
   become one generic fold plus a per-node leaf function, cutting the extension
@@ -428,12 +431,17 @@ alignment exist at all, and none of those survive a generic `Function`.
 2. **Done.** `__array_ufunc__` / `__array_function__` on the four wrapper
    types, ops keyed by canonical name. `np.sin` works; the named helpers are
    aliases; value-keyed digests and staging are unchanged.
-3. Add `__children__()` to `RateOps` and refold the four child-walking passes
-   onto it.
+3. **Done (step 35, CX29).** `rate_children(expr)` in `summer4.flows.rates` is the one
+   child walk. `_flow_refs`, `_field_paths`, `_collect_capture_meta`, `rate_stage` and
+   `build_hoist_table` fold over it. It uses the existing name `__rate_children__`
+   rather than `__children__`. The extension dunders now needed are `__rate_bytes__`,
+   plus `__rate_children__` for any node with rate-expression children.
+   `ForceOfInfection` defines `__rate_children__`, so a `FlowRef` under it is ordered
+   and its parameter-only children hoist.
 4. Consider a grouping marker on the node type so `mypy` catches alignment
    errors that currently surface at trace time.
 
-Items 1 and 2 have landed. Items 3 and 4 are what is left: one traversal, and
-a grouping marker so `mypy` can catch alignment errors. The operator set is
+Items 1, 2 and 3 have landed. Item 4 is what is left: a grouping marker so `mypy`
+can catch alignment errors. The operator set is
 open, which is the thing computegraph did better, adopted rather than
 reinvented.
