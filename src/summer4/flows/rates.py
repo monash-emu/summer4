@@ -406,15 +406,52 @@ def _eval_defer(expr: Defer, *, eval_child: Callable[[RateOps], Any], **_: Any) 
     return expr.fn(*args, **kwargs)
 
 
-def defer(fn: Callable[..., Any], *, name: str | None = None) -> Callable[..., Defer]:
-    """Wrap ``fn`` so calling it builds a :class:`Defer` node.
+def defer(fn: Callable[..., Any], *, name: str | None = None) -> Callable[..., Any]:
+    """Wrap ``fn`` so calling it builds a :class:`Defer` node, or a post-solve node.
 
     ``defer(f)(Time(), Param("amp"))`` is the documented spelling.
     ``Defer(f, Time(), Param("amp"))`` is the same node. See :class:`Defer`
     for what ``fn`` receives and for what ``name=`` asserts.
+
+    **Post-solve form.** If any argument, positional or keyword, is an output
+    (an :class:`~summer4.results.outputset.OutputExpr` or a save spec), the call
+    builds a node inside an :class:`~summer4.results.outputset.OutputSet` instead.
+    ``fn`` is then called after the solve with evaluated values: an
+    :class:`~summer4.results.output.Output` for each output argument, and arrays
+    for parameters and constants. It may use NumPy or JAX; under ``jax.jit`` those
+    values are traced.
+
+    .. code-block:: python
+
+        outputs["notified"] = defer(delayed)(outputs.ref("incidence"), Param("delay"))
+
+    **Return contract.** The result of ``fn`` must be one of:
+
+    - an :class:`~summer4.results.output.Output`, returned as is;
+    - an array with the data shape of the first :class:`~summer4.results.output.Output`
+      argument, wrapped with that argument's times and dims.
+
+    Any other shape raises :class:`TypeError`, naming ``fn`` and both shapes.
+
+    ``Defer(f, outputs.ref(...))`` called directly still raises: a :class:`Defer` is
+    a rate node and cannot hold an output. Use ``defer(f)(...)``.
     """
 
-    def wrapped(*args: object, **kwargs: object) -> Defer:
+    def wrapped(*args: object, **kwargs: object) -> Any:
+        from summer4.results import outputset
+
+        values = (*args, *kwargs.values())
+        if any(
+            isinstance(value, (outputset.OutputExpr, *outputset._LEAF_TYPES)) for value in values
+        ):
+            return outputset.OutputExpr(
+                kind="defer",
+                value=fn,
+                name=name,
+                kids=tuple(outputset._coerce(a) for a in args)
+                + tuple(outputset._coerce(v) for v in kwargs.values()),
+                kwargs=tuple((k, None) for k in kwargs),
+            )
         return Defer(fn, *args, name=name, **kwargs)
 
     return wrapped

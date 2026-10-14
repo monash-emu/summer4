@@ -19,6 +19,7 @@ from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
 from typing import Any, ClassVar, Literal
 
+from summer4.jax.propertydata import PropertyData
 from summer4.results.output import Output
 from summer4.results.plan import (
     Compartments,
@@ -46,7 +47,7 @@ _CALLS = frozenset(
         "at_times",
     }
 )
-type _Kind = Literal["leaf", "ref", "const", "param", "unary", "binary", "call"]
+type _Kind = Literal["leaf", "ref", "const", "param", "unary", "binary", "call", "defer"]
 
 
 def _is_numeric(value: object) -> bool:
@@ -237,6 +238,40 @@ def _same(left: Quantity, right: Quantity) -> bool:
     return left == right
 
 
+def _apply_deferred(fn: Callable[..., Any], args: list[Any], kwargs: dict[str, Any]) -> Any:
+    """Call a ``defer`` function on evaluated arguments and apply its return contract.
+
+    An :class:`Output` is returned as is. Any other value must be an array shaped
+    like the first :class:`Output` argument; it is wrapped with that argument's
+    times and dims.
+    """
+    import jax.numpy as jnp
+
+    result = fn(*args, **kwargs)
+    if isinstance(result, Output):
+        return result
+    label = getattr(fn, "__name__", repr(fn))
+    first = next((value for value in (*args, *kwargs.values()) if isinstance(value, Output)), None)
+    if first is None:
+        raise TypeError(
+            f"defer({label}) returned {type(result).__name__} with no Output argument to "
+            "take a shape from. Return an Output, or pass an Output argument."
+        )
+    if isinstance(first.values, PropertyData):
+        want = tuple(jnp.shape(first.values.data))
+    else:
+        want = tuple(jnp.shape(first.values))
+    got = tuple(jnp.shape(result))
+    if got != want:
+        raise TypeError(
+            f"defer({label}) returned an array of shape {got}; it must return an Output "
+            f"or an array of the first Output argument's shape {want}."
+        )
+    if isinstance(first.values, PropertyData):
+        return first._with(values=PropertyData(first.values.pmap, result))
+    return first._with(values=result)
+
+
 class OutputSet:
     """Declarative named outputs. Assign leaves and expressions; evaluate after a solve.
 
@@ -247,6 +282,7 @@ class OutputSet:
         outputs["incidence"] = FlowMass("infection").midpoint()
         outputs["per_capita"] = outputs.ref("incidence") / outputs.ref("population")
         outputs["scaled"] = outputs.ref("incidence") * Param("scale")
+        outputs["notified"] = defer(delayed)(outputs.ref("incidence"), Param("delay"))
 
         result = model.run(params, y0, save=outputs.plan(SavePlan(ts=times)))
         named = outputs.evaluate(result, params)
@@ -452,6 +488,13 @@ class OutputSet:
                     raise AttributeError(expr.method)
                 fn: Callable[..., Output] = getattr(child, expr.method)
                 return fn(*expr.args, **dict(expr.kwargs))
+            if expr.kind == "defer":
+                values = [eval_node(kid) for kid in expr.kids]
+                n_kwargs = len(expr.kwargs)
+                n_pos = len(values) - n_kwargs
+                kw_names = [key for key, _none in expr.kwargs]
+                kw_values = dict(zip(kw_names, values[n_pos:], strict=True))
+                return _apply_deferred(expr.value, values[:n_pos], kw_values)
             raise TypeError(f"Unknown output expression {expr.kind!r}.")
 
         for name in order:
