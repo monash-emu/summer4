@@ -200,11 +200,11 @@ Each step that touches `src/` also has Cursor write a short step plan,
 <!-- roadmap:current -->
 | Field | Value |
 | --- | --- |
-| Step | 31 |
+| Step | 32 |
 | Status | next |
-| Branch | `fix/likelihood-scale-expr` |
-| Cut from | `main` |
-| Last landed | `fix/saveplan-ts-grid` |
+| Branch | `feat/output-ufuncs` |
+| Cut from | `fix/likelihood-scale-expr` (stacked; see step 32) |
+| Last landed | `fix/likelihood-scale-expr` (PR #55, awaiting the user gate) |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -277,8 +277,8 @@ before step 15 lands. Each handoff below names its successor explicitly;
 | 28 | J | WP19 | `feat/calib-outputs` | `plans/calibration-toolkit.plan.md` | Step 28 | planned | CW10 CW11 |
 | 29 | K | CP1 | `feat/solve-composable` | `plans/solve-composable.plan.md` | Whole | done | CX1 CX2 CX3 CX4 CX5 |
 | 30 | K | CP2 | `feat/calib-composable` | `plans/calib-composable.plan.md` | Whole | done | CX16 CX17 CX18 CX19 CX24 |
-| 31 | L | CP5 | `fix/likelihood-scale-expr` | `plans/unified-lazy-idiom.plan.md` | Step 31 | next | CX26 |
-| 32 | L | CP5 | `feat/output-ufuncs` | `plans/unified-lazy-idiom.plan.md` | Step 32 | planned | CX27 |
+| 31 | L | CP5 | `fix/likelihood-scale-expr` | `plans/unified-lazy-idiom.plan.md` | Step 31 | done | CX26 |
+| 32 | L | CP5 | `feat/output-ufuncs` | `plans/unified-lazy-idiom.plan.md` | Step 32 | next | CX27 |
 | 33 | L | CP5 | `feat/output-defer` | `plans/unified-lazy-idiom.plan.md` | Step 33 | planned | CX28 |
 | 34 | L | CP5 | `feat/named-callables` | `plans/unified-lazy-idiom.plan.md` | Step 34 | planned | CX7 |
 | 35 | L | CP5 | `fix/rate-children-fold` | `plans/unified-lazy-idiom.plan.md` | Step 35 | planned | CX29 |
@@ -2187,6 +2187,9 @@ ahead of step 28, which now follows step 35.)
 
 ## Step 31 — `fix/likelihood-scale-expr`
 
+**Landed:** fix/likelihood-scale-expr, PR #55, 2026-10-15.
+**Worker:** Cursor claude-haiku-5-5-thinking-high (haiku); checker sonnet; attempts 1 (haiku, with two resumes of the same chat: the gate-model switch and a text fix); receipts 20261014-213438, 20261014-214404, 20261014-214801.
+
 ### Summary
 
 Likelihood `sd=` and `dispersion=` accept any parameter-only rate expression,
@@ -2276,6 +2279,27 @@ Set step 31 `done`, step 32 `next`.
 `maximum`, ...) work on `outputs.ref(...)`. They use the shared `algebra`
 dispatch in a new `output_expr` mode. `Param("s") * outputs.ref("x")` works too.
 It lands on `feat/output-ufuncs` and closes `CX27`.
+
+### What the previous worker left you
+
+- **Cut this branch from `fix/likelihood-scale-expr`, not `main`.** Step 31's
+  PR (#55) is waiting for the user gate, and the user asked for Phase L to keep
+  going without pausing. Steps 32–35 are therefore stacked: each PR targets
+  the previous step's branch. Once a lower PR merges, retarget the next one
+  onto `main`.
+- **Notebook 26's gate model is SEIRS, not SEIR.** It has waning immunity at
+  `omega` = 1/120 per day. Without waning, the first wave burns out in about 40
+  of the 104 weeks, which leaves the dispersion likelihood uninformative.
+  Reuse the model as it is for section B.
+- **`jupyter nbconvert` is not installed** in the pixi environment. Check that
+  the notebook executes with `pixi run pytest tests/test_notebooks.py -q -k 26`,
+  which runs it in about 3 s.
+- **Write Cursor briefs to a file and pass them with `-f`.** A brief passed as a
+  shell string in double quotes loses its backticked names to command
+  substitution; that is how `eval_closed` vanished from the CX26 row on the
+  first attempt.
+- `resolve_scale` now routes every `RateOps`, including a bare `FieldRef`,
+  through `eval_closed`. Nothing else in `summer4.flows` changed.
 
 ### Worker
 
