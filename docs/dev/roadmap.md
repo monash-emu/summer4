@@ -200,11 +200,11 @@ Each step that touches `src/` also has Cursor write a short step plan,
 <!-- roadmap:current -->
 | Field | Value |
 | --- | --- |
-| Step | 32 |
+| Step | 33 |
 | Status | next |
-| Branch | `feat/output-ufuncs` |
-| Cut from | `fix/likelihood-scale-expr` (stacked; see step 32) |
-| Last landed | `fix/likelihood-scale-expr` (PR #55, awaiting the user gate) |
+| Branch | `feat/output-defer` |
+| Cut from | `feat/output-ufuncs` (stacked; see step 32) |
+| Last landed | `feat/output-ufuncs` (PR #56, stacked on #55; both awaiting the user gate) |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -278,8 +278,8 @@ before step 15 lands. Each handoff below names its successor explicitly;
 | 29 | K | CP1 | `feat/solve-composable` | `plans/solve-composable.plan.md` | Whole | done | CX1 CX2 CX3 CX4 CX5 |
 | 30 | K | CP2 | `feat/calib-composable` | `plans/calib-composable.plan.md` | Whole | done | CX16 CX17 CX18 CX19 CX24 |
 | 31 | L | CP5 | `fix/likelihood-scale-expr` | `plans/unified-lazy-idiom.plan.md` | Step 31 | done | CX26 |
-| 32 | L | CP5 | `feat/output-ufuncs` | `plans/unified-lazy-idiom.plan.md` | Step 32 | next | CX27 |
-| 33 | L | CP5 | `feat/output-defer` | `plans/unified-lazy-idiom.plan.md` | Step 33 | planned | CX28 |
+| 32 | L | CP5 | `feat/output-ufuncs` | `plans/unified-lazy-idiom.plan.md` | Step 32 | done | CX27 |
+| 33 | L | CP5 | `feat/output-defer` | `plans/unified-lazy-idiom.plan.md` | Step 33 | next | CX28 |
 | 34 | L | CP5 | `feat/named-callables` | `plans/unified-lazy-idiom.plan.md` | Step 34 | planned | CX7 |
 | 35 | L | CP5 | `fix/rate-children-fold` | `plans/unified-lazy-idiom.plan.md` | Step 35 | planned | CX29 |
 | 36 | M | CP6 | `feat/stage-lattice` | `plans/unified-lazy-idiom.plan.md` | Step 36 | planned | — |
@@ -2273,6 +2273,9 @@ Set step 31 `done`, step 32 `next`.
 
 ## Step 32 — `feat/output-ufuncs`
 
+**Landed:** feat/output-ufuncs, PR #56, 2026-10-15.
+**Worker:** Cursor claude-haiku-5-5-thinking-high (haiku); checker sonnet; attempts 1 (haiku); receipts 20261015-061721.
+
 ### Summary
 
 `np.exp`, `np.sin`, `np.maximum`, `np.clip` and the named helpers (`tanh`,
@@ -2369,6 +2372,22 @@ Set step 32 `done`, step 33 `next`.
 It is the port of summer2's `Function(f, [DerivedOutput(...), Parameter(...)])`,
 with a documented return contract. The gate model gains notifications (delayed
 incidence). It lands on `feat/output-defer` and closes `CX28`.
+
+### What the previous worker left you
+
+- **Stacked again.** Cut from `feat/output-ufuncs`; the PR targets it (#56,
+  itself on #55). Retarget once the lower PRs merge.
+- `OutputExpr` now has `__array_ufunc__` / `__array_function__` (mode
+  `output_expr` in `algebra._apply_mode`, which calls `outputset._coerce` and
+  `outputset._binary`). The `rates` helpers (`_unary`, `_binary`, `clip`) build
+  `OutputExpr` nodes when an operand is one, and `RateOps` operators return
+  `NotImplemented` against an `OutputExpr`. Your `defer` branch sits alongside
+  these; `_is_output_expr` in `rates.py` is the helper to reuse.
+- Comparisons on an `OutputExpr` raise `ValueError` (via `DENY_OPS`), not
+  `TypeError`.
+- Section B of notebook 26 has two wording nits the checker flagged (an unused
+  `tanh` mention; "scores exactly like" in row B). The step 33 brief asks
+  Cursor to fix them while it edits the notebook.
 
 ### Worker
 

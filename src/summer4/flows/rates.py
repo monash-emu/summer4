@@ -80,36 +80,61 @@ def register_rate_eval[T](cls: type[T]) -> Callable[[Callable[..., Any]], Callab
 
 
 class RateOps:
-    """Arithmetic mixin for rate expression nodes."""
+    """Arithmetic mixin for rate expression nodes.
+
+    An :class:`~summer4.results.outputset.OutputExpr` on the other side returns
+    ``NotImplemented``, so Python (or NumPy) hands the operation to the
+    output's reflected method or ``__array_ufunc__``.
+    """
 
     def __add__(self, other: object) -> BinOp:
+        if _is_output_expr(other):
+            return NotImplemented
         return BinOp("add", as_rate(self), as_rate(other))
 
     def __radd__(self, other: object) -> BinOp:
+        if _is_output_expr(other):
+            return NotImplemented
         return BinOp("add", as_rate(other), as_rate(self))
 
     def __sub__(self, other: object) -> BinOp:
+        if _is_output_expr(other):
+            return NotImplemented
         return BinOp("sub", as_rate(self), as_rate(other))
 
     def __rsub__(self, other: object) -> BinOp:
+        if _is_output_expr(other):
+            return NotImplemented
         return BinOp("sub", as_rate(other), as_rate(self))
 
     def __mul__(self, other: object) -> BinOp:
+        if _is_output_expr(other):
+            return NotImplemented
         return BinOp("mul", as_rate(self), as_rate(other))
 
     def __rmul__(self, other: object) -> BinOp:
+        if _is_output_expr(other):
+            return NotImplemented
         return BinOp("mul", as_rate(other), as_rate(self))
 
     def __truediv__(self, other: object) -> BinOp:
+        if _is_output_expr(other):
+            return NotImplemented
         return BinOp("div", as_rate(self), as_rate(other))
 
     def __rtruediv__(self, other: object) -> BinOp:
+        if _is_output_expr(other):
+            return NotImplemented
         return BinOp("div", as_rate(other), as_rate(self))
 
     def __pow__(self, other: object) -> BinOp:
+        if _is_output_expr(other):
+            return NotImplemented
         return BinOp("pow", as_rate(self), as_rate(other))
 
     def __rpow__(self, other: object) -> BinOp:
+        if _is_output_expr(other):
+            return NotImplemented
         return BinOp("pow", as_rate(other), as_rate(self))
 
     def __neg__(self) -> UnaryOp:
@@ -121,6 +146,8 @@ class RateOps:
     def __array_ufunc__(self, ufunc: Any, method: str, *inputs: Any, **kwargs: Any) -> Any:
         from summer4.flows.algebra import dispatch_ufunc
 
+        if any(_is_output_expr(value) for value in inputs):
+            return NotImplemented
         return dispatch_ufunc(ufunc, method, inputs, kwargs, mode="symbolic")
 
     def __array_function__(
@@ -633,6 +660,13 @@ def as_rate(value: object) -> RateOps:
     raise TypeError(f"Cannot use {type(value).__name__} as a flow rate.")
 
 
+def _is_output_expr(value: object) -> bool:
+    """True when ``value`` is a post-solve :class:`~summer4.results.outputset.OutputExpr`."""
+    from summer4.results.outputset import OutputExpr
+
+    return isinstance(value, OutputExpr)
+
+
 def _is_value(value: object) -> bool:
     """True when ``value`` is already evaluated, not a rate-tree node.
 
@@ -681,12 +715,20 @@ def _apply_value_binary(op: str, left: object, right: object) -> Any:
 
 
 def _unary(op: str, arg: object) -> Any:
+    if _is_output_expr(arg):
+        from summer4.results.outputset import OutputExpr
+
+        return OutputExpr(kind="unary", op=op, kids=(cast(OutputExpr, arg),))
     if _is_value(arg):
         return _apply_value_unary(op, arg)
     return UnaryOp(op, as_rate(arg))
 
 
 def _binary(op: str, left: object, right: object) -> Any:
+    if _is_output_expr(left) or _is_output_expr(right):
+        from summer4.results import outputset
+
+        return outputset._binary(op, left, right)
     if _is_value(left) or _is_value(right):
         return _apply_value_binary(op, left, right)
     return BinOp(op, as_rate(left), as_rate(right))
@@ -742,6 +784,13 @@ def clip(x: object, lo: object | None = None, hi: object | None = None) -> Any:
     """
     if lo is None and hi is None:
         raise ValueError("clip requires a lower bound, an upper bound, or both.")
+    if _is_output_expr(x) or _is_output_expr(lo) or _is_output_expr(hi):
+        out: Any = x
+        if lo is not None:
+            out = _binary("maximum", out, lo)
+        if hi is not None:
+            out = _binary("minimum", out, hi)
+        return out
     if _is_value(x) or _is_value(lo) or _is_value(hi):
         if isinstance(x, RateOps) or isinstance(lo, RateOps) or isinstance(hi, RateOps):
             raise TypeError(_MIXED_EXPR)
