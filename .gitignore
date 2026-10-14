@@ -43,3 +43,6 @@ benchmarks/results/
 # Documentation build
 docs/_build/
 docs/api/generated/
+
+# cursor-delegate receipts and briefs (see docs/dev/roadmap.md, tiered workers)
+.delegations/
