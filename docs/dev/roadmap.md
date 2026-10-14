@@ -200,11 +200,11 @@ Each step that touches `src/` also has Cursor write a short step plan,
 <!-- roadmap:current -->
 | Field | Value |
 | --- | --- |
-| Step | 33 |
+| Step | 34 |
 | Status | next |
-| Branch | `feat/output-defer` |
-| Cut from | `feat/output-ufuncs` (stacked; see step 32) |
-| Last landed | `feat/output-ufuncs` (PR #56, stacked on #55; both awaiting the user gate) |
+| Branch | `feat/named-callables` |
+| Cut from | `feat/output-defer` (stacked; see step 32) |
+| Last landed | `feat/output-defer` (PR #57, stacked on #56 and #55; all awaiting the user gate) |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -279,8 +279,8 @@ before step 15 lands. Each handoff below names its successor explicitly;
 | 30 | K | CP2 | `feat/calib-composable` | `plans/calib-composable.plan.md` | Whole | done | CX16 CX17 CX18 CX19 CX24 |
 | 31 | L | CP5 | `fix/likelihood-scale-expr` | `plans/unified-lazy-idiom.plan.md` | Step 31 | done | CX26 |
 | 32 | L | CP5 | `feat/output-ufuncs` | `plans/unified-lazy-idiom.plan.md` | Step 32 | done | CX27 |
-| 33 | L | CP5 | `feat/output-defer` | `plans/unified-lazy-idiom.plan.md` | Step 33 | next | CX28 |
-| 34 | L | CP5 | `feat/named-callables` | `plans/unified-lazy-idiom.plan.md` | Step 34 | planned | CX7 |
+| 33 | L | CP5 | `feat/output-defer` | `plans/unified-lazy-idiom.plan.md` | Step 33 | done | CX28 |
+| 34 | L | CP5 | `feat/named-callables` | `plans/unified-lazy-idiom.plan.md` | Step 34 | next | CX7 |
 | 35 | L | CP5 | `fix/rate-children-fold` | `plans/unified-lazy-idiom.plan.md` | Step 35 | planned | CX29 |
 | 36 | M | CP6 | `feat/stage-lattice` | `plans/unified-lazy-idiom.plan.md` | Step 36 | planned | — |
 | 37 | M | CP6 | `feat/post-stage-nodes` | `plans/unified-lazy-idiom.plan.md` | Step 37 | planned | — |
@@ -317,6 +317,7 @@ changed about them is recorded here instead, and overrides them.
 | `tb-ports-feature-completeness` | §10.3 | The object `posterior_runs` returns must keep **per-draw outputs** (for example `runs.samples(scenario, output)` → shape `(n, t)`), not only quantiles, so step 28 can draw spaghetti plots from it. Keep its draw input a plain unconstrained/constrained site dict internally so step 28 can pass `Candidates` as well as `InferenceData` |
 | `tb-ports-feature-completeness` | §10.4 | Notebook `12-calibration` / step-15 `14-calibration` are taken. Step 13 ships `examples/notebooks/17-priors-and-likelihoods.ipynb`. Step 15 uses the next free `18-calibration.ipynb` |
 | `tb-ports-feature-completeness` | §10.2 | No `preprocess=` on `BayesianModel`. Run-start work uses `FlowModel.compile(prepare_fn=...)`. `futureplans/wp10-preprocess-is-prepare-fn.md` is deleted |
+| `unified-lazy-idiom` | Step 33 | `defer()` returns `Callable[..., Any]`, not `Callable[..., Defer \| OutputExpr]`. The union made every documented spelling a mypy error (`outputs[...] = defer(f)(...)`, `eval_closed(defer(...))`, `r: RateOps = defer(f)(Time())`). Keep `Any` until steps 36–38 merge the two expression languages, and do not re-widen it |
 
 ---
 
@@ -2366,6 +2367,9 @@ Set step 32 `done`, step 33 `next`.
 
 ## Step 33 — `feat/output-defer`
 
+**Landed:** feat/output-defer, PR #57, 2026-10-15.
+**Worker:** Cursor claude-opus-5-5-high (opus); checker opus (fresh context); attempts 3 (haiku → sonnet → opus); receipts 20261015-064127, 20261015-065650, 20261015-070319.
+
 ### Summary
 
 `defer(f)(outputs.ref("incidence"), Param("delay"))` builds a post-solve node.
@@ -2458,6 +2462,22 @@ SaveFn, derived_fn, prepare_fn, InitialPopulation callables and FOI `kind`.
 Rebuilding a model with a fresh closure therefore hits the jit cache, under the
 same contract as `defer(name=)`. It lands on `feat/named-callables` and closes
 `CX7`.
+
+### What the previous worker left you
+
+- **Stacked:** cut from `feat/output-defer` (PR #57, on #56 and #55).
+- **Step 33 needed all three tiers.**
+  - Haiku's work was correct but left a deviation unrecorded.
+  - Sonnet then followed the master plan's `Defer | OutputExpr` return annotation, which an opus
+    checker showed breaks mypy for the documented spellings.
+  - `defer` now returns `Callable[..., Any]` (see *Corrections to committed plans*).
+  - Lesson for briefs: when a plan prescribes a type annotation, ask the implementer to prove it
+    with a `/tmp` mypy probe of the user-facing spellings.
+- `Defer.__rate_bytes__` is unchanged by step 33. Your `_callable_key` change there must keep the
+  unnamed encoding (`str(id(fn))`), so the `tests/test_rate_dispatch.py` goldens stay
+  byte-identical.
+- The step 34 brief also carries two cosmetic notebook-26 and step-plan fixes from the step 33
+  review.
 
 ### Worker
 
