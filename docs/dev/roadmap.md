@@ -299,7 +299,7 @@ two handoffs either side.
 | 43 | M | CP6 | `feat/typed-stages` | `plans/unified-lazy-idiom.plan.md` | Step 43 | planned | CX34 |
 | 44 | M | CP6 | `docs/unified-lazy-idiom` | `plans/unified-lazy-idiom.plan.md` | Step 44 | planned | — |
 | 45 | M | — | `chore/remove-deprecated-doors` | `plans/unified-lazy-idiom.plan.md` | Step 45 | blocked | — |
-| 46 | K | CP3 | `feat/calib-posterior-protocol` | `plans/tb-nh-joint-calibration.plan.md` | §4, §5 NH2 | planned | CX21 CX22 CX35 |
+| 46 | K | CP3 | `feat/calib-posterior-protocol` | `plans/tb-nh-joint-calibration.plan.md` | §4, §5 NH2 | done | CX21 CX22 CX35 |
 <!-- /roadmap:steps -->
 
 `Closes` lists row IDs of {doc}`../evaluation/tb-ports` (and, where a step moves
@@ -3276,6 +3276,12 @@ tally of worker tiers across steps 31–45.
 ---
 
 ## Step 46 — `feat/calib-posterior-protocol`
+
+**Landed:** feat/calib-posterior-protocol, PR #60, 2026-10-19.
+
+**Worker:** Cursor composer-2.5 (substituted for sonnet: Cursor's Claude models were over their usage limit until 2026-10-26; the user chose a Cursor built-in model); checker opus; attempts 1 implementation plus 5 follow-ups in the same chat after two opus checks (first FAIL, second PASS) (composer-2.5); receipts 20261019-114102, 20261019-114109, 20261019-114220, 20261019-114245, 20261019-114314, 20261019-120013, 20261019-121511, 20261019-122403, 20261019-123142, 20261019-130405, 20261019-131541.
+
+**Pin:** tbcore NH4 and tb-nh-joint-calibration NH5 pin this PR's merge commit on `main`. Deviations from plan §4 are in `plans/calib-posterior-protocol.plan.md`.
 
 ### Summary
 
