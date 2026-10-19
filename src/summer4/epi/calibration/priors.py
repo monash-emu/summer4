@@ -69,20 +69,29 @@ class NumpyroPrior:
     dist: Any
 
     def to_numpyro(self) -> Any:
+        """Return the wrapped numpyro distribution."""
         return self.dist
 
+    def _finite_scalar_bound(self, value: Any) -> float | None:
+        if value is None:
+            return None
+        arr = np.asarray(value)
+        if arr.shape != () or not np.isfinite(arr):
+            return None
+        return float(arr)
+
     def bounds(self) -> tuple[float | None, float | None]:
+        """Support bounds as finite scalars, or ``None`` when not scalar/finite."""
         support = getattr(self.dist, "support", None)
         if support is None:
             return (None, None)
         low = getattr(support, "lower_bound", None)
         high = getattr(support, "upper_bound", None)
-        lo = None if low is None or not np.isfinite(float(low)) else float(low)
-        hi = None if high is None or not np.isfinite(float(high)) else float(high)
-        return (lo, hi)
+        return (self._finite_scalar_bound(low), self._finite_scalar_bound(high))
 
     @property
     def has_icdf(self) -> bool:
+        """Whether ``dist.icdf`` is implemented for this distribution."""
         try:
             import jax.numpy as jnp
 
@@ -92,6 +101,7 @@ class NumpyroPrior:
         return True
 
     def icdf(self, u: np.ndarray | float) -> np.ndarray:
+        """Inverse CDF on the host; ``u`` must lie in ``[0, 1]``."""
         if not self.has_icdf:
             raise NotImplementedError(f"icdf is not available for site {self.name!r}.")
         import jax.numpy as jnp

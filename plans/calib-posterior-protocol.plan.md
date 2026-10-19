@@ -190,5 +190,8 @@ Plotly figure or a displayed object, and no asserts. The asserts live in
 
 | Spike | Implementation | Why |
 |---|---|---|
-| Test 4 reads the `"likelihood"` factor value from a trace | Asserts the site exists, idempotence, joint `numpyro.factor`, and failed-solve penalty | Under numpyro 0.16 the factor site is auxiliary observed with an empty `value` array; the log factor is not exposed on the trace message |
-| (implicit) exclude observed sample sites via `obs` only | Also skip sites with `is_observed` | Observed sites in this numpyro version set `is_observed=True` while `obs` is `None` |
+| (implicit) exclude observed sample sites via `obs` only | Filter latent sites on `is_observed` only | Numpyro trace messages carry `is_observed`, not an `obs` key on the message |
+| Gate SIR with constant per-capita `TransitionFlow` rates | Frequency-dependent FOI on a stratified population (still two unknown rates named `infection` and `recovery`) | A homogeneous-rate SIR did not give a clean early-growth ridge for multi-start within the notebook CPU budget; notebook 24's gate geometry carries over with the step's parameter names |
+| Nested `plate("dur")` duration observations | `obs=durations.T` with shape `(n_dur, k)` | Numpyro's plate ordering requires the transpose for `(k, n_dur)` simulated data |
+| Joint `mu` prior centred on generating value | Vague `Normal(log(0.25), 1)` in `tests/gate_custom_posterior.py` | A truth-centred `mu` prior made the joint look tight without side data |
+| `lhs` with empty `site_priors()` | `lhs` raises; `prior_draws` draws all sites via Predictive | Latin hypercube needs at least one stratifiable site; fully predictive designs use `prior_draws` |

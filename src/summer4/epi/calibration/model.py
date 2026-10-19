@@ -191,7 +191,11 @@ class BayesianModel:
         return model
 
     def log_likelihood(self, draws: Mapping[str, Any]) -> Any:
-        """Target log-likelihood (and solver-failure penalty) at constrained draws."""
+        """Target log-likelihood (and solver-failure penalty) at constrained draws.
+
+        ``draws`` should name every site in :meth:`prior_names`; names omitted
+        fall back to :attr:`fixed_params`. Traceable under ``jax.jit``.
+        """
         import jax.numpy as jnp
 
         params = self.merge_params(draws)

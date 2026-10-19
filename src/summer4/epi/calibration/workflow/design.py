@@ -28,6 +28,27 @@ def _stratified_site_priors(post: Posterior) -> tuple[Prior, ...]:
     return tuple(by_name[name] for name in post.prior_names() if name in by_name)
 
 
+def _params_from_predictive_only(
+    post: Posterior,
+    m: int,
+    *,
+    seed: int,
+) -> tuple[dict[str, Any], tuple[str, ...], tuple[str, ...]]:
+    """Draw all sites with ``Predictive`` when nothing is stratifiable."""
+    from jax import random
+    from numpyro.infer import Predictive  # type: ignore[import-untyped]
+
+    all_sites = tuple(post.prior_names())
+    pred = Predictive(
+        post.numpyro_model(),
+        num_samples=int(m),
+        return_sites=all_sites,
+    )
+    drawn = pred(random.PRNGKey(int(seed)))
+    params = {name: np.asarray(drawn[name]) for name in all_sites}
+    return params, (), all_sites
+
+
 def _params_from_strat_unit(
     post: Posterior,
     u: np.ndarray,
@@ -50,7 +71,7 @@ def _params_from_strat_unit(
     if predictive_names:
         import jax.numpy as jnp
         from jax import random
-        from numpyro.infer import Predictive  # type: ignore[import-untyped]
+        from numpyro.infer import Predictive
 
         posterior_samples = {k: jnp.asarray(v) for k, v in params.items()}
         pred = Predictive(
@@ -97,18 +118,24 @@ def lhs(post: Posterior, m: int, *, seed: int = 0) -> Candidates:
     """Latin-hypercube design of ``m`` points over stratifiable prior sites.
 
     Host-side: strata in the unit cube (numpy permutation + jitter; no
-    ``scipy.qmc``), pushed through each stratified site's :meth:`~Prior.icdf``.
+    ``scipy.qmc``), pushed through each stratified site's :meth:`~Prior.icdf`.
     Sites in :meth:`~Posterior.prior_names` that are not in
     :meth:`~Posterior.site_priors` are filled with
     ``numpyro.infer.Predictive`` conditional on the stratified row (same
     ``seed`` as the stage). Then :meth:`~Posterior.unconstrain` builds ``z``.
+
+    When :meth:`~Posterior.site_priors` is empty, use :func:`prior_draws` instead
+    (full Predictive draws for every site).
     """
     m_int = int(m)
     if m_int < 1:
         raise ValueError(f"lhs expects m >= 1, got {m_int}.")
     strat = _stratified_site_priors(post)
     if not strat:
-        raise ValueError("lhs requires at least one site in site_priors().")
+        raise ValueError(
+            "lhs requires at least one site in site_priors(); "
+            "when site_priors() is empty, use prior_draws instead."
+        )
     t0 = time.perf_counter()
     rng = np.random.default_rng(int(seed))
     u = _unit_lhs(m_int, len(strat), rng)
@@ -126,15 +153,41 @@ def prior_draws(post: Posterior, m: int, *, seed: int = 0) -> Candidates:
     """``m`` independent prior draws (i.i.d. unit uniforms through ``icdf``).
 
     Uncovered sites use the same :class:`~numpyro.infer.Predictive` fallback as
-    :func:`lhs`.
+    :func:`lhs`. When :meth:`~Posterior.site_priors` is empty, every site is
+    drawn from a single unconditional Predictive call.
     """
     m_int = int(m)
     if m_int < 1:
         raise ValueError(f"prior_draws expects m >= 1, got {m_int}.")
     strat = _stratified_site_priors(post)
-    if not strat:
-        raise ValueError("prior_draws requires at least one site in site_priors().")
     t0 = time.perf_counter()
+    if not strat:
+        sites = tuple(post.prior_names())
+        if not sites:
+            raise ValueError("prior_draws requires at least one prior site.")
+        params, lhs_sites, predictive_sites = _params_from_predictive_only(
+            post, m_int, seed=int(seed)
+        )
+        full_settings = {
+            "m": m_int,
+            "seed": int(seed),
+            "lhs_sites": list(lhs_sites),
+            "predictive_sites": list(predictive_sites),
+        }
+        z = {k: np.asarray(v) for k, v in post.unconstrain(params).items()}
+        params_arr = {k: np.asarray(v) for k, v in params.items()}
+        return Candidates(
+            sites=sites,
+            z=z,
+            params=params_arr,
+            history=(
+                StageRecord(
+                    stage="prior_draws",
+                    settings=full_settings,
+                    seconds=time.perf_counter() - t0,
+                ),
+            ),
+        )
     rng = np.random.default_rng(int(seed))
     u = rng.random((m_int, len(strat)))
     return _candidates_from_unit(

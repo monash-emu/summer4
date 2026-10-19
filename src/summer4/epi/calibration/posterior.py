@@ -42,7 +42,7 @@ def _latent_sample_sites(trace: Mapping[str, Any]) -> list[tuple[str, Any, Any]]
     for name, site in trace.items():
         if site["type"] != "sample":
             continue
-        if site.get("is_observed") or site.get("obs") is not None:
+        if site.get("is_observed"):
             continue
         infer = site.get("infer") or {}
         if infer.get("is_auxiliary"):
@@ -51,24 +51,17 @@ def _latent_sample_sites(trace: Mapping[str, Any]) -> list[tuple[str, Any, Any]]
     return out
 
 
-def _dist_independent_of_seed(model: Callable[[], None], name: str) -> bool:
+def _trace_latent_fns(model: Callable[[], None], seed: int) -> dict[str, Any]:
     from numpyro import handlers
 
-    numpyro = _require_numpyro()
-    del numpyro
+    with handlers.trace() as tr, handlers.seed(rng_seed=seed):
+        model()
+    return {name: fn for name, _val, fn in _latent_sample_sites(tr)}
 
-    def _fn(seed: int) -> Any:
-        with handlers.trace() as tr, handlers.seed(rng_seed=seed):
-            model()
-        for n, _val, fn in _latent_sample_sites(tr):
-            if n == name:
-                return fn
-        raise KeyError(name)
 
-    d0 = _fn(0)
-    d1 = _fn(1)
-    flat0, _ = jax.tree_util.tree_flatten(d0)
-    flat1, _ = jax.tree_util.tree_flatten(d1)
+def _fn_independent_of_seed(fn0: Any, fn1: Any) -> bool:
+    flat0, _ = jax.tree_util.tree_flatten(fn0)
+    flat1, _ = jax.tree_util.tree_flatten(fn1)
     if len(flat0) != len(flat1):
         return False
     return all(
@@ -81,22 +74,16 @@ def _auto_site_priors(
     shapes: dict[str, tuple[int, ...]],
     model: Callable[[], None],
 ) -> tuple[Prior, ...]:
+    fns0 = _trace_latent_fns(model, 0)
+    fns1 = _trace_latent_fns(model, 1)
     out: list[Prior] = []
     for name in names:
         if shapes.get(name, ()) != ():
             continue
-        if not _dist_independent_of_seed(model, name):
+        fn = fns0.get(name)
+        if fn is None or name not in fns1:
             continue
-        from numpyro import handlers
-
-        with handlers.trace() as tr, handlers.seed(rng_seed=0):
-            model()
-        fn = None
-        for n, _val, dist_fn in _latent_sample_sites(tr):
-            if n == name:
-                fn = dist_fn
-                break
-        if fn is None:
+        if not _fn_independent_of_seed(fn, fns1[name]):
             continue
         prior = NumpyroPrior(name, fn)
         if prior.has_icdf:
@@ -105,7 +92,30 @@ def _auto_site_priors(
 
 
 class NumpyroPosterior:
-    """Workflow-facing wrapper around a hand-written numpyro model."""
+    """Wrap a hand-written numpyro model for calibration workflow stages.
+
+    Args:
+        model: A numpyro model callable (``def model(): ...``) whose latent sample
+            sites define the parameterisation.
+        site_priors: Optional explicit list of :class:`~summer4.epi.calibration.priors.Prior`
+            objects to stratify in :func:`~summer4.epi.calibration.workflow.lhs` and
+            :func:`~summer4.epi.calibration.workflow.prior_draws`. Each name must appear
+            in :meth:`prior_names`. When omitted, scalar sites whose distribution does
+            not depend on other sites and expose an icdf are auto-selected; plate
+            members, centred hierarchical children, and icdf-less distributions are
+            left out and filled via ``numpyro.infer.Predictive`` instead.
+        seed: PRNG seed for the construction trace and for the lazy
+            ``initialize_model`` key (density only). It does not affect
+            :meth:`constrain` or :meth:`unconstrain`.
+
+    :meth:`constrain` and :meth:`unconstrain` accept either unbatched site arrays
+    (shapes matching :meth:`site_shapes`) or a leading batch axis of size ``m`` on
+    every site. Mixed batched and unbatched leaves raise :class:`ValueError`.
+    Each call runs the full numpyro model via ``constrain_fn`` / ``unconstrain_fn``
+    (one model evaluation per batch row). The same applies to the Predictive
+    fallback in :func:`~summer4.epi.calibration.workflow.lhs` and
+    :func:`~summer4.epi.calibration.workflow.prior_draws`.
+    """
 
     def __init__(
         self,
@@ -124,11 +134,20 @@ class NumpyroPosterior:
             )
         else:
             name_set = set(self._names)
+            seen: set[str] = set()
             validated: list[Prior] = []
             for prior in site_priors:
+                if prior.name in seen:
+                    raise ValueError(f"duplicate site_priors name {prior.name!r}.")
+                seen.add(prior.name)
                 if prior.name not in name_set:
                     raise ValueError(
                         f"site_priors name {prior.name!r} is not in prior_names() {self._names!r}."
+                    )
+                if self._shapes.get(prior.name, ()) != ():
+                    raise ValueError(
+                        f"site_priors name {prior.name!r} is not scalar "
+                        f"(shape {self._shapes[prior.name]!r})."
                     )
                 validated.append(prior)
             self._site_priors = tuple(validated)
@@ -148,6 +167,7 @@ class NumpyroPosterior:
         return tuple(names), shapes
 
     def numpyro_model(self) -> Callable[[], None]:
+        """Return the wrapped numpyro model for ``MCMC(NUTS(...))``."""
         return self._model
 
     def _ensure_initialized(self) -> tuple[Any, Any]:
@@ -166,15 +186,18 @@ class NumpyroPosterior:
 
     @property
     def potential_fn(self) -> Callable[[Mapping[str, Any]], Any]:
+        """Unconstrained potential ``-log_density`` (for optimisation backends)."""
         fn, _post = self._ensure_initialized()
         return cast(Callable[[Mapping[str, Any]], Any], fn)
 
     @property
     def postprocess_fn(self) -> Callable[[Mapping[str, Any]], dict[str, Any]]:
+        """Map unconstrained dicts to constrained site values (numpyro ``postprocess_fn``)."""
         _fn, post = self._ensure_initialized()
         return cast(Callable[[Mapping[str, Any]], dict[str, Any]], post)
 
     def log_density(self, unconstrained: Mapping[str, Any]) -> Any:
+        """Log posterior density at unconstrained site values."""
         return -self.potential_fn(dict(unconstrained))
 
     def _batch_axis(self, tree: Mapping[str, Any]) -> int | None:
@@ -200,6 +223,7 @@ class NumpyroPosterior:
         return 0 if batched else None
 
     def constrain(self, z: Mapping[str, Any]) -> dict[str, Any]:
+        """Unconstrained → constrained values for every site in :meth:`prior_names`."""
         from numpyro.infer.util import constrain_fn
 
         names = self._names
@@ -218,6 +242,7 @@ class NumpyroPosterior:
         return jax.vmap(_one)(z_sub)
 
     def unconstrain(self, params: Mapping[str, Any]) -> dict[str, Any]:
+        """Constrained → unconstrained values for every site in :meth:`prior_names`."""
         from numpyro.infer.util import unconstrain_fn
 
         names = self._names
@@ -236,6 +261,7 @@ class NumpyroPosterior:
         return jax.vmap(_one)(p_sub)
 
     def init_point(self, seed: int = 0) -> dict[str, Any]:
+        """Default unconstrained initial point from ``initialize_model``."""
         from jax import random
         from numpyro.infer.util import initialize_model
 
@@ -243,12 +269,15 @@ class NumpyroPosterior:
         return dict(params_info.z)
 
     def prior_names(self) -> tuple[str, ...]:
+        """Latent sample site names in trace order."""
         return self._names
 
     def site_shapes(self) -> dict[str, tuple[int, ...]]:
+        """Constrained value shape for each latent sample site."""
         return dict(self._shapes)
 
     def site_priors(self) -> Sequence[Prior]:
+        """Priors stratified by :func:`~summer4.epi.calibration.workflow.lhs`."""
         return self._site_priors
 
 
