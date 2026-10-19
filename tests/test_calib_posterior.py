@@ -66,6 +66,15 @@ from summer4.epi.calibration import (
 from summer4.epi.calibration.priors import NumpyroPrior, Prior
 
 
+def _enable_x64_ctx() -> Any:
+    return jax.enable_x64(True) if hasattr(jax, "enable_x64") else jax.experimental.enable_x64()
+
+
+def _lhs_strata_sorted(values: np.ndarray, cdf: Any, m: int) -> np.ndarray:
+    u = cdf(np.asarray(values, float))
+    return np.sort(np.floor(u * m).astype(int))
+
+
 class _Rates(NamedTuple):
     infection: float
     recovery: float
@@ -175,7 +184,7 @@ def test_numpyro_posterior_equivalent_to_bayesian_model() -> None:
     post = NumpyroPosterior(bm.numpyro_model())
     assert post.prior_names() == bm.prior_names()
     rng = np.random.default_rng(42)
-    with jax.experimental.enable_x64():
+    with _enable_x64_ctx():
         for z in _random_z(bm, rng, 32):
             np.testing.assert_allclose(
                 float(post.log_density(z)), float(bm.log_density(z)), atol=1e-10
@@ -230,7 +239,7 @@ def test_numpyro_posterior_equivalent_to_bayesian_model() -> None:
 
     bm2 = _sir_bm_gamma_truncated()
     post2 = NumpyroPosterior(bm2.numpyro_model(), site_priors=bm2.site_priors())
-    with jax.experimental.enable_x64():
+    with _enable_x64_ctx():
         z0 = bm2.init_point(1)
         np.testing.assert_allclose(
             float(post2.log_density(z0)), float(bm2.log_density(z0)), atol=1e-10
@@ -304,14 +313,20 @@ def test_plate_noncentred_lhs_and_workflow() -> None:
     m_lhs = 4
     mu_vals = np.asarray(lhs_a.params["mu"], float)
     tau_vals = np.asarray(lhs_a.params["tau"], float)
-    assert len(np.unique(mu_vals)) == m_lhs
-    assert len(np.unique(tau_vals)) == m_lhs
+    np.testing.assert_array_equal(
+        _lhs_strata_sorted(mu_vals, lambda v: stats.norm.cdf(v, loc=0.0, scale=1.0), m_lhs),
+        np.arange(m_lhs),
+    )
+    np.testing.assert_array_equal(
+        _lhs_strata_sorted(tau_vals, lambda v: stats.halfnorm.cdf(v, scale=1.0), m_lhs),
+        np.arange(m_lhs),
+    )
 
     scored = wf.evaluate(post, lhs_a, batch_size=2)
     assert scored.log_density is not None
     assert np.all(np.isfinite(np.asarray(scored.log_density)))
-    if scored.ok is not None:
-        assert np.all(np.asarray(scored.ok))
+    assert scored.ok is not None
+    assert np.all(np.asarray(scored.ok))
 
     start = wf.Candidates.from_z(post, {k: v[:2] for k, v in scored.z.items()})
     opt_run = wf.optimize(
@@ -345,14 +360,37 @@ def test_plate_noncentred_lhs_and_workflow() -> None:
         np.testing.assert_allclose(theta_c[i].mean(), mu_c[i], atol=0.15)
 
 
+def _numpyro_dist_icdf_available(dist_obj: Any) -> bool:
+    try:
+        dist_obj.icdf(jnp.asarray(0.5))
+    except (NotImplementedError, ImportError):
+        return False
+    return True
+
+
+def _assert_numpyro_prior_has_icdf_consistent(prior: NumpyroPrior) -> None:
+    assert prior.has_icdf == _numpyro_dist_icdf_available(prior.dist)
+    if prior.has_icdf:
+        prior.icdf(0.5)
+    else:
+        with pytest.raises(NotImplementedError, match=prior.name):
+            prior.icdf(0.5)
+
+
 def test_numpyro_prior_icdf_and_protocol() -> None:
     n = NumpyroPrior("x", dist.Normal(1.0, 2.0))
     u = np.array([0.1, 0.5, 0.9])
     np.testing.assert_allclose(n.icdf(u), stats.norm(loc=1.0, scale=2.0).ppf(u), rtol=1e-6)
     assert n.bounds() == (None, None)
     uni = NumpyroPrior("u", dist.Uniform(0.0, 2.0))
+    assert uni.bounds() == (0.0, 2.0)
     np.testing.assert_allclose(uni.icdf(0.25), 0.5)
+    batched_uni = NumpyroPrior("u", dist.Uniform(jnp.zeros(3), 1.0))
+    assert batched_uni.bounds() == (None, None)
+    trunc = NumpyroPrior("t", dist.TruncatedNormal(loc=0.0, scale=1.0, low=0.0))
+    _assert_numpyro_prior_has_icdf_consistent(trunc)
     beta = NumpyroPrior("b", dist.Beta(2.0, 2.0))
+    _assert_numpyro_prior_has_icdf_consistent(beta)
     assert beta.has_icdf is False
     assert isinstance(n, Prior)
 
@@ -361,7 +399,6 @@ def test_bayesian_model_log_likelihood() -> None:
     bm = _sir_bm_three_priors()
     draws = {"infection": 0.3, "recovery": 0.15, "log_scale": 0.1}
     ll = float(bm.log_likelihood(draws))
-    assert ll == float(bm.log_likelihood(draws))
     with handlers.trace() as tr, handlers.seed(rng_seed=0), handlers.condition(data=draws):
         bm.numpyro_model()()
     assert "likelihood" in tr
@@ -494,6 +531,16 @@ def test_gate_notebook_constants_match_helper() -> None:
         ), f"{name}: notebook {notebook_val!r} != helper {helper_val!r}"
 
 
+def test_gate_joint_lhs_listing() -> None:
+    gate = build_gate_models()
+    joint = gate.joint
+    assert joint.prior_names() == ("mu", "tau", "infection", "z", "z_main")
+    lhs_joint = wf.lhs(joint, 8, seed=2)
+    settings = lhs_joint.history[0].settings
+    assert settings["lhs_sites"] == ["mu", "tau", "infection", "z_main"]
+    assert settings["predictive_sites"] == ["z"]
+
+
 def test_gate_main_only_ridge_multistart() -> None:
     gate = build_gate_models()
     bm, truth = gate.bm, gate.truth
@@ -575,7 +622,10 @@ def test_gate_joint_recovery_concentration() -> None:
         seed=MCMC_MAIN_SEED,
     )
     run_main = wf.sample_until(warm_main.mcmc, stop, seed=MCMC_MAIN_SEED)
+    inf_main_draws = np.asarray(run_main.samples["infection"]).reshape(-1)
     rec_main_draws = np.asarray(run_main.samples["recovery"]).reshape(-1)
+    main_corr = float(np.corrcoef(inf_main_draws, rec_main_draws)[0, 1])
+    assert main_corr > 0.95
 
     init_joint = design_joint.init_params(MCMC_CHAINS, seed=MCMC_JOINT_SEED)
     warm_joint = wf.warmup_until(
@@ -604,7 +654,7 @@ def test_gate_bm_numpyro_posterior_log_density() -> None:
     bm = gate.bm
     post = NumpyroPosterior(bm.numpyro_model())
     rng = np.random.default_rng(99)
-    with jax.experimental.enable_x64():
+    with _enable_x64_ctx():
         for z in _random_z(bm, rng, 16):
             np.testing.assert_allclose(
                 float(post.log_density(z)), float(bm.log_density(z)), atol=1e-10

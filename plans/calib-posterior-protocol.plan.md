@@ -75,8 +75,8 @@ class NumpyroPosterior:
 - `icdf(u)` is `np.asarray(dist.icdf(jnp.asarray(u)), float64)` after the `[0, 1]` check.
 - `has_icdf` (property) probes `dist.icdf(0.5)` and catches `NotImplementedError` and
   `ImportError`. numpyro 0.16 raises `ImportError` for `Beta` and `Gamma` and
-  `NotImplementedError` for `TruncatedNormal`. `icdf` raises `NotImplementedError` with the site
-  name when `has_icdf` is false.
+  `NotImplementedError` for `TruncatedNormal`; numpyro 0.21 implements `TruncatedNormal.icdf`.
+  `icdf` raises `NotImplementedError` with the site name when `has_icdf` is false.
 
 ## Design stages: the fallback
 
@@ -142,8 +142,9 @@ read `compiled`, `outputs` and `targets`. `BayesianModel.find_map` / `sample` ar
      and `MCMCRun.candidates(post)` all run;
    - a centred variant (`theta ~ Normal(mu, tau)` in the plate) leaves `theta` out of auto
      `site_priors()`.
-3. **`NumpyroPrior`**: `bounds`, `icdf` against scipy for `Normal` / `Uniform`, `has_icdf` false for
-   `Beta`, and `isinstance(NumpyroPrior(...), Prior)`.
+3. **`NumpyroPrior`**: `bounds`, `icdf` against scipy for `Normal` / `Uniform`, `has_icdf`
+   consistent with a direct `dist.icdf` probe (`Beta` lacks icdf without TFP in numpyro 0.16 and
+   0.21), and `isinstance(NumpyroPrior(...), Prior)`.
 4. **`BayesianModel.log_likelihood`**: equals the `"likelihood"` factor in a trace of
    `numpyro_model`, returns the `-1e30` penalty for a failed solve, and works inside a hand-written
    `numpyro.factor` model.
@@ -170,7 +171,8 @@ Plotly figure or a displayed object, and no asserts. The asserts live in
   3. The joint posterior object: displayed `prior_names()`, `site_shapes()`, and which sites LHS
      stratifies and which are Predictive.
   4. LHS → `evaluate` → multi-start `optimize`, for main-only (`bm`) and joint (`post`): endpoints
-     in (infection, recovery). Main-only endpoints spread along the ridge; joint endpoints cluster.
+     in (infection, recovery). Main-only endpoints collapse to one prior-determined ridge point;
+     joint endpoints cluster near the truth.
   5. Staged NUTS (`warmup_until` + `sample_until`, seeded from `Candidates.init_params`) on both
      posteriors. Overlay the (infection, recovery) draws: joint is tight and covers the truth;
      main-only lies along the ridge. A second figure shows the partial pooling: per-outbreak recovery
@@ -195,3 +197,5 @@ Plotly figure or a displayed object, and no asserts. The asserts live in
 | Nested `plate("dur")` duration observations | `obs=durations.T` with shape `(n_dur, k)` | Numpyro's plate ordering requires the transpose for `(k, n_dur)` simulated data |
 | Joint `mu` prior centred on generating value | Vague `Normal(log(0.25), 1)` in `tests/gate_custom_posterior.py` | A truth-centred `mu` prior made the joint look tight without side data |
 | `lhs` with empty `site_priors()` | `lhs` raises; `prior_draws` draws all sites via Predictive | Latin hypercube needs at least one stratifiable site; fully predictive designs use `prior_draws` |
+| Main-only optimise ends spread along the ridge | All main-only ends collapse to one wrong point (low ptp) | Adam maximises unconstrained log density, including Uniform logit Jacobians; that objective peaks inside the box and is set by priors, not the flat ridge likelihood |
+| Explicit `site_priors=` passed through unchanged | `ValueError` on duplicate names and non-scalar sites | Keeps LHS stratification well-defined; the spike assumed callers only pass valid tuples |

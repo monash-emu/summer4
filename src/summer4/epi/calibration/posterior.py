@@ -111,8 +111,9 @@ class NumpyroPosterior:
     :meth:`constrain` and :meth:`unconstrain` accept either unbatched site arrays
     (shapes matching :meth:`site_shapes`) or a leading batch axis of size ``m`` on
     every site. Mixed batched and unbatched leaves raise :class:`ValueError`.
-    Each call runs the full numpyro model via ``constrain_fn`` / ``unconstrain_fn``
-    (one model evaluation per batch row). The same applies to the Predictive
+    Each call traces the full numpyro model via ``constrain_fn`` / ``unconstrain_fn``;
+    batched inputs use a single ``jax.vmap`` over the leading axis (not a Python
+    loop per row). The same applies to the Predictive
     fallback in :func:`~summer4.epi.calibration.workflow.lhs` and
     :func:`~summer4.epi.calibration.workflow.prior_draws`.
     """

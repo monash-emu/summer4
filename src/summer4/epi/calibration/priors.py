@@ -87,6 +87,9 @@ class NumpyroPrior:
             return (None, None)
         low = getattr(support, "lower_bound", None)
         high = getattr(support, "upper_bound", None)
+        for value in (low, high):
+            if value is not None and np.asarray(value).shape != ():
+                return (None, None)
         return (self._finite_scalar_bound(low), self._finite_scalar_bound(high))
 
     @property
