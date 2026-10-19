@@ -12,11 +12,11 @@ import numpy as np
 import numpyro
 import numpyro.distributions as dist
 import pytest
+from tests import gate_nuts_tuning as gate_settings
 
 from summer4.epi.calibration import NumpyroPosterior
 from summer4.epi.calibration import workflow as wf
 from summer4.epi.calibration.workflow import tune
-from tests import gate_nuts_tuning as gate_settings
 
 # Trace order (b, then a) differs from numpyro's sorted block order (a, then b).
 _L = np.array([[1.0, 0.0, 0.0], [0.9, 0.4, 0.0], [0.5, 0.2, 0.3]])

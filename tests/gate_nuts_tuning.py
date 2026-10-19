@@ -11,9 +11,9 @@ from dataclasses import dataclass
 from typing import Any
 
 import optax
+from tests.gate_custom_posterior import build_gate_models
 
 from summer4.epi.calibration import workflow as wf
-from tests.gate_custom_posterior import build_gate_models
 
 LHS_M = 48
 LHS_SEED = 0
