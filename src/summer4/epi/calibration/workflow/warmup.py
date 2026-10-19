@@ -167,7 +167,7 @@ def warmup_until(
 
     ``make_mcmc(n)`` builds the caller's ``numpyro.infer.MCMC`` with
     ``num_warmup=n``, for example
-    ``lambda n: MCMC(NUTS(bm.numpyro_model()), num_warmup=n, num_samples=200, num_chains=4)``.
+    ``lambda n: MCMC(NUTS(post.numpyro_model()), num_warmup=n, num_samples=200, num_chains=4)``.
     Round one uses ``num_warmup``. After each round the warmup draws are checked
     (default :class:`WarmupRule`); on a failure the length is multiplied by
     ``growth`` and a fresh ``MCMC`` warms up again, each chain starting from where

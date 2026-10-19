@@ -18,6 +18,7 @@ import jax.numpy as jnp
 import numpy as np
 from jax import random
 
+from summer4.epi.calibration.posterior import Posterior
 from summer4.epi.calibration.workflow.candidates import (
     Candidates,
     StageRecord,
@@ -397,7 +398,7 @@ class OptimizeRun:
 
     def __init__(
         self,
-        bm: Any,
+        post: Posterior,
         candidates: Candidates,
         *,
         method: OptimizeMethod | None = None,
@@ -416,7 +417,7 @@ class OptimizeRun:
                 f"method); got {type(method).__name__}."
             )
         start = time.perf_counter()
-        self.bm = bm
+        self.post = post
         self.method = method
         self.tuning = AutoTune() if tuning is None else tuning
         self.reserve = reserve
@@ -425,7 +426,7 @@ class OptimizeRun:
         self.batch_size = max(1, int(batch_size))
         self.sites = candidates.sites
         self._input_history = candidates.history
-        potential_fn = bm.potential_fn
+        potential_fn = post.potential_fn
         n = len(candidates)
 
         self._z_start = {k: jnp.asarray(candidates.z[k]) for k in self.sites}
@@ -590,10 +591,10 @@ class OptimizeRun:
 
     def _scored(self) -> Candidates:
         best_z = {k: np.asarray(self.states["best_z"][k]) for k in self.sites}
-        best_params = {k: np.asarray(v) for k, v in self.bm.constrain(best_z).items()}
+        best_params = {k: np.asarray(v) for k, v in self.post.constrain(best_z).items()}
         if self._score is None:
-            bm, batch = self.bm, self.batch_size
-            self._score = jax.jit(lambda z: jax.lax.map(bm.log_density, z, batch_size=batch))
+            post, batch = self.post, self.batch_size
+            self._score = jax.jit(lambda z: jax.lax.map(post.log_density, z, batch_size=batch))
         log_density = np.asarray(self._score({k: jnp.asarray(v) for k, v in best_z.items()}))
         return Candidates(
             sites=self.sites,
@@ -606,7 +607,7 @@ class OptimizeRun:
 
 
 def optimize(
-    bm: Any,
+    post: Posterior,
     candidates: Candidates,
     *,
     method: OptimizeMethod | None = None,
@@ -621,7 +622,7 @@ def optimize(
 
     Exactly equivalent to::
 
-        run = OptimizeRun(bm, candidates, method=method, tuning=tuning, reserve=reserve,
+        run = OptimizeRun(post, candidates, method=method, tuning=tuning, reserve=reserve,
                           chunk_steps=chunk_steps, seed=seed, batch_size=batch_size)
         return run.extend(max_steps)
 
@@ -635,7 +636,7 @@ def optimize(
     ``population × starts`` model solves.
     """
     run = OptimizeRun(
-        bm,
+        post,
         candidates,
         method=method,
         tuning=tuning,

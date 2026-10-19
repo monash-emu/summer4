@@ -179,31 +179,36 @@ class BayesianModel:
     def numpyro_model(self) -> Any:
         """Return the numpyro model callable (priors → run → factor)."""
         numpyro = _require_numpyro()
-        import jax.numpy as jnp
 
         sites = self._sites
-        targets = self.targets
-        outputs = self.outputs
 
         def model() -> None:
             draws: dict[str, Any] = {}
             for prior in sites:
                 draws[prior.name] = numpyro.sample(prior.name, prior.to_numpyro())
-            params = self.merge_params(draws)
-            result = self._run(params)
-            scored = result
-            if outputs is not None:
-                scored = outputs.evaluate(result, params)
-            ll = targets.log_likelihood(scored, params)
-            ok = True if result.solver is None else result.solver.ok
-            # numpyro.factor / Unit rejects non-finite log_factor; a failed solve
-            # (and any NaN likelihood) becomes a large finite penalty instead.
-            fail = jnp.asarray(-1.0e30, dtype=jnp.result_type(ll))
-            ll = jnp.where(ok, ll, fail)
-            ll = jnp.nan_to_num(ll, nan=-1.0e30, posinf=-1.0e30, neginf=-1.0e30)
-            numpyro.factor("likelihood", ll)
+            numpyro.factor("likelihood", self.log_likelihood(draws))
 
         return model
+
+    def log_likelihood(self, draws: Mapping[str, Any]) -> Any:
+        """Target log-likelihood (and solver-failure penalty) at constrained draws.
+
+        ``draws`` should name every site in :meth:`prior_names`; names omitted
+        fall back to :attr:`fixed_params`. Traceable under ``jax.jit``.
+        """
+        import jax.numpy as jnp
+
+        params = self.merge_params(draws)
+        result = self._run(params)
+        scored = result
+        if self.outputs is not None:
+            scored = self.outputs.evaluate(result, params)
+        ll = self.targets.log_likelihood(scored, params)
+        ok = True if result.solver is None else result.solver.ok
+        fail = jnp.asarray(-1.0e30, dtype=jnp.result_type(ll))
+        ll = jnp.where(ok, ll, fail)
+        ll = jnp.nan_to_num(ll, nan=-1.0e30, posinf=-1.0e30, neginf=-1.0e30)
+        return ll
 
     def _ensure_potential(self, rng_key: Any | None = None) -> tuple[Any, Any, Any]:
         """Lazily build unconstrained potential / postprocess via ``initialize_model``."""
@@ -233,6 +238,12 @@ class BayesianModel:
         """
         potential, _post, _z = self._ensure_potential()
         return potential
+
+    @property
+    def postprocess_fn(self) -> Any:
+        """Map unconstrained values to constrained parameters (numpyro ``initialize_model``)."""
+        _potential, postprocess, _z = self._ensure_potential()
+        return postprocess
 
     def log_density(self, unconstrained: Mapping[str, Any]) -> Any:
         """Joint log density at an **unconstrained** site dict (NUTS space).

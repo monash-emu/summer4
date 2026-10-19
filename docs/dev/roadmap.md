@@ -220,7 +220,10 @@ tb-ports rows. **Phase K** (step 29 onward) works through the composability
 survey's packages ({doc}`../evaluation/composability`); its rows close `CX`
 findings and name `CP` packages. Step 29 (`CP1`) was inserted on 2026-09-28,
 after step 27, and lands before step 28; step 30 (`CP2`) was inserted on
-2026-09-28 after step 29, also before step 28.
+2026-09-28 after step 29, also before step 28. Step 46 (`CP3`, step NH2 of
+`plans/tb-nh-joint-calibration.plan.md`) was inserted on 2026-10-19, cut from
+`main` beside step 31: it lets the workflow stages run on any numpyro model, for
+the joint TB natural-history calibration in `monash-emu/tb-nh-joint-calibration`.
 
 **Phases L and M** (steps 31–45) are the staged unification of summer4's lazy
 idioms (`plans/unified-lazy-idiom.plan.md`): one way to write rates, derived
@@ -236,13 +239,17 @@ all coding is delegated to Cursor, and Claude orchestrates and checks.
 The order is fixed as:
 
 ```text
-14 → 15 → 24 → 25 → 26 → 27 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 28 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 16 → 17 → 18 → 19 → 45
+14 → 15 → 24 → 25 → 26 → 27 → 29 → 30 → 46 → 31 → 32 → 33 → 34 → 35 → 28 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 16 → 17 → 18 → 19 → 45
 ```
 
 Phase J comes **directly after step 15** and before Track G resumes at step 16.
 Steps 24–27 would technically run on step 14 alone, but they are not started
 before step 15 lands. Each handoff below names its successor explicitly;
 `tests/test_roadmap.py` checks that they agree with this line.
+Step 46 is independent of Phases L and M and does not move *Current position*;
+the line places it where it was cut. If Phase L steps merge first, whoever
+merges step 46 moves it in this line to where it actually landed and fixes the
+two handoffs either side.
 
 <!-- roadmap:steps -->
 | Step | Phase | WP | Branch | Plan | Section | Status | Closes |
@@ -292,6 +299,7 @@ before step 15 lands. Each handoff below names its successor explicitly;
 | 43 | M | CP6 | `feat/typed-stages` | `plans/unified-lazy-idiom.plan.md` | Step 43 | planned | CX34 |
 | 44 | M | CP6 | `docs/unified-lazy-idiom` | `plans/unified-lazy-idiom.plan.md` | Step 44 | planned | — |
 | 45 | M | — | `chore/remove-deprecated-doors` | `plans/unified-lazy-idiom.plan.md` | Step 45 | blocked | — |
+| 46 | K | CP3 | `feat/calib-posterior-protocol` | `plans/tb-nh-joint-calibration.plan.md` | §4, §5 NH2 | done | CX21 CX22 CX35 |
 <!-- /roadmap:steps -->
 
 `Closes` lists row IDs of {doc}`../evaluation/tb-ports` (and, where a step moves
@@ -2183,6 +2191,9 @@ objects (`.idata`, `.best_params`, `.candidates`).
 (Re-sequenced 2026-10-14: step 31 `next`. Phase L, steps 31–35, was inserted
 ahead of step 28, which now follows step 35.)
 
+(Re-sequenced 2026-10-19: step 46 `next` beside step 31. Step 46 was cut from
+`main` while step 31 was current and does not move *Current position*.)
+
 ---
 
 ## Step 31 — `fix/likelihood-scale-expr`
@@ -3261,6 +3272,109 @@ text-only "before" cells.
 
 Set step 45 `done`. The lazy-idiom unification is complete; record the final
 tally of worker tiers across steps 31–45.
+
+---
+
+## Step 46 — `feat/calib-posterior-protocol`
+
+**Landed:** feat/calib-posterior-protocol, PR #60, 2026-10-19.
+
+**Worker:** Cursor composer-2.5 (substituted for sonnet: Cursor's Claude models were over their usage limit until 2026-10-26; the user chose a Cursor built-in model); checker opus; attempts 1 implementation plus 5 follow-ups in the same chat after two opus checks (first FAIL, second PASS) (composer-2.5); receipts 20261019-114102, 20261019-114109, 20261019-114220, 20261019-114245, 20261019-114314, 20261019-120013, 20261019-121511, 20261019-122403, 20261019-123142, 20261019-130405, 20261019-131541.
+
+**Pin:** tbcore NH4 and tb-nh-joint-calibration NH5 pin this PR's merge commit on `main`. Deviations from plan §4 are in `plans/calib-posterior-protocol.plan.md`.
+
+### Summary
+
+The calibration workflow stages (`wf.lhs`, `wf.prior_draws`, `wf.evaluate`,
+`Candidates`, `wf.optimize`, `wf.run_mcmc` and `MCMCRun.candidates`) accept any
+`Posterior`, not only a `BayesianModel`. `NumpyroPosterior` wraps a hand-written
+numpyro model (hierarchical latents, two likelihoods, shared sites);
+`BayesianModel.log_likelihood` lets such a model score a compiled model's
+targets; `NumpyroPrior` wraps a bare numpyro distribution; `init_point` and
+`postprocess_fn` are public. It is step NH2 of the joint TB natural-history
+calibration, lands on `feat/calib-posterior-protocol`, closes `CX21`, `CX22`
+and `CX35`, and ships `28-calibration-custom-posterior.ipynb`.
+
+### What the previous worker left you
+
+- **This step was inserted on 2026-10-19** for
+  `monash-emu/tb-nh-joint-calibration` (step NH2 of its plan, copied here as
+  `plans/tb-nh-joint-calibration.plan.md`; its runbook is that repo's
+  `docs/roadmap.md`). tbcore's NH4 and that repo's NH5 pin the commit this
+  step lands.
+- It runs beside Phase L and does not move *Current position*.
+- Notebooks 25–27 are reserved by steps 28, 31 and 44, so the gate notebook is
+  `28-calibration-custom-posterior.ipynb`.
+
+### Worker
+
+Design spike: **opus** (the orchestrator), committed as
+`plans/calib-posterior-protocol.plan.md` before delegating. Implementer:
+**sonnet**, delegated to Cursor (`--model claude-sonnet-5-5-high`). Checker:
+**opus**. Escalate per
+[Running a step with tiered workers](#running-a-step-with-tiered-workers).
+
+### Files
+
+`src/summer4/epi/calibration/{__init__.py,model.py,priors.py,posterior.py}`,
+`src/summer4/epi/calibration/workflow/*.py`, `tests/test_calib_posterior.py`
+(new), `tests/test_epi_calibration.py`,
+`examples/notebooks/28-calibration-custom-posterior.ipynb` (new),
+`docs/evaluation/composability.md`, `plans/calib-posterior-protocol.plan.md`
+(new step plan).
+
+### Read first
+
+1. `AGENTS.md` (§ *Composability is a design goal*)
+2. `plans/tb-nh-joint-calibration.plan.md` §4 and §5 *NH2*
+3. `plans/calib-posterior-protocol.plan.md` (the design spike; it wins over §4
+   where they differ)
+4. {doc}`../evaluation/composability`: rows `CX20`–`CX22`, `CX35`, package `CP3`
+5. `src/summer4/epi/calibration/model.py`, `priors.py`, `workflow/*.py`
+
+### Do
+
+Follow the design spike. Add `CX35` to the composability survey (package
+`CP3`) in this branch's first commit. Replace the untyped `bm` parameter of
+every workflow stage with `post: Posterior` wherever only the protocol's
+members are read; `posterior_runs` keeps `BayesianModel`. Write the §4
+equivalence test. Ship the gate notebook as an acceptance page: an SIR whose
+main data leave a ridge between infection and recovery rates, resolved by
+partially pooled "historical outbreaks" that share the recovery rate.
+
+Set `CX21`, `CX22` and `CX35` to `done` in the same commit as the code, then
+run `pixi run composability-write`.
+
+Cut from: `main`. Merges into: `main`.
+
+### Sanity check
+
+The checker verifies these items, plus the checklist every step gets (see
+[Running a step with tiered workers](#running-a-step-with-tiered-workers)):
+
+- The equivalence test passes: `NumpyroPosterior(bm.numpyro_model())` and `bm`
+  agree on `log_density`, `potential_fn`, `constrain` and `unconstrain` at
+  random points to 1e-10, and give the same `wf.lhs` and `wf.optimize` results
+  for the same seed.
+- `mypy --strict` on `src/summer4` is clean.
+- No workflow function annotates `bm: BayesianModel` (or an untyped `bm`)
+  unless it reads `compiled`, `outputs` or `targets`.
+- `NumpyroPosterior` is tested on a model with a `plate` and a non-centred
+  latent, including `wf.lhs` falling back to prior predictive draws for the
+  plate site.
+
+### Exit checks
+
+The [standard checks](#exit-checks-every-step), plus `pixi run composability`
+and `pixi run -e docs docs-strict`.
+**User gate:** `28-calibration-custom-posterior.ipynb`.
+
+### Handoff
+
+Set step 46 `done`. Leave *Current position* on the Phase L step that is
+current (on `main` when this step was cut: step 31 `next`). Record the commit
+tbcore and `tb-nh-joint-calibration` pin in the PR body and in that repo's NH2
+handoff, not here.
 
 ---
 
