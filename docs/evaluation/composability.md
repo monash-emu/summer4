@@ -39,7 +39,7 @@ pixi run composability         # statuses, evidence anchors, packages, totals
 ## Where things stand
 
 <!-- composability:totals -->
-Open findings: **7** (0 high, 2 medium, 5 low); planned: 11; deferred: 3; done: 14; rejected: 0.
+Open findings: **7** (0 high, 2 medium, 5 low); planned: 14; deferred: 3; done: 14; rejected: 0.
 <!-- /composability:totals -->
 
 The calibration workflow's MCMC stage (`CX25`), the solve (`CP1`, roadmap step
@@ -94,6 +94,9 @@ can be inspected and extended. What remains:
 | CX33 | rates | P1 | medium | planned | InitialPopulation base values and weights accept a `callable(params)` that bypasses the rate tree: it is keyed by `id()`, cannot be staged or inspected, and duplicates what a run-stage expression already does. | Deprecate the callables in favour of `defer(f)(Params())` (roadmap step 42). | `src/summer4/flows/initial.py::def _base_digest` |
 | CX34 | rates | P2 | medium | planned | Stage is a runtime property only: `Time()` in an initial population, a step-stage likelihood scale or (after CX30) a post-solve expression in a rate slot fails at compile or run time, never under mypy. | `RateOps` generic in a covariant stage marker (`Run <: Step <: Post`), with each slot annotated (roadmap step 43). | `src/summer4/flows/stages.py::Stage = Literal` |
 | CX35 | calibration | P1, P2 | medium | done | Before step 46: the workflow stages were bound to `BayesianModel`: `wf.lhs`, `prior_draws`, `evaluate`, `Candidates`, `optimize`, `run_mcmc` and `MCMCRun.candidates` read `numpyro_model`, `potential_fn`, `log_density`, `constrain`, `unconstrain`, `prior_names` and `site_priors`. A hand-written numpyro model (hierarchical latents, two likelihoods, sites shared between them) runs under `MCMC(NUTS(model))`, but not through LHS, multi-start optimisation, `Candidates.init_params` or replay. | Done in step 46: a `Posterior` protocol of exactly those members, which every stage takes; `NumpyroPosterior(model)` implements it for any model function; public `BayesianModel.log_likelihood(params)` so a joint model can `numpyro.factor` a compiled model's targets; `wf.lhs` / `prior_draws` draw sites without a stratifiable prior by `Predictive`. | `src/summer4/epi/calibration/workflow/design.py::def lhs(post: Posterior` |
+| CX36 | calibration | P2, P3 | medium | planned | `wf.sample_until` / `MCMCRun` request only `diverging` from numpyro, so `num_steps` (gradient evaluations), `accept_prob` and the adapted step size of each draw are lost; tuning or costing a sampler means rerunning it outside the stage (tbcore `docs/summer4-workarounds.md` W8). | `sample_until(..., extra_fields=(...))`; `MCMCRun.extra[name]` is `(chain, draw)`, concatenated across chunks and `extend`, and lands in `idata.sample_stats` (roadmap step 47). | `src/summer4/epi/calibration/workflow/mcmc.py::extra = ("diverging",) if self._divergences else ()` |
+| CX37 | calibration | P2 | medium | planned | `MCMCRun` reports one R-hat and ESS per site, averaged over a plate site's elements (`np.mean(split_gelman_rubin(x))`), so one unconverged element is hidden by its converged siblings and `StopRule` cannot judge on the worst element. | Progress rows and `MCMCRun.diagnostics` add `rhat_element_max` / `ess_bulk_element_min`; `StopRule(per_element=True)` judges on them (roadmap step 47). | `src/summer4/epi/calibration/workflow/mcmc.py::float(np.mean(split_gelman_rubin(x)))` |
+| CX38 | calibration | P2, P3 | medium | planned | `wf.warmup_until` cannot start from a given inverse mass matrix, restarts every doubling round from the factory's metric (discarding the previous round's adaptation), and reports nothing until it returns, so a long dense warm-up is a black box. | `warmup_until(..., inverse_mass_matrix=, carry_metric=, on_round=)`; rows record `grad_evals` (roadmap step 47). | `src/summer4/epi/calibration/workflow/warmup.py::mcmc = make_mcmc(n)` |
 <!-- /composability:findings -->
 
 ## Work packages
@@ -103,7 +106,8 @@ findings are tracked by their `futureplans/` notes instead. **CP1** landed as
 roadmap step 29 and **CP2** as step 30. **CP3** and **CP4** are independent
 and can run alongside the roadmap. **CP5** and **CP6** are the staged
 unification of the lazy idioms (`plans/unified-lazy-idiom.plan.md`): CP5 is
-roadmap steps 31-35, CP6 steps 36-44.
+roadmap steps 31-35, CP6 steps 36-44. **CP7** is roadmap step 47, the NUTS
+tuning stage (`plans/nuts-tuning.plan.md`).
 
 <!-- composability:packages -->
 | Package | Title | Closes |
@@ -114,6 +118,7 @@ roadmap steps 31-35, CP6 steps 36-44.
 | CP4 | Tests use public API | CX8 CX10 CX22 |
 | CP5 | Bridges between the lazy idioms (roadmap steps 31-35) | CX7 CX26 CX27 CX28 CX29 |
 | CP6 | One lazy node set for rates, outputs and parameters (roadmap steps 36-44) | CX11 CX30 CX31 CX32 CX33 CX34 |
+| CP7 | NUTS tuning: sampler statistics, worst-element diagnostics, steerable warm-up (roadmap step 47) | CX36 CX37 CX38 |
 <!-- /composability:packages -->
 
 ## Patterns to copy

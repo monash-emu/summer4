@@ -223,7 +223,10 @@ after step 27, and lands before step 28; step 30 (`CP2`) was inserted on
 2026-09-28 after step 29, also before step 28. Step 46 (`CP3`, step NH2 of
 `plans/tb-nh-joint-calibration.plan.md`) was inserted on 2026-10-19, cut from
 `main` beside step 31: it lets the workflow stages run on any numpyro model, for
-the joint TB natural-history calibration in `monash-emu/tb-nh-joint-calibration`.
+the joint TB natural-history calibration in `monash-emu/tb-nh-joint-calibration`. Step 47
+(`CP7`) was inserted on 2026-10-20, cut from `main` after step 46: a NUTS tuning stage
+that picks a mass matrix, tree depth, target acceptance and warm-up length for any
+`Posterior` from short pilot runs.
 
 **Phases L and M** (steps 31–45) are the staged unification of summer4's lazy
 idioms (`plans/unified-lazy-idiom.plan.md`): one way to write rates, derived
@@ -239,7 +242,7 @@ all coding is delegated to Cursor, and Claude orchestrates and checks.
 The order is fixed as:
 
 ```text
-14 → 15 → 24 → 25 → 26 → 27 → 29 → 30 → 46 → 31 → 32 → 33 → 34 → 35 → 28 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 16 → 17 → 18 → 19 → 45
+14 → 15 → 24 → 25 → 26 → 27 → 29 → 30 → 46 → 47 → 31 → 32 → 33 → 34 → 35 → 28 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 16 → 17 → 18 → 19 → 45
 ```
 
 Phase J comes **directly after step 15** and before Track G resumes at step 16.
@@ -250,6 +253,7 @@ Step 46 is independent of Phases L and M and does not move *Current position*;
 the line places it where it was cut. If Phase L steps merge first, whoever
 merges step 46 moves it in this line to where it actually landed and fixes the
 two handoffs either side.
+Step 47 is placed the same way, after step 46.
 
 <!-- roadmap:steps -->
 | Step | Phase | WP | Branch | Plan | Section | Status | Closes |
@@ -300,6 +304,7 @@ two handoffs either side.
 | 44 | M | CP6 | `docs/unified-lazy-idiom` | `plans/unified-lazy-idiom.plan.md` | Step 44 | planned | — |
 | 45 | M | — | `chore/remove-deprecated-doors` | `plans/unified-lazy-idiom.plan.md` | Step 45 | blocked | — |
 | 46 | K | CP3 | `feat/calib-posterior-protocol` | `plans/tb-nh-joint-calibration.plan.md` | §4, §5 NH2 | done | CX21 CX22 CX35 |
+| 47 | K | CP7 | `feat/nuts-tuning` | `plans/nuts-tuning.plan.md` | all | planned | CX36 CX37 CX38 |
 <!-- /roadmap:steps -->
 
 `Closes` lists row IDs of {doc}`../evaluation/tb-ports` (and, where a step moves
@@ -3372,9 +3377,91 @@ and `pixi run -e docs docs-strict`.
 ### Handoff
 
 Set step 46 `done`. Leave *Current position* on the Phase L step that is
-current (on `main` when this step was cut: step 31 `next`). Record the commit
+current (on `main` when this step was cut: step 31 `next`). Step 47 was
+inserted after this step on 2026-10-20 and, like it, leaves step 31 current (in the landing
+order only: step 47 `next`). Record the commit
 tbcore and `tb-nh-joint-calibration` pin in the PR body and in that repo's NH2
 handoff, not here.
+
+---
+
+## Step 47 — `feat/nuts-tuning`
+
+### Summary
+
+A domain-neutral workflow stage that picks NUTS hyperparameters for any
+`Posterior` from short pilot runs seeded by `Candidates.init_params`: mass
+matrix (diagonal, dense from identity, dense or diagonal primed with a Laplace
+metric, Laplace fixed), `max_tree_depth`, `target_accept_prob`, initial step
+size and warm-up length (`warmup_until`'s doubling rounds). Each pilot is
+scored by effective draws per gradient evaluation and per wall second, with
+warm-up cost reported separately, and ranked by the cost of reaching a stated
+target ESS. It ships `wf.laplace_metric`, `wf.time_gradient`, `wf.NutsSetting`,
+`wf.pilot`, `wf.NutsTuning` and `wf.tune_nuts` on `feat/nuts-tuning`, closes
+`CX36`–`CX38` (`sample_until(extra_fields=)`, worst-element R-hat and ESS,
+`warmup_until(inverse_mass_matrix=, carry_metric=, on_round=)`) and ships
+`29-calibration-nuts-tuning.ipynb`.
+
+### What the previous worker left you
+
+- **This step was inserted on 2026-10-20** at the request of the TB
+  natural-history joint calibration (tbcore NH4): there, dense warm-up from an
+  identity metric took 54 minutes against 5 for diagonal, and then sampled
+  twice as fast. The stage makes that trade-off measurable for any model.
+- It runs beside Phase L and does not move *Current position*.
+- Notebooks 25–27 are reserved by steps 28, 31 and 44 and 28 is taken, so the
+  gate notebook is `29-calibration-nuts-tuning.ipynb`.
+
+### Worker
+
+Design spike and implementation: **opus** (one Claude Code session, at the
+user's request from the NH4 session), committed as `plans/nuts-tuning.plan.md`
+before the code.
+
+### Files
+
+`src/summer4/epi/calibration/workflow/{__init__.py,mcmc.py,warmup.py,tune.py}`,
+`tests/test_calib_workflow_mcmc.py`, `tests/test_calib_workflow_tune.py` (new),
+`tests/gate_nuts_tuning.py` (new),
+`examples/notebooks/29-calibration-nuts-tuning.ipynb` (new),
+`docs/evaluation/composability.md`, `plans/nuts-tuning.plan.md` (new),
+`futureplans/nuts-metric-from-draws.md` (new).
+
+### Read first
+
+1. `AGENTS.md` (§ *Composability is a design goal*)
+2. `plans/nuts-tuning.plan.md`
+3. {doc}`../evaluation/composability`: rows `CX25`, `CX36`–`CX38`, package `CP7`
+4. `src/summer4/epi/calibration/workflow/mcmc.py`, `warmup.py`
+
+### Do
+
+Follow the plan. Close the three gaps first (each with tests), then the tuning
+module. Keep `StopRule`'s default (mean over elements) so existing runs stop
+where they did. Set `CX36`–`CX38` to `done` in the same commit as the code,
+then run `pixi run composability-write`.
+
+Cut from: `main`. Merges into: `main`.
+
+### Sanity check
+
+- `extra_fields` survive `extend`; `StopRule(per_element=True)` refuses a
+  run whose plate site has one unconverged element.
+- `laplace_metric` recovers a known Gaussian covariance in `ravel_pytree`
+  order, for plate and scalar sites, and numpyro accepts it for dense and
+  diagonal kernels.
+- `tune_nuts` equals its documented expansion.
+- `mypy --strict` on `src/summer4` is clean.
+
+### Exit checks
+
+The [standard checks](#exit-checks-every-step), plus `pixi run composability`.
+**User gate:** `29-calibration-nuts-tuning.ipynb`.
+
+### Handoff
+
+Set step 47 `done`. Leave *Current position* on the Phase L step that is
+current (on `main` when this step was cut: step 31 `next`).
 
 ---
 
