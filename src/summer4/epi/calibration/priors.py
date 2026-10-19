@@ -62,6 +62,44 @@ class Prior(Protocol):
 
 
 @dataclass(frozen=True, slots=True)
+class NumpyroPrior:
+    """Wrap a numpyro distribution as a :class:`Prior` (CX21)."""
+
+    name: str
+    dist: Any
+
+    def to_numpyro(self) -> Any:
+        return self.dist
+
+    def bounds(self) -> tuple[float | None, float | None]:
+        support = getattr(self.dist, "support", None)
+        if support is None:
+            return (None, None)
+        low = getattr(support, "lower_bound", None)
+        high = getattr(support, "upper_bound", None)
+        lo = None if low is None or not np.isfinite(float(low)) else float(low)
+        hi = None if high is None or not np.isfinite(float(high)) else float(high)
+        return (lo, hi)
+
+    @property
+    def has_icdf(self) -> bool:
+        try:
+            import jax.numpy as jnp
+
+            _ = self.dist.icdf(jnp.asarray(0.5))
+        except (NotImplementedError, ImportError):
+            return False
+        return True
+
+    def icdf(self, u: np.ndarray | float) -> np.ndarray:
+        if not self.has_icdf:
+            raise NotImplementedError(f"icdf is not available for site {self.name!r}.")
+        import jax.numpy as jnp
+
+        return np.asarray(self.dist.icdf(jnp.asarray(_as_unit_array(u))), dtype=np.float64)
+
+
+@dataclass(frozen=True, slots=True)
 class Uniform:
     """Continuous uniform on ``[lo, hi]``."""
 
@@ -283,6 +321,7 @@ __all__ = [
     "Gamma",
     "LogNormal",
     "Normal",
+    "NumpyroPrior",
     "Prior",
     "TruncatedNormal",
     "Uniform",

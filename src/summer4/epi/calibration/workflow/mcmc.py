@@ -18,6 +18,7 @@ from typing import Any
 
 import numpy as np
 
+from summer4.epi.calibration.posterior import Posterior
 from summer4.epi.calibration.workflow.candidates import Candidates, StageRecord
 
 # Warnings point at the caller's line, whichever public entry point was used.
@@ -237,7 +238,7 @@ class MCMCRun:
             groups["sample_stats"] = {"diverging": self.diverging}
         return az.from_dict(groups)
 
-    def candidates(self, bm: Any) -> Candidates:
+    def candidates(self, post: Posterior) -> Candidates:
         """Each chain's latest draw as :class:`Candidates`, for re-seeding another stage."""
         last = {name: np.asarray(self.samples[name])[:, -1] for name in self.sites}
         record = StageRecord(
@@ -245,7 +246,7 @@ class MCMCRun:
             settings={"chunks": self.chunks, "converged": self.converged, "reason": self.reason},
             seconds=self._seconds,
         )
-        base = Candidates.from_params(bm, last)
+        base = Candidates.from_params(post, last)
         return Candidates(sites=base.sites, z=base.z, params=base.params, history=(record,))
 
     def extend(self, stop: Stop, *, warn: bool = True) -> MCMCRun:
@@ -341,7 +342,7 @@ def sample_until(
 
 
 def run_mcmc(
-    bm: Any,
+    post: Posterior,
     init: Candidates | None = None,
     *,
     make_kernel: Callable[[], Any] | None = None,
@@ -360,7 +361,7 @@ def run_mcmc(
 
         def make_mcmc(n):
             return MCMC(
-                make_kernel() if make_kernel else NUTS(bm.numpyro_model()),
+                make_kernel() if make_kernel else NUTS(post.numpyro_model()),
                 num_warmup=n, num_samples=chunk_samples,
                 num_chains=num_chains, chain_method=chain_method, progress_bar=progress_bar,
             )
@@ -378,7 +379,7 @@ def run_mcmc(
 
     Write those lines yourself to use another kernel's options, inspect the
     ``MCMC`` object, or retry with a new kernel (for example
-    ``NUTS(bm.numpyro_model(), target_accept_prob=0.95)`` after a
+    ``NUTS(post.numpyro_model(), target_accept_prob=0.95)`` after a
     ``"divergences"`` stop).
     """
     _require_numpyro()
@@ -386,7 +387,7 @@ def run_mcmc(
 
     def make_mcmc(n: int) -> Any:
         return MCMC(
-            make_kernel() if make_kernel is not None else NUTS(bm.numpyro_model()),
+            make_kernel() if make_kernel is not None else NUTS(post.numpyro_model()),
             num_warmup=int(n),
             num_samples=int(chunk_samples),
             num_chains=int(num_chains),

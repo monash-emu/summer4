@@ -14,11 +14,13 @@ from summer4.epi.calibration.likelihoods import (
 )
 from summer4.epi.calibration.likelihoods import Normal as NormalLikelihood
 from summer4.epi.calibration.model import BayesianModel, SampleKind
+from summer4.epi.calibration.posterior import NumpyroPosterior, Posterior
 from summer4.epi.calibration.posterior_runs import PosteriorRuns, Scenario
 from summer4.epi.calibration.priors import (
     Beta,
     Gamma,
     LogNormal,
+    NumpyroPrior,
     TruncatedNormal,
     Uniform,
     priors_from_frame,
@@ -34,7 +36,10 @@ __all__ = [
     "NegativeBinomial",
     "NormalLikelihood",
     "NormalPrior",
+    "NumpyroPosterior",
+    "NumpyroPrior",
     "Poisson",
+    "Posterior",
     "PosteriorRuns",
     "SampleKind",
     "Scenario",

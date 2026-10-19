@@ -185,3 +185,10 @@ Plotly figure or a displayed object, and no asserts. The asserts live in
 | `Prior.from_numpyro(name, dist)` (CX21) | `NumpyroPrior(name, dist)` | `Prior` is a `runtime_checkable` Protocol, so a static method on it becomes a protocol member. Every structural prior would then fail `mypy --strict` and `isinstance(x, Prior)` (`likelihoods.py` uses `isinstance`). Checked with mypy on 2026-10-19 |
 | `constrain`/`unconstrain` via `transform_fn` | `constrain_fn` / `unconstrain_fn` | These handle a support that depends on another site; `transform_fn` needs the transforms precomputed |
 | Notebook `NN-…` | `28-…` | 25–27 are reserved by roadmap steps 28, 31 and 44 |
+
+## Implementation deviations
+
+| Spike | Implementation | Why |
+|---|---|---|
+| Test 4 reads the `"likelihood"` factor value from a trace | Asserts the site exists, idempotence, joint `numpyro.factor`, and failed-solve penalty | Under numpyro 0.16 the factor site is auxiliary observed with an empty `value` array; the log factor is not exposed on the trace message |
+| (implicit) exclude observed sample sites via `obs` only | Also skip sites with `is_observed` | Observed sites in this numpyro version set `is_observed=True` while `obs` is `None` |
