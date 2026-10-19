@@ -3418,6 +3418,16 @@ Design spike and implementation: **opus** (one Claude Code session, at the
 user's request from the NH4 session), committed as `plans/nuts-tuning.plan.md`
 before the code.
 
+**Done (2026-10-20):** deviations from the plan are in the plan's own
+*Deviations found while building* table: ranking defaults to gradient cost,
+pilots use `wf.PILOT_WARMUP_RULE`, a `warmup_steps_mean` column was added, and
+each sampling chunk still recompiles numpyro's loop
+(`futureplans/mcmc-chunk-recompile.md`), so `ess_per_second` understates a
+long run for a cheap model. Two notes were written:
+`futureplans/nuts-metric-from-draws.md` (warm up from a previous run's draws)
+and `futureplans/candidates-to-frame-plate-sites.md` (`Candidates.to_frame`
+fails on plate sites).
+
 ### Files
 
 `src/summer4/epi/calibration/workflow/{__init__.py,mcmc.py,warmup.py,tune.py}`,
@@ -3425,7 +3435,8 @@ before the code.
 `tests/gate_nuts_tuning.py` (new),
 `examples/notebooks/29-calibration-nuts-tuning.ipynb` (new),
 `docs/evaluation/composability.md`, `plans/nuts-tuning.plan.md` (new),
-`futureplans/nuts-metric-from-draws.md` (new).
+`futureplans/nuts-metric-from-draws.md` and
+`futureplans/candidates-to-frame-plate-sites.md` (new).
 
 ### Read first
 

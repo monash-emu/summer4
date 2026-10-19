@@ -28,6 +28,7 @@ from summer4.epi.calibration.workflow.optimize import (
     optimize,
 )
 from summer4.epi.calibration.workflow.tune import (
+    PILOT_WARMUP_RULE,
     LaplaceMetric,
     NutsSetting,
     NutsTuning,
@@ -48,6 +49,7 @@ from summer4.epi.calibration.workflow.warmup import (
 )
 
 __all__ = [
+    "PILOT_WARMUP_RULE",
     "AutoTune",
     "CMAES",
     "Candidates",

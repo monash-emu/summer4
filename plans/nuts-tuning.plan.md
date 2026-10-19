@@ -183,3 +183,15 @@ recommended factory used for a real run. Each with a *What to check* box; assert
 - Re-warming from a sampled run's draws (`MCMCRun` → metric): possible with `laplace_metric`'s
   sibling `empirical_metric`, noted in `futureplans/nuts-metric-from-draws.md`.
 - Pathfinder initialisation.
+
+## Deviations found while building (2026-10-20)
+
+Recorded here because this plan had not landed when they were found.
+
+| Plan said | Shipped | Why |
+|---|---|---|
+| `table()` sorts by `cost_seconds` | `table(target_ess, by="cost_grads")` by default; `by="cost_seconds"` on request | At notebook 28's ~50 µs per gradient, wall time is mostly compilation, per-step overhead and timer noise, so the seconds ranking changed between identical runs (and with it the stage-B base). Gradient cost is reproducible for a fixed seed and transfers to other hardware. |
+| chunk 2 is timed "after compilation" | chunk 2 is timed, but it still recompiles numpyro's outer loop | Every `MCMC.run` call recompiles (`futureplans/mcmc-chunk-recompile.md`). `ess_per_second` therefore understates a long run's speed for a cheap model. |
+| pilots use `WarmupRule()` | `wf.PILOT_WARMUP_RULE = WarmupRule(max_divergence_frac=None)` | numpyro restarts dual averaging at 10x the step size at each window end, so a few warm-up divergences happen even on a Gaussian and doubled every pilot's warm-up. Sampling divergences are still counted and gate usability. A final run should use the same check so the recommended `num_warmup` carries over. |
+| pilot row as listed | adds `warmup_steps_mean` (leapfrog steps per warm-up iteration) | Warm-up gradient totals mix round count with trajectory length; per-iteration steps isolate what the Laplace start changes (25 vs 79 diagonal, 18 vs 79 dense on the joint posterior). |
+| *Not in this step* | also: `Candidates.to_frame` fails on plate sites | Found writing the notebook; `futureplans/candidates-to-frame-plate-sites.md`. |

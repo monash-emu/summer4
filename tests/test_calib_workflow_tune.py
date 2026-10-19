@@ -16,6 +16,7 @@ import pytest
 from summer4.epi.calibration import NumpyroPosterior
 from summer4.epi.calibration import workflow as wf
 from summer4.epi.calibration.workflow import tune
+from tests import gate_nuts_tuning as gate_settings
 
 # Trace order (b, then a) differs from numpyro's sorted block order (a, then b).
 _L = np.array([[1.0, 0.0, 0.0], [0.9, 0.4, 0.0], [0.5, 0.2, 0.3]])
@@ -168,6 +169,8 @@ def test_pilot_row_is_consistent_and_the_run_resumes() -> None:
     assert row["treedepth_frac"] == pytest.approx(float(np.mean(num_steps >= 2**10 - 1)))
     assert row["warmup_rounds"] == len(rounds) == result.warmup.rounds
     assert row["warmup_grad_evals"] == sum(int(r["grad_evals"]) for r in rounds)
+    iterations = 2 * sum(int(r["num_warmup"]) for r in rounds)
+    assert row["warmup_steps_mean"] == pytest.approx(row["warmup_grad_evals"] / iterations)
     assert row["num_warmup"] == result.warmup.num_warmup
     assert row["predicted_ess_per_second"] == pytest.approx(row["ess_per_grad"] / 1e-5)
     assert row["ess_per_second"] > 0 and row["draws_per_second"] > 0
@@ -233,8 +236,10 @@ def test_table_can_rank_by_gradient_cost() -> None:
             _fake_row("b", 2.0, 10.0),
         ]
     )
-    assert list(tuning.table(100).index) == ["a", "b"]
-    assert list(tuning.table(100, by="cost_grads").index) == ["b", "a"]
+    assert list(tuning.table(100).index) == ["b", "a"]  # by gradients
+    assert list(tuning.table(100, by="cost_seconds").index) == ["a", "b"]
+    with pytest.raises(ValueError, match="by must be"):
+        tuning.table(100, by="ess")
 
 
 def test_skipped_laplace_settings_and_no_usable_pilot() -> None:
@@ -284,3 +289,57 @@ def test_recommended_setting_and_factory() -> None:
     assert tuning.metric is not None
     start = recommended.initial_metric(tuning.metric)
     np.testing.assert_allclose(start[("a", "b")], tuning.metric.covariance)
+
+
+# --- gate claims of notebook 29 (same seeds and sizes, tests/gate_nuts_tuning.py) ---
+
+
+@pytest.fixture(scope="module")
+def gate() -> gate_settings.GateRun:
+    return gate_settings.run_gate()
+
+
+@pytest.mark.slow
+def test_gate_laplace_metric_sees_the_pooling_correlation(gate: gate_settings.GateRun) -> None:
+    s = gate_settings.summary(gate)
+    assert gate.joint.metric is not None and gate.joint.metric.clipped == 0
+    assert s["corr_infection_z_main"] > 0.5
+    # A starting metric, not the answer: every scale within a factor of three of the posterior.
+    assert all(1 / 3 < r < 3 for r in s["std_ratio"].values())
+
+
+@pytest.mark.slow
+def test_gate_laplace_start_shortens_warmup_trajectories(gate: gate_settings.GateRun) -> None:
+    table = gate.joint.table(gate_settings.TARGET_ESS)
+    steps = table["warmup_steps_mean"]
+    assert steps["diag+laplace"] < 0.5 * steps["diag"]
+    assert steps["dense+laplace"] < 0.5 * steps["dense"]
+
+
+@pytest.mark.slow
+def test_gate_dense_metric_beats_diagonal_on_the_ridge(gate: gate_settings.GateRun) -> None:
+    per_grad = gate.main.table(gate_settings.TARGET_ESS)["ess_per_grad"]
+    assert min(per_grad["dense"], per_grad["dense+laplace"]) > 1.2 * per_grad["diag"]
+
+
+@pytest.mark.slow
+def test_gate_tuning_runs_two_stages_and_recommends_a_usable_setting(
+    gate: gate_settings.GateRun,
+) -> None:
+    table = gate.joint.table(gate_settings.TARGET_ESS)
+    assert len(table) == 10
+    best = gate.joint.best(gate_settings.TARGET_ESS)
+    assert table.loc[best.setting.label, "rank"] == 1 and table.iloc[0]["usable"]
+    stage_b = [p.setting.label for p in gate.joint.pilots[5:]]
+    winner_a = stage_b[0].split(", ")[0]
+    assert all(label.startswith(winner_a + ", ") for label in stage_b)
+
+
+@pytest.mark.slow
+def test_gate_recommended_run_converges_on_every_element(gate: gate_settings.GateRun) -> None:
+    assert gate.warm.converged
+    assert gate.run.converged and gate.run.reason == "diagnostics"
+    last = gate.run.progress.iloc[-1]
+    assert last["rhat_element_max"] <= 1.01
+    assert last["ess_bulk_element_min"] >= gate_settings.TARGET_ESS
+    assert gate.run.extra["num_steps"].shape == gate.run.diverging.shape

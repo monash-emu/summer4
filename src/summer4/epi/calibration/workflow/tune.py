@@ -7,7 +7,7 @@ the model does. This module runs short, identically seeded pilots of candidate
 multi-start optima) and scores each one:
 
 - **sampling efficiency**: effective draws per gradient evaluation (hardware
-  free) and per wall second (timed after compilation);
+  free) and per wall second;
 - **warm-up cost**: seconds and gradient evaluations of :func:`warmup_until`'s
   doubling rounds, reported separately, because a setting that samples twice
   as fast can take ten times longer to warm up.
@@ -355,7 +355,7 @@ def _pilot_row(
     accept = np.asarray(run.extra["accept_prob"])
     draws = int(num_steps.size)
     grad_evals = int(num_steps.sum())
-    # Chunk 1 includes compiling the sampler; time chunk 2 only.
+    # Chunk 1 also compiles the kernel's step; time chunk 2 only.
     chunk_seconds = float(progress["seconds"].iloc[1] - progress["seconds"].iloc[0])
     draws_per_second = num_chains * pilot_samples / chunk_seconds
     ess = float(last["ess_bulk_element_min"])
@@ -369,6 +369,9 @@ def _pilot_row(
         "warmup_failed": warm_rows["failed"].iloc[-1],
         "warmup_seconds": float(warm_rows["seconds"].iloc[-1]),
         "warmup_grad_evals": int(warm_rows["grad_evals"].sum()),
+        "warmup_steps_mean": float(
+            warm_rows["grad_evals"].sum() / (num_chains * warm_rows["num_warmup"].sum())
+        ),
         "step_size": float(step.mean()),
         "accept_mean": float(accept.mean()),
         "num_steps_mean": float(num_steps.mean()),
@@ -418,8 +421,12 @@ def pilot(
         run = sample_until(warm.mcmc, <stop after 2 chunks>, seed=seed, warn=False,
                            extra_fields=("num_steps", "accept_prob"))
 
-    The first chunk compiles the sampler, so speed is timed on the second only;
-    ESS and R-hat (worst element of any site) use both. ``warmup_check``
+    Speed is timed on the second chunk, which skips compiling the kernel's step
+    but, like every ``sample_until`` chunk, still recompiles numpyro's outer
+    loop (``futureplans/mcmc-chunk-recompile.md``, about 0.4 s on CPU): for a
+    cheap model ``ess_per_second`` understates a long run's speed, which is
+    one reason :meth:`NutsTuning.table` ranks by gradients by default. ESS and
+    R-hat (worst element of any site) use both chunks. ``warmup_check``
     defaults to :data:`PILOT_WARMUP_RULE`. ``grad_seconds`` (from
     :func:`time_gradient`) adds ``predicted_ess_per_second``: the rate if every
     second were spent in the model.
@@ -552,7 +559,7 @@ class NutsTuning:
             reasons.append("R-hat")
         return "; ".join(reasons) or None
 
-    def table(self, target_ess: float = 1000.0, by: str = "cost_seconds") -> Any:
+    def table(self, target_ess: float = 1000.0, by: str = "cost_grads") -> Any:
         """Pilots ranked by cost to ``target_ess`` effective draws, usable first.
 
         ``cost_seconds = warmup_seconds + target_ess / ess_per_second`` and
@@ -560,9 +567,13 @@ class NutsTuning:
         compile- and hardware-free version). ``why`` says why a pilot is not
         usable: its warm-up failed, it diverged more than
         ``max_divergence_frac``, or its worst R-hat exceeds ``max_rhat``.
-        ``by`` names the column to rank on: ``"cost_seconds"`` for this machine,
-        or ``"cost_grads"`` when wall time is dominated by compilation (a cheap
-        model) or the real run will be on other hardware.
+        ``by`` names the column to rank on. The default ``"cost_grads"`` is
+        reproducible for a fixed seed and transfers to other hardware;
+        ``"cost_seconds"`` is this machine's wall time, which also counts JIT
+        compilation and per-step overhead (a dense metric's matrix products in
+        high dimension, vectorised chains waiting for the longest trajectory),
+        but carries timer noise that dominates when a gradient is cheap. Ties
+        keep pilot order.
         """
         if by not in ("cost_seconds", "cost_grads"):
             raise ValueError(f"by must be 'cost_seconds' or 'cost_grads', got {by!r}.")
@@ -581,11 +592,11 @@ class NutsTuning:
             rows.append(row)
         frame = pd.DataFrame(rows)
         frame["usable"] = frame["why"].isna()
-        frame = frame.sort_values(["usable", by], ascending=[False, True])
+        frame = frame.sort_values(["usable", by], ascending=[False, True], kind="stable")
         frame.insert(0, "rank", range(1, len(frame) + 1))
         return frame.set_index("label")
 
-    def best(self, target_ess: float = 1000.0, by: str = "cost_seconds") -> Pilot:
+    def best(self, target_ess: float = 1000.0, by: str = "cost_grads") -> Pilot:
         """The usable pilot that reaches ``target_ess`` effective draws most cheaply."""
         frame = self.table(target_ess, by)
         usable = frame[frame["usable"]]
@@ -594,7 +605,7 @@ class NutsTuning:
         label = usable.index[0]
         return next(p for p in self.pilots if p.setting.label == label)
 
-    def recommended(self, target_ess: float = 1000.0, by: str = "cost_seconds") -> NutsSetting:
+    def recommended(self, target_ess: float = 1000.0, by: str = "cost_grads") -> NutsSetting:
         """The best pilot's setting, with ``num_warmup`` at the length its warm-up passed."""
         best = self.best(target_ess, by)
         assert best.warmup is not None
@@ -606,7 +617,7 @@ class NutsTuning:
         num_samples: int,
         num_chains: int | None = None,
         target_ess: float = 1000.0,
-        by: str = "cost_seconds",
+        by: str = "cost_grads",
         progress_bar: bool = False,
     ) -> Callable[..., Any]:
         """The recommended ``num_warmup -> MCMC`` factory, Laplace metric included if used.
