@@ -337,7 +337,9 @@ def test_gate_laplace_start_shortens_warmup_trajectories(gate: gate_settings.Gat
 @pytest.mark.slow
 def test_gate_dense_metric_beats_diagonal_on_the_ridge(gate: gate_settings.GateRun) -> None:
     per_grad = gate.main.table(gate_settings.TARGET_ESS)["ess_per_grad"]
-    assert min(per_grad["dense"], per_grad["dense+laplace"]) > 1.2 * per_grad["diag"]
+    # Pilot ESS from 600 draws on a ridge is noisy: dense-from-identity alone ranged from
+    # 1.0x to 1.9x diagonal across JAX versions, so the claim is about the better dense metric.
+    assert max(per_grad["dense"], per_grad["dense+laplace"]) > 2.0 * per_grad["diag"]
 
 
 @pytest.mark.slow
