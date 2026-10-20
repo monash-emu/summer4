@@ -304,7 +304,7 @@ Step 47 is placed the same way, after step 46.
 | 44 | M | CP6 | `docs/unified-lazy-idiom` | `plans/unified-lazy-idiom.plan.md` | Step 44 | planned | — |
 | 45 | M | — | `chore/remove-deprecated-doors` | `plans/unified-lazy-idiom.plan.md` | Step 45 | blocked | — |
 | 46 | K | CP3 | `feat/calib-posterior-protocol` | `plans/tb-nh-joint-calibration.plan.md` | §4, §5 NH2 | done | CX21 CX22 CX35 |
-| 47 | K | CP7 | `feat/nuts-tuning` | `plans/nuts-tuning.plan.md` | all | planned | CX36 CX37 CX38 |
+| 47 | K | CP7 | `feat/nuts-tuning` | `plans/nuts-tuning.plan.md` | all | done | CX36 CX37 CX38 |
 <!-- /roadmap:steps -->
 
 `Closes` lists row IDs of {doc}`../evaluation/tb-ports` (and, where a step moves
@@ -3386,6 +3386,8 @@ handoff, not here.
 ---
 
 ## Step 47 — `feat/nuts-tuning`
+
+**Landed:** feat/nuts-tuning, PR #61, 2026-10-20.
 
 ### Summary
 
