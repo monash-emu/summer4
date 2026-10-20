@@ -181,6 +181,7 @@ def warmup_until(
     inverse_mass_matrix: Any = None,
     carry_metric: bool = False,
     on_round: OnRound | None = None,
+    abort: Callable[[Mapping[str, Any]], bool] | None = None,
     seed: int = 0,
     growth: float = 2.0,
     max_warmup: int = 4000,
@@ -207,8 +208,12 @@ def warmup_until(
     adapted metric (averaged over chains) instead of the factory's default.
     Either makes :func:`warmup_until` call ``make_mcmc(n,
     inverse_mass_matrix=M)``. ``on_round(row)`` is called as each round ends,
-    for logging a long warm-up. Rows record ``grad_evals``, the leapfrog steps
-    (gradient evaluations) of the whole round summed over chains.
+    for logging a long warm-up. ``abort(row)`` returning ``True`` after a
+    failed round ends the warm-up there, unconverged (reason ``"aborted"``),
+    instead of doubling: for example when trajectories are stuck at
+    ``max_tree_depth`` and a longer round would only cost more. Rows record
+    ``grad_evals``, the leapfrog steps (gradient evaluations) of the whole round
+    summed over chains.
     """
     from jax import random
     from numpyro.infer import HMC  # type: ignore[import-untyped]
@@ -284,6 +289,9 @@ def warmup_until(
         if not failed:
             run.converged, run.reason = True, "passed"
             break
+        if abort is not None and abort(dict(row)):
+            run.converged, run.reason = False, "aborted"
+            break
         grown = int(math.ceil(n * float(growth)))
         if grown > int(max_warmup):
             run.converged, run.reason = False, "max_warmup"
@@ -296,7 +304,7 @@ def warmup_until(
 
     if warn and not run.converged:
         warnings.warn(
-            f"Warmup did not pass its check within max_warmup={max_warmup} "
+            f"Warmup did not pass its check (reason={run.reason!r}, max_warmup={max_warmup}, "
             f"(last round num_warmup={run.num_warmup}, failed: {run._rows[-1]['failed']}).",
             RuntimeWarning,
             skip_file_prefixes=(_PACKAGE_DIR,),

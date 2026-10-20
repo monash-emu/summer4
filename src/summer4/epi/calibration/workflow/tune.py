@@ -392,6 +392,32 @@ def _pilot_row(
     }
 
 
+def _treedepth_abort(limit: float | None) -> Callable[[Mapping[str, Any]], bool] | None:
+    if limit is None:
+        return None
+
+    def stuck(row: Mapping[str, Any]) -> bool:
+        frac = row.get("treedepth_frac")
+        return frac is not None and float(frac) > float(limit)
+
+    return stuck
+
+
+def _aborted_row(setting: NutsSetting, warm: WarmupRun) -> dict[str, Any]:
+    rows = warm.progress
+    return {
+        "label": setting.label,
+        "aborted": True,
+        "warmup_rounds": int(warm.rounds),
+        "num_warmup": int(warm.num_warmup),
+        "warmup_passed": False,
+        "warmup_failed": rows["failed"].iloc[-1],
+        "warmup_seconds": float(rows["seconds"].iloc[-1]),
+        "warmup_grad_evals": int(rows["grad_evals"].sum()),
+        "warmup_treedepth_frac": float(rows["treedepth_frac"].iloc[-1]),
+    }
+
+
 def pilot(
     post: Posterior,
     init: Candidates,
@@ -408,6 +434,7 @@ def pilot(
     jitter: float = 0.05,
     seed: int = 0,
     on_round: OnRound | None = None,
+    max_warmup_treedepth_frac: float | None = 0.5,
 ) -> Pilot:
     """Warm up and sample one setting briefly, and summarise it. Exactly::
 
@@ -417,7 +444,7 @@ def pilot(
         warm = warmup_until(make_mcmc, setting.num_warmup, warmup_check,
                             init_params=init.init_params(num_chains, jitter=jitter, seed=seed),
                             carry_metric=carry_metric, max_warmup=max_warmup, seed=seed,
-                            on_round=on_round, warn=False)
+                            on_round=on_round, warn=False, abort=<tree depth stuck>)
         run = sample_until(warm.mcmc, <stop after 2 chunks>, seed=seed, warn=False,
                            extra_fields=("num_steps", "accept_prob"))
 
@@ -430,6 +457,14 @@ def pilot(
     defaults to :data:`PILOT_WARMUP_RULE`. ``grad_seconds`` (from
     :func:`time_gradient`) adds ``predicted_ess_per_second``: the rate if every
     second were spent in the model.
+
+    A warm-up round whose second half has more than
+    ``max_warmup_treedepth_frac`` of its trajectories at ``max_tree_depth``
+    aborts the pilot (``None`` never aborts): it is not sampled, ``run`` is
+    ``None`` and the row is marked ``aborted``. A metric that misleads the
+    sampler, such as a Laplace metric at the mode of a hierarchical model
+    whose curvature there does not represent the bulk, otherwise spends every
+    doubling round at the cap.
     """
     samples = int(pilot_samples)
     if samples < 4:
@@ -450,8 +485,11 @@ def pilot(
         max_warmup=max_warmup,
         seed=seed,
         on_round=on_round,
+        abort=_treedepth_abort(max_warmup_treedepth_frac),
         warn=False,
     )
+    if warm.reason == "aborted":
+        return Pilot(setting=setting, warmup=warm, run=None, row=_aborted_row(setting, warm))
 
     def two_chunks(row: Mapping[str, Any]) -> tuple[bool, str] | None:
         return (True, "pilot") if int(row["samples"]) >= 2 * samples else None
@@ -495,6 +533,7 @@ class NutsTuning:
         time_repeats: int = 20,
         max_divergence_frac: float = 0.01,
         max_rhat: float = 1.1,
+        max_warmup_treedepth_frac: float | None = 0.5,
         on_pilot: Callable[[Mapping[str, Any]], None] | None = None,
     ) -> None:
         self.post = post
@@ -512,6 +551,7 @@ class NutsTuning:
         self.seed = int(seed)
         self.max_divergence_frac = float(max_divergence_frac)
         self.max_rhat = float(max_rhat)
+        self.max_warmup_treedepth_frac = max_warmup_treedepth_frac
         self.on_pilot = on_pilot
         self.pilots: list[Pilot] = []
 
@@ -541,6 +581,7 @@ class NutsTuning:
                     max_warmup=self.max_warmup,
                     jitter=self.jitter,
                     seed=self.seed,
+                    max_warmup_treedepth_frac=self.max_warmup_treedepth_frac,
                 )
             self.pilots.append(result)
             if self.on_pilot is not None:
@@ -550,6 +591,8 @@ class NutsTuning:
     def _why(self, row: Mapping[str, Any]) -> str | None:
         if row.get("skipped"):
             return "skipped: no Laplace metric"
+        if row.get("aborted"):
+            return f"warm-up aborted: {row['warmup_treedepth_frac']:.0%} at max tree depth"
         reasons = []
         if not row["warmup_passed"]:
             reasons.append(f"warm-up failed ({row['warmup_failed']})")
@@ -584,7 +627,7 @@ class NutsTuning:
         for p in self.pilots:
             row = dict(p.row)
             row["why"] = self._why(row)
-            if row.get("skipped"):
+            if row.get("skipped") or row.get("aborted"):
                 row["cost_seconds"] = row["cost_grads"] = float("nan")
             else:
                 row["cost_seconds"] = row["warmup_seconds"] + target_ess / row["ess_per_second"]

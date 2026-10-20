@@ -180,6 +180,24 @@ def test_pilot_row_is_consistent_and_the_run_resumes() -> None:
     assert result.run.samples["a"].shape == (2, 150, 2)
 
 
+def test_a_pilot_stuck_at_max_tree_depth_is_aborted_before_sampling() -> None:
+    post, init = _gaussian()
+    tuning = wf.NutsTuning(post, init, num_chains=2, pilot_samples=20, time_repeats=1)
+    tuning.run(
+        [
+            wf.NutsSetting("stuck", {"max_tree_depth": 1}, num_warmup=40),
+            wf.NutsSetting("fine", {"dense_mass": True}, laplace=True, num_warmup=40),
+        ]
+    )
+    stuck = tuning.pilots[0]
+    assert stuck.run is None and stuck.warmup is not None and stuck.warmup.rounds == 1
+    table = tuning.table(100)
+    assert list(table.index) == ["fine", "stuck"]
+    assert table.loc["stuck", "why"] == "warm-up aborted: 100% at max tree depth"
+    assert np.isnan(table.loc["stuck", "cost_grads"])
+    assert tuning.best(100).setting.label == "fine"
+
+
 def _fake_row(label: str, warm_s: float, ess_s: float, **overrides: Any) -> dict[str, Any]:
     row = {
         "label": label,

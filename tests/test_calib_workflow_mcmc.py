@@ -612,3 +612,24 @@ def test_a_fixed_metric_reaches_the_kernel() -> None:
     warm = wf.warmup_until(make, 30, lambda row: (), inverse_mass_matrix=metric)
     used = warm.mcmc.post_warmup_state.adapt_state.inverse_mass_matrix
     np.testing.assert_allclose(np.asarray(used[("infection",)]), [0.25])
+
+
+def test_warmup_until_abort_stops_doubling() -> None:
+    from numpyro.infer import MCMC, NUTS
+
+    bm = _sir_bm()
+
+    def make(n: int) -> Any:
+        kernel = NUTS(bm.numpyro_model(), max_tree_depth=1)  # every trajectory at the cap
+        return MCMC(kernel, num_warmup=n, num_samples=10, num_chains=2, progress_bar=False)
+
+    with pytest.warns(RuntimeWarning, match="aborted"):
+        warm = wf.warmup_until(
+            make,
+            20,
+            lambda row: ("always",),
+            init_params=_starts(bm, 2, seed=0).init_params(2),
+            abort=lambda row: float(row["treedepth_frac"]) > 0.5,
+        )
+    assert warm.rounds == 1 and not warm.converged and warm.reason == "aborted"
+    assert warm.progress["treedepth_frac"].iloc[0] == pytest.approx(1.0)
