@@ -484,3 +484,152 @@ def test_candidates_from_run_are_last_draws() -> None:
         cands.params["infection"], run.samples["infection"][:, -1], rtol=1e-6
     )
     assert cands.history[0].stage == "sample_until"
+
+
+# --- step 47: extra fields, worst-element diagnostics, steerable warm-up (CX36-CX38) ---
+
+
+def _after(samples: int) -> wf.Stop:
+    def stop(row: Mapping[str, Any]) -> wf.Decision | None:
+        return (True, "enough") if int(row["samples"]) >= samples else None
+
+    return stop
+
+
+def test_extra_fields_are_kept_across_chunks_and_extend() -> None:
+    bm = _sir_bm()
+    run = wf.sample_until(
+        _nuts_mcmc(bm, warmup=30, chunk=10),
+        _after(20),
+        init_params=_starts(bm, 2, seed=0).init_params(2),
+        extra_fields=("num_steps", "accept_prob"),
+    )
+    assert run.chunks == 2
+    assert set(run.extra) == {"num_steps", "accept_prob"}
+    assert run.extra["num_steps"].shape == (2, 20)
+    run.extend(_after(30))
+    assert run.extra["num_steps"].shape == (2, 30)
+    assert run.extra["accept_prob"].shape == (2, 30)
+    assert run.diverging is not None and run.diverging.shape == (2, 30)
+    assert np.all(run.extra["num_steps"] >= 1)
+    assert np.all((run.extra["accept_prob"] >= 0) & (run.extra["accept_prob"] <= 1))
+    stats = run.idata.sample_stats
+    assert {"num_steps", "accept_prob", "diverging"} <= set(stats.data_vars)
+
+
+def test_without_extra_fields_only_divergences_are_kept() -> None:
+    bm = _sir_bm()
+    run = wf.sample_until(
+        _nuts_mcmc(bm, warmup=20, chunk=10),
+        _after(10),
+        init_params=_starts(bm, 2, seed=0).init_params(2),
+    )
+    assert run.extra == {} and run.diverging is not None
+
+
+def _one_bad_element(seed: int = 0) -> dict[str, np.ndarray]:
+    """Four chains; element 4 of the plate site has chain means spread apart."""
+    rng = np.random.default_rng(seed)
+    z = rng.normal(size=(4, 400, 5))
+    z[:, :, 4] += 0.3 * np.array([-1.5, -0.5, 0.5, 1.5])[:, None]
+    return {"z": z, "s": rng.normal(size=(4, 400))}
+
+
+def test_worst_element_rhat_is_reported_and_per_element_stop_uses_it() -> None:
+    samples = _one_bad_element()
+    rows = wf.replay(wf.StopRule(rhat=1.05, ess=None), samples, 400)
+    row = rows.iloc[-1]
+    # The mean over z's five elements hides the one bad element; the max does not.
+    assert row["rhat_max"] < 1.05 < row["rhat_element_max"]
+    assert row["ess_bulk_element_min"] < row["ess_bulk_min"]
+    assert row["decision"] == "diagnostics"
+    strict = wf.replay(wf.StopRule(rhat=1.05, ess=None, per_element=True), samples, 400)
+    assert strict["decision"].isna().all()
+
+
+def test_diagnostics_table_has_worst_element_columns() -> None:
+    bm = _sir_bm()
+    run = wf.sample_until(
+        _nuts_mcmc(bm, warmup=20, chunk=20),
+        _after(20),
+        init_params=_starts(bm, 2, seed=0).init_params(2),
+    )
+    diag = run.diagnostics
+    assert list(diag.columns) == ["rhat", "ess_bulk", "rhat_element_max", "ess_bulk_element_min"]
+    # A scalar site has one element, so mean and worst agree.
+    assert diag.loc["infection", "rhat"] == pytest.approx(diag.loc["infection", "rhat_element_max"])
+
+
+def test_warmup_until_hands_a_metric_to_the_factory_and_reports_each_round() -> None:
+    from numpyro.infer import MCMC, NUTS
+
+    bm = _sir_bm()
+    calls: list[Any] = []
+
+    def make(n: int, inverse_mass_matrix: Any = None) -> Any:
+        calls.append(inverse_mass_matrix)
+        return MCMC(
+            NUTS(bm.numpyro_model(), inverse_mass_matrix=inverse_mass_matrix),
+            num_warmup=n,
+            num_samples=10,
+            num_chains=2,
+            chain_method="vectorized",
+            progress_bar=False,
+        )
+
+    seen: list[Mapping[str, Any]] = []
+    start = {("infection",): np.array([0.5])}
+    warm = wf.warmup_until(
+        make,
+        40,
+        lambda row: ("first",) if row["round"] == 1 else (),
+        init_params=_starts(bm, 2, seed=0).init_params(2),
+        inverse_mass_matrix=start,
+        carry_metric=True,
+        on_round=seen.append,
+    )
+    assert [r["round"] for r in seen] == [1, 2] == list(warm.progress.index)
+    assert all(int(r["grad_evals"]) >= r["num_warmup"] * 2 for r in seen)
+    assert calls[0] is start
+    # Round 2 starts from round 1's adapted metric, averaged over the two chains.
+    assert set(calls[1]) == {("infection",)}
+    assert calls[1][("infection",)].shape == (1,)
+    assert not np.allclose(calls[1][("infection",)], 0.5)
+
+
+def test_a_fixed_metric_reaches_the_kernel() -> None:
+    from numpyro.infer import MCMC, NUTS
+
+    bm = _sir_bm()
+    metric = {("infection",): np.array([0.25])}
+
+    def make(n: int, inverse_mass_matrix: Any = None) -> Any:
+        kernel = NUTS(
+            bm.numpyro_model(), inverse_mass_matrix=inverse_mass_matrix, adapt_mass_matrix=False
+        )
+        return MCMC(kernel, num_warmup=n, num_samples=10, num_chains=1, progress_bar=False)
+
+    warm = wf.warmup_until(make, 30, lambda row: (), inverse_mass_matrix=metric)
+    used = warm.mcmc.post_warmup_state.adapt_state.inverse_mass_matrix
+    np.testing.assert_allclose(np.asarray(used[("infection",)]), [0.25])
+
+
+def test_warmup_until_abort_stops_doubling() -> None:
+    from numpyro.infer import MCMC, NUTS
+
+    bm = _sir_bm()
+
+    def make(n: int) -> Any:
+        kernel = NUTS(bm.numpyro_model(), max_tree_depth=1)  # every trajectory at the cap
+        return MCMC(kernel, num_warmup=n, num_samples=10, num_chains=2, progress_bar=False)
+
+    with pytest.warns(RuntimeWarning, match="aborted"):
+        warm = wf.warmup_until(
+            make,
+            20,
+            lambda row: ("always",),
+            init_params=_starts(bm, 2, seed=0).init_params(2),
+            abort=lambda row: float(row["treedepth_frac"]) > 0.5,
+        )
+    assert warm.rounds == 1 and not warm.converged and warm.reason == "aborted"
+    assert warm.progress["treedepth_frac"].iloc[0] == pytest.approx(1.0)

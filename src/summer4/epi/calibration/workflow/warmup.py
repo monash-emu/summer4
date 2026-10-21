@@ -10,6 +10,13 @@ windows; positions carry over). numpyro cannot re-warm one ``MCMC`` object, and
 a new warmup length recompiles regardless, hence the factory. The passing
 round's ``MCMC`` is left warmed up, so :func:`sample_until` continues from it
 with no further warmup.
+
+The factory may also take the starting metric: ``make_mcmc(n,
+inverse_mass_matrix=M)`` builds its kernel with ``NUTS(...,
+inverse_mass_matrix=M)``. :func:`warmup_until` calls it that way only when it
+has a metric to hand over (``inverse_mass_matrix=`` given, or
+``carry_metric=True`` after the first round), so one-argument factories keep
+working.
 """
 
 from __future__ import annotations
@@ -33,6 +40,9 @@ from summer4.epi.calibration.workflow.mcmc import (
 WarmupCheck = Callable[[Mapping[str, Any]], Sequence[str]]
 """Called with the latest :attr:`WarmupRun.progress` row; returns the names of
 failed criteria (empty means the warmup is good)."""
+
+OnRound = Callable[[Mapping[str, Any]], None]
+"""Called with each :attr:`WarmupRun.progress` row as soon as its round ends."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,6 +150,16 @@ def _tail_rhat(tail: Mapping[str, np.ndarray]) -> float:
     return worst
 
 
+def _adapted_metric(state: Any, num_chains: int) -> Any:
+    """The adapted inverse mass matrix of ``state``, averaged over chains."""
+    from jax import tree_util
+
+    metric = state.adapt_state.inverse_mass_matrix
+    if int(num_chains) <= 1:
+        return tree_util.tree_map(np.asarray, metric)
+    return tree_util.tree_map(lambda m: np.mean(np.asarray(m), axis=0), metric)
+
+
 def _hmc_settings(sampler: Any) -> tuple[float | None, int | None]:
     # numpyro exposes no public accessor for these kernel settings.
     target = getattr(sampler, "_target_accept_prob", None)
@@ -153,11 +173,15 @@ def _hmc_settings(sampler: Any) -> tuple[float | None, int | None]:
 
 
 def warmup_until(
-    make_mcmc: Callable[[int], Any],
+    make_mcmc: Callable[..., Any],
     num_warmup: int,
     check: WarmupCheck | None = None,
     *,
     init_params: Mapping[str, Any] | None = None,
+    inverse_mass_matrix: Any = None,
+    carry_metric: bool = False,
+    on_round: OnRound | None = None,
+    abort: Callable[[Mapping[str, Any]], bool] | None = None,
     seed: int = 0,
     growth: float = 2.0,
     max_warmup: int = 4000,
@@ -177,6 +201,19 @@ def warmup_until(
 
     ``check`` is any callable returning the names of failed criteria. Afterwards
     call ``sample_until(warm.mcmc, stop)`` without ``init_params``.
+
+    ``inverse_mass_matrix`` is the first round's starting metric (for example
+    ``wf.laplace_metric(post, z).inverse_mass_matrix(dense=True)``), and
+    ``carry_metric=True`` starts each later round from the previous round's
+    adapted metric (averaged over chains) instead of the factory's default.
+    Either makes :func:`warmup_until` call ``make_mcmc(n,
+    inverse_mass_matrix=M)``. ``on_round(row)`` is called as each round ends,
+    for logging a long warm-up. ``abort(row)`` returning ``True`` after a
+    failed round ends the warm-up there, unconverged (reason ``"aborted"``),
+    instead of doubling: for example when trajectories are stuck at
+    ``max_tree_depth`` and a longer round would only cost more. Rows record
+    ``grad_evals``, the leapfrog steps (gradient evaluations) of the whole round
+    summed over chains.
     """
     from jax import random
     from numpyro.infer import HMC  # type: ignore[import-untyped]
@@ -192,8 +229,9 @@ def warmup_until(
     key = random.PRNGKey(int(seed))
     start = time.perf_counter()
 
+    metric = inverse_mass_matrix
     while True:
-        mcmc = make_mcmc(n)
+        mcmc = make_mcmc(n) if metric is None else make_mcmc(n, inverse_mass_matrix=metric)
         if int(mcmc.num_warmup) != n or mcmc.post_warmup_state is not None:
             raise ValueError(
                 f"make_mcmc({n}) must return a fresh MCMC with num_warmup={n}; got "
@@ -220,13 +258,14 @@ def warmup_until(
             "target_accept_prob": target,
             "divergence_frac": None,
             "treedepth_frac": None,
+            "grad_evals": None,
         }
         state: Any = mcmc.post_warmup_state
         if hmc:
-            extra = {
-                k: np.asarray(v)[:, half:]
-                for k, v in mcmc.get_extra_fields(group_by_chain=True).items()
+            whole = {
+                k: np.asarray(v) for k, v in mcmc.get_extra_fields(group_by_chain=True).items()
             }
+            extra = {k: v[:, half:] for k, v in whole.items()}
             step = np.atleast_1d(np.asarray(state.adapt_state.step_size))
             row.update(
                 step_size_min=float(step.min()),
@@ -237,15 +276,21 @@ def warmup_until(
                 treedepth_frac=(
                     None if depth is None else float(np.mean(extra["num_steps"] >= 2**depth - 1))
                 ),
+                grad_evals=int(np.sum(whole["num_steps"])),
             )
         row["seconds"] = time.perf_counter() - start
         failed = tuple(rule(dict(row)))
         row["failed"] = ", ".join(failed) if failed else None
         run._rows.append(row)
         run.mcmc, run.samples = mcmc, draws
+        if on_round is not None:
+            on_round(dict(row))
 
         if not failed:
             run.converged, run.reason = True, "passed"
+            break
+        if abort is not None and abort(dict(row)):
+            run.converged, run.reason = False, "aborted"
             break
         grown = int(math.ceil(n * float(growth)))
         if grown > int(max_warmup):
@@ -253,11 +298,13 @@ def warmup_until(
             break
         if hmc:
             init_params = {k: np.asarray(v) for k, v in state.z.items()}
+            if carry_metric:
+                metric = _adapted_metric(state, int(mcmc.num_chains))
         n = grown
 
     if warn and not run.converged:
         warnings.warn(
-            f"Warmup did not pass its check within max_warmup={max_warmup} "
+            f"Warmup did not pass its check (reason={run.reason!r}, max_warmup={max_warmup}, "
             f"(last round num_warmup={run.num_warmup}, failed: {run._rows[-1]['failed']}).",
             RuntimeWarning,
             skip_file_prefixes=(_PACKAGE_DIR,),
@@ -266,6 +313,7 @@ def warmup_until(
 
 
 __all__ = [
+    "OnRound",
     "WarmupCheck",
     "WarmupRule",
     "WarmupRun",
