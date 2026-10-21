@@ -114,8 +114,11 @@ class PropertyData:
         """Replace matching compartments with ``other`` (scalar or PropertyData).
 
         Polarity note: this *replaces* what ``sel`` matches (pandas
-        ``Series.mask`` semantics). To *keep* matches and zero the rest, use
-        :meth:`keep` or write ``where(~sel, other)``.
+        ``Series.mask`` semantics). To *keep* matches and replace the rest, use
+        :meth:`keep`. ``where(~sel, other)`` is not the same thing on a ragged
+        map: selectors are three-valued, so a compartment where ``sel``'s
+        property is absent matches neither ``sel`` nor ``~sel`` and would be
+        left in place.
         """
         mask = self.pmap.mask(sel)
         other_data = other.data if isinstance(other, PropertyData) else other
@@ -126,11 +129,17 @@ class PropertyData:
     def keep(self, sel: Selector, other: Any = 0.0) -> PropertyData:
         """Keep matching compartments; replace the rest with ``other``.
 
-        Equivalent to ``where(~sel, other)``. Prefer this spelling when summing
-        a subset of compartments so the polarity matches
-        ``select`` / ``sum_over`` / :class:`~summer4.flows.rates.Reduce`.
+        "The rest" is every compartment where ``sel`` is not Kleene-true,
+        including those where ``sel``'s property is absent. That is what
+        ``select`` / ``sum_over`` / :class:`~summer4.flows.rates.Reduce` mean by
+        a subset, and it differs from ``where(~sel, other)`` on a ragged map,
+        where absent compartments match neither ``sel`` nor ``~sel``.
         """
-        return self.where(~sel, other)
+        mask = self.pmap.mask(sel)
+        other_data = other.data if isinstance(other, PropertyData) else other
+        if isinstance(other, PropertyData):
+            _require_same_map(self.pmap, other.pmap)
+        return self._with_data(jnp.where(mask, self.data, other_data))
 
     def partition(self, prop: Property | str) -> dict[Trait, Any]:
         """Gather values for each trait of ``prop``."""
