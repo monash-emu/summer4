@@ -148,6 +148,5 @@ across leftover strata. This is settled, not an open question.
 
 The project's risk is no longer "can anyone exercise a full run?" — they can.
 The remaining risk is the distance to a *complete* migration surface: WP3
-(initial population / split), then WP9 / WP10, plus the FOI susceptibility gap
-that keeps chapter 15 at `partial`. Little external-user feedback has arrived
+(initial population / split), then WP9 / WP10. Little external-user feedback has arrived
 to steer those designs.

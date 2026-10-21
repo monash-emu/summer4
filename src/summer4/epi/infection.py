@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
+import numpy as np
+
 from summer4.enums import coerce_strenum
 from summer4.epi.mixing import MixingMatrix
 from summer4.flows.rates import (
@@ -43,12 +45,14 @@ class InfectiousnessNormalize(StrEnum):
 type FOIKindArg = FOIKind | str | Callable[..., Any]
 type InfectiousnessMap = Mapping[Trait | str, object]
 type InfectiousnessArg = InfectiousnessMap | Sequence[tuple[Selector, object]] | None
+type SusceptibilityMap = Mapping[Trait | str, object]
+type SusceptibilityArg = SusceptibilityMap | Sequence[tuple[Selector, object]] | None
 type InfectiousnessNormalizeArg = InfectiousnessNormalize | str | None
 type CompartmentWeights = tuple[tuple[Selector, RateOps], ...]
 
 
 def coerce_compartment_weights(
-    weights: InfectiousnessArg,
+    weights: InfectiousnessArg | SusceptibilityArg,
     *,
     group_by: Property,
     what: str = "infectiousness",
@@ -64,9 +68,9 @@ def coerce_compartment_weights(
 
     The pair list is unrolled when the weights are applied. Keep it small.
 
-    Step 16's susceptibility surface should call this rather than growing a
-    second selector mechanism. Susceptibility is not normalised; do not reuse
-    :func:`scale_infectious_pool` for it.
+    :class:`ForceOfInfection` coerces both ``infectiousness=`` and
+    ``susceptibility=`` with this function, passing ``what`` so error messages
+    name the argument at fault.
     """
     if weights is None:
         return None
@@ -154,10 +158,17 @@ def apply_compartment_weights(
 ) -> Any:
     """Multiply compartments by the product of the weights whose selectors match.
 
-    ``data`` is aligned with ``pmap``. ``None`` or an empty pair list returns
-    ``data`` unchanged. A selector that matches no compartment raises: a weight
-    that can never apply is an error, not a silent no-op. Step 16 applies
-    susceptibility with this function on the recipient side, after mixing.
+    ``data`` is aligned with ``pmap`` on its last axis. ``None`` or an empty
+    pair list returns ``data`` unchanged. A selector that matches no compartment
+    raises: a weight that can never apply is an error, not a silent no-op.
+
+    ``eval_child`` evaluates one weight (a rate expression) to a scalar or an
+    array that broadcasts against ``data``. Inside a rate evaluator it is the
+    ``eval_child`` the evaluator was handed. :class:`ForceOfInfection` uses this
+    function for infectiousness on the source side, before the group sum, and
+    for susceptibility on the recipient side, after mixing. The loop is over
+    pairs, not compartments: each pair is one masked multiply over the whole
+    array.
     """
     if not pairs:
         return data
@@ -171,6 +182,32 @@ def apply_compartment_weights(
         mask = jnp.asarray(pmap.mask(selector))
         weighted = jnp.where(mask, weighted * value, weighted)
     return weighted
+
+
+def split_susceptibility(
+    pairs: CompartmentWeights | None,
+    *,
+    group_by: Property,
+) -> tuple[CompartmentWeights, CompartmentWeights]:
+    """Split susceptibility pairs into per-group and per-compartment weights.
+
+    A pair whose selector is a single trait of ``group_by`` (everything a trait
+    map produces) scales the force of infection of that whole group, so it can
+    be folded into the per-group rate. Every other pair — a trait of another
+    property, or a combination such as ``state["L"] & age["0"]`` — varies
+    within a group and is applied to the compartment-aligned rate instead.
+    Returns ``(per_group, per_compartment)``; either may be empty.
+    """
+    if not pairs:
+        return (), ()
+    per_group: list[tuple[Selector, RateOps]] = []
+    per_compartment: list[tuple[Selector, RateOps]] = []
+    for selector, value in pairs:
+        if isinstance(selector, Trait) and selector.property == group_by.name:
+            per_group.append((selector, value))
+        else:
+            per_compartment.append((selector, value))
+    return tuple(per_group), tuple(per_compartment)
 
 
 def scale_infectious_pool(
@@ -240,6 +277,38 @@ class ForceOfInfection(RateOps):
     under 15 transmits"). Compartments no pair matches keep weight 1.
     ``normalize_infectiousness`` then rescales that weighted pool; the default
     is no normalisation. See :func:`coerce_compartment_weights`.
+
+    ``susceptibility`` weights the recipient of transmission and takes the same
+    two shapes. It multiplies the force of infection *after* the mixing
+    product, so with infectiousness weights :math:`w`, susceptibility weights
+    :math:`s`, mixing matrix :math:`K`, contact rate :math:`c` and kind
+    :math:`f`,
+
+    .. math:: \\lambda_a = s_a \\, c \\sum_b K_{ab} \\, f(w_b I_b, N_b).
+
+    That is what scaling row :math:`a` of :math:`K` does, and what
+    ``Multiply(s_a, where=group_by[a])`` on the infection flow does; this keyword
+    keeps it on the force of infection, beside infectiousness, and out of the
+    contact structure. **Susceptibility is not normalised**, and there is no
+    ``normalize_susceptibility=``: infectiousness is normalised so a
+    population-weighted mean of 1 keeps the contact rate interpretable, and no
+    such invariant applies to the recipient side. Doubling every susceptibility
+    weight doubles the force of infection.
+
+    A pair keyed on a single trait of ``group_by`` (every entry of a trait map)
+    scales that group's :math:`\\lambda_a`; the rate stays a per-group
+    :class:`~summer4.flows.compiled.GroupedRate`, and the value saved under
+    ``name`` includes the weight. A pair whose selector names anything else — a
+    compartment, or a compartment and a group together ("recovered people are
+    0.3 as susceptible") — varies within a group, so the rate becomes
+    compartment-aligned: each compartment's :math:`\\lambda_a` times the product
+    of the per-compartment weights that match it (unmatched compartments keep
+    weight 1). The value saved under ``name`` stays per group and does **not**
+    include those per-compartment weights: it is the force of infection on a
+    group member whose per-compartment susceptibility is 1. :meth:`captured`
+    is refused in that case, because the rate is no longer per group. Like
+    infectiousness, susceptibility groups on the one ``group_by`` property;
+    multi-property mixing is not available.
     """
 
     name: str
@@ -252,6 +321,7 @@ class ForceOfInfection(RateOps):
     infectiousness: CompartmentWeights | None = None
     normalize_infectiousness: InfectiousnessNormalize | None = None
     exponent: RateOps | None = None
+    susceptibility: CompartmentWeights | None = None
 
     def __init__(
         self,
@@ -266,6 +336,7 @@ class ForceOfInfection(RateOps):
         infectiousness: InfectiousnessArg = None,
         normalize_infectiousness: InfectiousnessNormalizeArg = None,
         exponent: object | None = None,
+        susceptibility: SusceptibilityArg = None,
     ) -> None:
         if callable(kind):
             resolved_kind: FOIKind | Callable[..., Any] = kind
@@ -305,6 +376,11 @@ class ForceOfInfection(RateOps):
         )
         object.__setattr__(self, "normalize_infectiousness", resolved_norm)
         object.__setattr__(self, "exponent", None if exponent is None else as_rate(exponent))
+        object.__setattr__(
+            self,
+            "susceptibility",
+            coerce_compartment_weights(susceptibility, group_by=group_by, what="susceptibility"),
+        )
         if mixing is not None and mixing.prop.name != group_by.name:
             raise ValueError(
                 f"MixingMatrix property {mixing.prop.name!r} does not match "
@@ -325,6 +401,9 @@ class ForceOfInfection(RateOps):
             paths |= _field_paths(self.mixing.matrix)
         if self.infectiousness is not None:
             for _selector, value in self.infectiousness:
+                paths |= _field_paths(value)
+        if self.susceptibility is not None:
+            for _selector, value in self.susceptibility:
                 paths |= _field_paths(value)
         return paths
 
@@ -351,6 +430,10 @@ class ForceOfInfection(RateOps):
             body += b"1" if self.mixing.check_reciprocal else b"0"
         if self.infectiousness is not None:
             for selector, value in self.infectiousness:
+                body += _selector_bytes(selector) + _rate_bytes(value)
+        if self.susceptibility is not None:
+            body += b"sus"
+            for selector, value in self.susceptibility:
                 body += _selector_bytes(selector) + _rate_bytes(value)
         return body
 
@@ -380,8 +463,32 @@ class ForceOfInfection(RateOps):
             )
         return tuple(out)
 
+    @property
+    def per_compartment(self) -> bool:
+        """True when a susceptibility pair varies within a ``group_by`` group.
+
+        The rate is then compartment-aligned rather than a per-group
+        :class:`~summer4.flows.compiled.GroupedRate`. See
+        :func:`split_susceptibility`.
+        """
+        _per_group, per_compartment = split_susceptibility(
+            self.susceptibility, group_by=self.group_by
+        )
+        return bool(per_compartment)
+
     def captured(self) -> Capture:
-        """Wrap this FOI in a :class:`Capture` so it is saveable by name."""
+        """Wrap this FOI in a :class:`Capture` so it is saveable by name.
+
+        Refused when :attr:`per_compartment` is true: the rate is then aligned
+        to compartments, not groups. The force of infection is saved under
+        ``name`` regardless; read it with ``GroupedOutput(name)``.
+        """
+        if self.per_compartment:
+            raise ValueError(
+                f"ForceOfInfection {self.name!r} has per-compartment susceptibility, so its "
+                "rate is not per group and cannot be wrapped in Capture. The per-group force "
+                f"of infection is already saved as GroupedOutput({self.name!r})."
+            )
         return Capture(self.name, self)
 
 
@@ -464,5 +571,66 @@ def _eval_force_of_infection(
         import jax.numpy as jnp
 
         result = GroupedRate(jnp.asarray(contact) * jnp.asarray(shedding.data), (prop,))
-    captures[expr.name] = result
-    return result
+    if expr.susceptibility is None:
+        captures[expr.name] = result
+        return result
+    return _apply_susceptibility(
+        result,
+        expr.susceptibility,
+        name=expr.name,
+        group_by=prop,
+        pmap=pmap,
+        eval_child=eval_child,
+        captures=captures,
+    )
+
+
+def _apply_susceptibility(
+    force: Any,
+    pairs: CompartmentWeights,
+    *,
+    name: str,
+    group_by: Property,
+    pmap: PropertyMap,
+    eval_child: Callable[[RateOps], Any],
+    captures: dict[str, Any],
+) -> Any:
+    """Weight the recipient side of an evaluated per-group force of infection.
+
+    Per-group pairs scale ``force`` (a ``GroupedRate`` over ``group_by``) and
+    are included in the capture. Per-compartment pairs are applied after the
+    capture, to the force gathered onto compartments, which is then returned.
+    No normalisation, unlike infectiousness.
+    """
+    import jax.numpy as jnp
+
+    from summer4.flows.compiled import GroupedRate
+
+    for selector, _value in pairs:
+        if pmap.select(selector).size == 0:
+            raise ValueError(f"susceptibility selector {selector!r} matches no compartment.")
+    per_group, per_compartment = split_susceptibility(pairs, group_by=group_by)
+    if per_group:
+        data = jnp.asarray(force.data)
+        group_weights = apply_compartment_weights(
+            jnp.ones(len(group_by.traits), dtype=data.dtype),
+            PropertyMap.from_property(group_by),
+            per_group,
+            eval_child,
+            what="susceptibility",
+        )
+        force = GroupedRate(data * group_weights, (group_by,))
+    captures[name] = force
+    if not per_compartment:
+        return force
+    # One constant gather from groups onto compartments, then one masked
+    # multiply per pair. Compartments without ``group_by`` get NaN: no
+    # infection flow may leave them (the per-group rate refuses that too).
+    codes = np.asarray(pmap.codes[:, pmap.column_index(group_by)], dtype=np.int32)
+    valid = codes >= 0
+    per_comp = jnp.take(jnp.asarray(force.data), np.where(valid, codes, 0), axis=-1)
+    if not bool(valid.all()):
+        per_comp = jnp.where(valid, per_comp, jnp.nan)
+    return apply_compartment_weights(
+        per_comp, pmap, per_compartment, eval_child, what="susceptibility"
+    )

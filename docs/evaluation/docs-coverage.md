@@ -39,10 +39,8 @@ summary:
 
 | Outcome | Chapters | Count |
 |---|---|---|
-| Ported in full | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 | 14 |
-| Ported, modelling content partial | 15 (no FOI susceptibility surface) | 1 |
+| Ported in full | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20 | 16 |
 | Blocked on contact-survey data (WP9) | 16, 17, 18, 19 | 4 |
-| Blocked on calibration (WP10) | 20 | 1 |
 
 Ported paths live under `docs/textbook/` (see the ledger `Ported` column).
 Chapter 10 notes unstratified $R_t$ without a next-generation-matrix helper.
