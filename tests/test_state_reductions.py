@@ -31,7 +31,25 @@ class _FoiParams(NamedTuple):
     foi: object
 
 
-def test_keep_equals_where_not_sel() -> None:
+def _ragged_programme_map() -> tuple[Property, Property, Property, Property, PropertyMap]:
+    """A map where ``state`` and ``programme`` each exist on only some rows.
+
+    Rows: ``[population/S, population/I, programme/waiting, programme/active]``.
+    """
+    kind = Property("kind", ("population", "programme"))
+    state = Property("state", ("S", "I"))
+    programme = Property("programme", ("waiting", "active"))
+    pop = Property("pop", ("all",))
+    pmap = (
+        PropertyMap.from_property(kind)
+        .stratify(state, where=kind["population"])
+        .stratify(programme, where=kind["programme"])
+        .stratify(pop)
+    )
+    return kind, state, programme, pop, pmap
+
+
+def test_keep_equals_where_not_sel_on_full_map() -> None:
     pytest.importorskip("jax")
     jnp = pytest.importorskip("jax.numpy")
     state = Property("state", ("S", "I", "R"))
@@ -44,6 +62,48 @@ def test_keep_equals_where_not_sel() -> None:
     np.testing.assert_allclose(np.asarray(kept.data), np.asarray(via_where.data))
     wrong = pd.where(state["I"], 0.0)
     assert not np.allclose(np.asarray(kept.data), np.asarray(wrong.data))
+
+
+def test_keep_replaces_rows_where_property_is_absent() -> None:
+    """Regression: ``keep`` used to be ``where(~sel)``, which kept absent rows."""
+    pytest.importorskip("jax")
+    _, state, programme, _, pmap = _ragged_programme_map()
+    pd = PropertyData.wrap(pmap, np.array([99990.0, 10.0, 1.0, 0.0]))
+
+    np.testing.assert_allclose(np.asarray(pd.keep(programme["active"]).data), [0, 0, 0, 0])
+    np.testing.assert_allclose(np.asarray(pd.keep(state["I"]).data), [0, 10, 0, 0])
+    np.testing.assert_allclose(np.asarray(pd.keep(state["I"], -1.0).data), [-1, 10, -1, -1])
+    # where(~sel) is not keep on a ragged map: absent rows match neither side.
+    np.testing.assert_allclose(np.asarray(pd.where(~state["I"], 0.0).data), [0, 10, 1, 0])
+
+
+def test_keep_accepts_property_data_other() -> None:
+    pytest.importorskip("jax")
+    _, state, _, _, pmap = _ragged_programme_map()
+    pd = PropertyData.wrap(pmap, np.array([1.0, 2.0, 3.0, 4.0]))
+    other = PropertyData.wrap(pmap, np.array([10.0, 20.0, 30.0, 40.0]))
+    np.testing.assert_allclose(np.asarray(pd.keep(state["I"], other).data), [10, 2, 30, 40])
+
+
+@pytest.mark.parametrize(
+    ("which", "expected"),
+    [("active", 0.0), ("I", 10.0), ("S_or_I", 100000.0), ("programme", 1.0)],
+)
+def test_reduce_where_on_ragged_map_counts_only_matches(which: str, expected: float) -> None:
+    """Regression: ``Reduce(where=sel)`` must not count rows where sel's property is absent."""
+    pytest.importorskip("jax")
+    kind, state, programme, pop, pmap = _ragged_programme_map()
+    sel = {
+        "active": programme["active"],
+        "I": state["I"],
+        "S_or_I": state["S"] | state["I"],
+        "programme": kind["programme"],
+    }[which]
+    y = np.array([99990.0, 10.0, 1.0, 0.0])
+    model = FlowModel(pmap)
+    model.add_flow(EntryFlow("probe", state["S"], Reduce(sum_over=pop, where=sel)))
+    mass = np.asarray(model.compile().observe(0.0, y, {}).flows["probe"])
+    np.testing.assert_allclose(mass, [expected])
 
 
 def test_reduce_where_matches_keep_sum_over() -> None:
@@ -85,7 +145,7 @@ def test_reduce_foi_matches_derived_fn_trajectory() -> None:
 
         def derived_fn(params: object, *, y: object, t: object) -> _FoiParams:
             pd_y = PropertyData(pmap, y)
-            i_by = pd_y.where(~state["I"], 0.0).sum_over(age).data
+            i_by = pd_y.keep(state["I"], 0.0).sum_over(age).data
             n_by = pd_y.sum_over(age).data
             beta = params["beta"]  # type: ignore[index]
             foi = beta * i_by / n_by
