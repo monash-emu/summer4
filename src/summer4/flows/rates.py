@@ -6,7 +6,7 @@ import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any, Literal, NamedTuple, cast, get_type_hints
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple, cast, get_type_hints
 
 import numpy as np
 
@@ -25,6 +25,9 @@ from summer4.selectors import (
     Selector,
     Source,
 )
+
+if TYPE_CHECKING:
+    from summer4.results.outputset import OutputExpr
 
 type FlowReduce = Literal["identity", "sum"] | tuple[Literal["sum_over"], str]
 type Adjustment = Multiply | Overwrite | Transform
@@ -80,36 +83,61 @@ def register_rate_eval[T](cls: type[T]) -> Callable[[Callable[..., Any]], Callab
 
 
 class RateOps:
-    """Arithmetic mixin for rate expression nodes."""
+    """Arithmetic mixin for rate expression nodes.
+
+    An :class:`~summer4.results.outputset.OutputExpr` on the other side returns
+    ``NotImplemented``, so Python (or NumPy) hands the operation to the
+    output's reflected method or ``__array_ufunc__``.
+    """
 
     def __add__(self, other: object) -> BinOp:
+        if _is_output_expr(other):
+            return NotImplemented
         return BinOp("add", as_rate(self), as_rate(other))
 
     def __radd__(self, other: object) -> BinOp:
+        if _is_output_expr(other):
+            return NotImplemented
         return BinOp("add", as_rate(other), as_rate(self))
 
     def __sub__(self, other: object) -> BinOp:
+        if _is_output_expr(other):
+            return NotImplemented
         return BinOp("sub", as_rate(self), as_rate(other))
 
     def __rsub__(self, other: object) -> BinOp:
+        if _is_output_expr(other):
+            return NotImplemented
         return BinOp("sub", as_rate(other), as_rate(self))
 
     def __mul__(self, other: object) -> BinOp:
+        if _is_output_expr(other):
+            return NotImplemented
         return BinOp("mul", as_rate(self), as_rate(other))
 
     def __rmul__(self, other: object) -> BinOp:
+        if _is_output_expr(other):
+            return NotImplemented
         return BinOp("mul", as_rate(other), as_rate(self))
 
     def __truediv__(self, other: object) -> BinOp:
+        if _is_output_expr(other):
+            return NotImplemented
         return BinOp("div", as_rate(self), as_rate(other))
 
     def __rtruediv__(self, other: object) -> BinOp:
+        if _is_output_expr(other):
+            return NotImplemented
         return BinOp("div", as_rate(other), as_rate(self))
 
     def __pow__(self, other: object) -> BinOp:
+        if _is_output_expr(other):
+            return NotImplemented
         return BinOp("pow", as_rate(self), as_rate(other))
 
     def __rpow__(self, other: object) -> BinOp:
+        if _is_output_expr(other):
+            return NotImplemented
         return BinOp("pow", as_rate(other), as_rate(self))
 
     def __neg__(self) -> UnaryOp:
@@ -121,6 +149,8 @@ class RateOps:
     def __array_ufunc__(self, ufunc: Any, method: str, *inputs: Any, **kwargs: Any) -> Any:
         from summer4.flows.algebra import dispatch_ufunc
 
+        if any(_is_output_expr(value) for value in inputs):
+            return NotImplemented
         return dispatch_ufunc(ufunc, method, inputs, kwargs, mode="symbolic")
 
     def __array_function__(
@@ -286,6 +316,64 @@ class Capture(RateOps):
     inner: RateOps
 
 
+@dataclass(frozen=True)
+class Named:
+    """A callable with a stable digest key. ``named(fn, name)`` builds one.
+
+    Every hook that takes a callable accepts a ``Named``: :class:`Transform`,
+    :class:`~summer4.results.plan.SaveFn`, ``derived_fn`` and ``prepare_fn`` on
+    :meth:`~summer4.flows.compiled.FlowModel.compile`, the callable base value
+    of an :class:`~summer4.flows.initial.InitialPopulation`, and the ``kind``
+    of a :class:`~summer4.epi.infection.ForceOfInfection`.
+
+    ``Named`` forwards every call, with its arguments unchanged, to ``fn``.
+    The only difference from the bare function is the jit-cache digest: it
+    keys on ``name`` rather than on ``id(fn)``. A rebuilt model whose hook is
+    a fresh closure therefore reuses a compiled program instead of missing
+    the cache.
+
+    **The contract.** Passing a name asserts that every function given that
+    name is the same program. Two functions with different captured values
+    must not share a name. If they do, the second model silently returns the
+    first model's numbers. This is the same contract as ``defer(fn, name=)``:
+    a wrong name is a wrong answer, not a slower run. When in doubt, leave the
+    bare function, which is keyed by identity and is always correct.
+
+    Build instances with :func:`named`. Direct construction validates the same
+    arguments.
+
+    Raises:
+        TypeError: if ``fn`` is not callable, or ``name`` is not a string.
+        ValueError: if ``name`` is empty.
+    """
+
+    fn: Callable[..., Any]
+    name: str
+
+    def __post_init__(self) -> None:
+        if not callable(self.fn):
+            raise TypeError(f"named() wraps a callable, got {type(self.fn).__name__}.")
+        if not isinstance(self.name, str):
+            raise TypeError(f"named() needs a string name, got {type(self.name).__name__}.")
+        if not self.name:
+            raise ValueError("named() needs a non-empty name.")
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        return self.fn(*args, **kwargs)
+
+
+def named(fn: Callable[..., Any], name: str) -> Named:
+    """Wrap ``fn`` so the jit-cache digest keys on ``name``. See :class:`Named`."""
+    return Named(fn, name)
+
+
+def _callable_key(fn: object) -> str:
+    """Digest key for a callable hook: ``n:<name>`` for a :class:`Named`, else its identity."""
+    if isinstance(fn, Named):
+        return "n:" + fn.name
+    return str(id(fn))
+
+
 @dataclass(frozen=True, slots=True)
 class Defer(RateOps):
     """Call ``fn`` on evaluated rate arguments. The general escape hatch.
@@ -299,7 +387,8 @@ class Defer(RateOps):
 
     ``name`` is optional and affects only the jit-cache digest. The default
     key is ``id(fn)``, which keeps two closures with the same source and
-    different captured values from sharing a compiled program. Passing
+    different captured values from sharing a compiled program. If ``fn`` is a
+    :func:`named` wrapper, the default key is its name instead. Passing
     ``name=`` asserts that those calls are the same program. A wrong name is
     a wrong answer, not a slower run.
 
@@ -361,7 +450,7 @@ class Defer(RateOps):
         # Identity, not ``__qualname__``. Every lambda is ``<lambda>``; keying
         # on the name would make two different closures share a jit cache entry
         # and silently return the first one's numbers.
-        key = self.name if self.name is not None else str(id(self.fn))
+        key = self.name if self.name is not None else _callable_key(self.fn)
         parts = [b"defer", key.encode()]
         for child in self.args:
             parts.append(_rate_bytes(child))
@@ -379,15 +468,56 @@ def _eval_defer(expr: Defer, *, eval_child: Callable[[RateOps], Any], **_: Any) 
     return expr.fn(*args, **kwargs)
 
 
-def defer(fn: Callable[..., Any], *, name: str | None = None) -> Callable[..., Defer]:
-    """Wrap ``fn`` so calling it builds a :class:`Defer` node.
+def defer(fn: Callable[..., Any], *, name: str | None = None) -> Callable[..., Any]:
+    """Wrap ``fn`` so calling it builds a :class:`Defer` node, or a post-solve node.
 
     ``defer(f)(Time(), Param("amp"))`` is the documented spelling.
     ``Defer(f, Time(), Param("amp"))`` is the same node. See :class:`Defer`
     for what ``fn`` receives and for what ``name=`` asserts.
+
+    **Post-solve form.** If any argument, positional or keyword, is an output
+    (an :class:`~summer4.results.outputset.OutputExpr` or a save spec), the call
+    builds a node inside an :class:`~summer4.results.outputset.OutputSet` instead.
+    ``fn`` is then called after the solve with evaluated values: an
+    :class:`~summer4.results.output.Output` for each output argument, and arrays
+    for parameters and constants. It may use NumPy or JAX; under ``jax.jit`` those
+    values are traced.
+
+    .. code-block:: python
+
+        outputs["notified"] = defer(delayed)(outputs.ref("incidence"), Param("delay"))
+
+    **Return contract.** The result of ``fn`` must be one of:
+
+    - an :class:`~summer4.results.output.Output`, returned as is;
+    - an array with the data shape of the first :class:`~summer4.results.output.Output`
+      argument, wrapped with that argument's times and dims.
+
+    Any other shape raises :class:`TypeError`, naming ``fn`` and both shapes.
+
+    ``Defer(f, outputs.ref(...))`` called directly still raises: a :class:`Defer` is
+    a rate node and cannot hold an output. Use ``defer(f)(...)``.
+
+    The returned callable is typed ``Any`` because the node type depends on the
+    arguments: a :class:`Defer` for rate arguments, an
+    :class:`~summer4.results.outputset.OutputExpr` when any argument is an output.
     """
 
-    def wrapped(*args: object, **kwargs: object) -> Defer:
+    def wrapped(*args: object, **kwargs: object) -> Defer | OutputExpr:
+        from summer4.results import outputset
+
+        values = (*args, *kwargs.values())
+        if any(
+            isinstance(value, (outputset.OutputExpr, *outputset._LEAF_TYPES)) for value in values
+        ):
+            return outputset.OutputExpr(
+                kind="defer",
+                value=fn,
+                name=name,
+                kids=tuple(outputset._coerce(a) for a in args)
+                + tuple(outputset._coerce(v) for v in kwargs.values()),
+                kwargs=tuple((k, None) for k in kwargs),
+            )
         return Defer(fn, *args, name=name, **kwargs)
 
     return wrapped
@@ -633,6 +763,13 @@ def as_rate(value: object) -> RateOps:
     raise TypeError(f"Cannot use {type(value).__name__} as a flow rate.")
 
 
+def _is_output_expr(value: object) -> bool:
+    """True when ``value`` is a post-solve :class:`~summer4.results.outputset.OutputExpr`."""
+    from summer4.results.outputset import OutputExpr
+
+    return isinstance(value, OutputExpr)
+
+
 def _is_value(value: object) -> bool:
     """True when ``value`` is already evaluated, not a rate-tree node.
 
@@ -681,12 +818,20 @@ def _apply_value_binary(op: str, left: object, right: object) -> Any:
 
 
 def _unary(op: str, arg: object) -> Any:
+    if _is_output_expr(arg):
+        from summer4.results.outputset import OutputExpr
+
+        return OutputExpr(kind="unary", op=op, kids=(cast(OutputExpr, arg),))
     if _is_value(arg):
         return _apply_value_unary(op, arg)
     return UnaryOp(op, as_rate(arg))
 
 
 def _binary(op: str, left: object, right: object) -> Any:
+    if _is_output_expr(left) or _is_output_expr(right):
+        from summer4.results import outputset
+
+        return outputset._binary(op, left, right)
     if _is_value(left) or _is_value(right):
         return _apply_value_binary(op, left, right)
     return BinOp(op, as_rate(left), as_rate(right))
@@ -742,6 +887,13 @@ def clip(x: object, lo: object | None = None, hi: object | None = None) -> Any:
     """
     if lo is None and hi is None:
         raise ValueError("clip requires a lower bound, an upper bound, or both.")
+    if _is_output_expr(x) or _is_output_expr(lo) or _is_output_expr(hi):
+        out: Any = x
+        if lo is not None:
+            out = _binary("maximum", out, lo)
+        if hi is not None:
+            out = _binary("minimum", out, hi)
+        return out
     if _is_value(x) or _is_value(lo) or _is_value(hi):
         if isinstance(x, RateOps) or isinstance(lo, RateOps) or isinstance(hi, RateOps):
             raise TypeError(_MIXED_EXPR)
@@ -772,36 +924,58 @@ def _normalize_adjust(adjust: AdjustSpec) -> tuple[Adjustment, ...]:
     return tuple(as_adjust(item) for item in adjust)
 
 
-def _flow_refs(expr: RateOps) -> set[str]:
+def rate_children(expr: RateOps) -> tuple[RateOps, ...]:
+    """The rate-expression children of ``expr``: the one child walk every pass shares.
+
+    Built-in nodes list their children here. Any other node returns what its
+    ``__rate_children__()`` hook returns, or ``()`` when it defines none. A custom
+    node with rate-expression children therefore needs ``__rate_children__`` and
+    ``__rate_bytes__``.
+
+    - ``BinOp``: ``left``, ``right``.
+    - ``UnaryOp``: ``arg``.
+    - ``Interp``: ``*breakpoints``, ``*values``, ``arg``.
+    - ``GaussianPulse``: ``arg``, ``centre``, ``width``, ``height``.
+    - ``TableInterp``: ``arg``. The knot arrays are constants.
+    - ``Lookup``: ``table``, ``index``.
+    - ``Capture``: ``inner``.
+    - ``Defer``: positional arguments, then keyword values.
+    - Leaves (``Const``, ``Time``, ``FieldRef``, ``FlowRef``, ``Reduce``, ``ArrayConst``): none.
+    """
     match expr:
-        case FlowRef(name=name):
-            return {name}
         case BinOp(left=left, right=right):
-            return _flow_refs(left) | _flow_refs(right)
+            return (left, right)
         case UnaryOp(arg=arg):
-            return _flow_refs(arg)
+            return (arg,)
         case Interp(breakpoints=breakpoints, values=values, arg=arg):
-            refs: set[str] = set()
-            for bp in breakpoints:
-                refs |= _flow_refs(bp)
-            for value in values:
-                refs |= _flow_refs(value)
-            return refs | _flow_refs(arg)
+            return (*breakpoints, *values, arg)
         case GaussianPulse(arg=arg, centre=centre, width=width, height=height):
-            return _flow_refs(arg) | _flow_refs(centre) | _flow_refs(width) | _flow_refs(height)
-        case Time() | Const() | FieldRef() | Reduce() | ArrayConst():
-            return set()
+            return (arg, centre, width, height)
         case TableInterp(arg=arg):
-            return _flow_refs(arg)
-        case Lookup(index=index):
-            return _flow_refs(index)
+            return (arg,)
+        case Lookup(table=table, index=index):
+            return (table, index)
         case Capture(inner=inner):
-            return _flow_refs(inner)
+            return (inner,)
+        case Time() | Const() | FieldRef() | FlowRef() | Reduce() | ArrayConst():
+            return ()
         case _:
-            custom = getattr(expr, "__flow_refs__", None)
-            if callable(custom):
-                return set(custom())
-            return set()
+            hook = getattr(expr, "__rate_children__", None)
+            if callable(hook):
+                return tuple(hook())
+            return ()
+
+
+def _flow_refs(expr: RateOps) -> set[str]:
+    if isinstance(expr, FlowRef):
+        return {expr.name}
+    custom = getattr(expr, "__flow_refs__", None)
+    if callable(custom):
+        return set(custom())
+    refs: set[str] = set()
+    for child in rate_children(expr):
+        refs |= _flow_refs(child)
+    return refs
 
 
 def _adjust_flow_refs(adj: Adjustment) -> set[str]:
@@ -821,40 +995,15 @@ def _flow_rate_refs(rate: RateOps, adjust: Sequence[Adjustment]) -> set[str]:
 
 
 def _field_paths(expr: RateOps) -> set[tuple[str, ...]]:
-    match expr:
-        case FieldRef(path=path):
-            return {path}
-        case BinOp(left=left, right=right):
-            return _field_paths(left) | _field_paths(right)
-        case UnaryOp(arg=arg):
-            return _field_paths(arg)
-        case Interp(breakpoints=breakpoints, values=values, arg=arg):
-            paths: set[tuple[str, ...]] = set()
-            for bp in breakpoints:
-                paths |= _field_paths(bp)
-            for value in values:
-                paths |= _field_paths(value)
-            return paths | _field_paths(arg)
-        case GaussianPulse(arg=arg, centre=centre, width=width, height=height):
-            return (
-                _field_paths(arg)
-                | _field_paths(centre)
-                | _field_paths(width)
-                | _field_paths(height)
-            )
-        case Time() | Const() | FlowRef() | Reduce() | ArrayConst():
-            return set()
-        case TableInterp(arg=arg):
-            return _field_paths(arg)
-        case Lookup(table=table, index=index):
-            return _field_paths(table) | _field_paths(index)
-        case Capture(inner=inner):
-            return _field_paths(inner)
-        case _:
-            custom = getattr(expr, "__field_paths__", None)
-            if callable(custom):
-                return set(custom())
-            return set()
+    if isinstance(expr, FieldRef):
+        return {expr.path}
+    custom = getattr(expr, "__field_paths__", None)
+    if callable(custom):
+        return set(custom())
+    paths: set[tuple[str, ...]] = set()
+    for child in rate_children(expr):
+        paths |= _field_paths(child)
+    return paths
 
 
 def _adjust_field_paths(adj: Adjustment) -> set[tuple[str, ...]]:
@@ -907,6 +1056,8 @@ def derived_return_schema(derived_fn: Callable[..., Any] | None) -> type | None:
     """
     if derived_fn is None:
         return None
+    if isinstance(derived_fn, Named):
+        derived_fn = derived_fn.fn
     raw = getattr(derived_fn, "__annotations__", {}).get("return")
     if isinstance(raw, type) and _is_namedtuple_class(raw):
         return raw
@@ -1053,6 +1204,7 @@ def _rate_bytes(expr: RateOps) -> bytes:
 
 def _adjust_bytes(adj: Adjustment) -> bytes:
     if isinstance(adj, Transform):
-        return b"tf" + str(id(adj.fn)).encode() + b"".join(_rate_bytes(arg) for arg in adj.args)
+        key = _callable_key(adj.fn).encode()
+        return b"tf" + key + b"".join(_rate_bytes(arg) for arg in adj.args)
     kind = b"ow" if isinstance(adj, Overwrite) else b"mul"
     return kind + _rate_bytes(adj.value)

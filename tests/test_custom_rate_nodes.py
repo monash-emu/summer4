@@ -19,7 +19,15 @@ import pytest
 
 jax = pytest.importorskip("jax")
 
-from summer4 import ExitFlow, FlowModel, Property, PropertyMap  # noqa: E402
+from summer4 import (  # noqa: E402
+    ExitFlow,
+    FlowModel,
+    FlowRef,
+    Param,
+    Property,
+    PropertyMap,
+    TransitionFlow,
+)
 from summer4.flows.rates import (  # noqa: E402
     RateOps,
     _rate_bytes,
@@ -112,3 +120,73 @@ def test_force_of_infection_still_registers() -> None:
 
     assert ForceOfInfection in _RATE_EVALUATORS
     assert callable(getattr(ForceOfInfection, "__rate_bytes__", None))
+
+
+# A custom node needs only ``__rate_children__`` and ``__rate_bytes__`` (roadmap step 35).
+
+
+@dataclass(frozen=True, slots=True)
+class Halved(RateOps):
+    """Half of an inner rate. Defines no ``__flow_refs__`` / ``__field_paths__`` / stage hook."""
+
+    inner: RateOps
+
+    def __rate_bytes__(self) -> bytes:
+        return b"halved" + _rate_bytes(self.inner)
+
+    def __rate_children__(self) -> tuple[RateOps, ...]:
+        return (self.inner,)
+
+
+@register_rate_eval(Halved)
+def _eval_halved(
+    expr: Halved,
+    *,
+    eval_child: Callable[[RateOps], Any],
+    **_: Any,
+) -> Any:
+    return 0.5 * eval_child(expr.inner)
+
+
+_HALVED_PARAMS = {"beta": 0.4, "vax_effect": 0.5, "pop_scale": 100.0, "nu": 0.1}
+
+
+def _halved_model() -> FlowModel:
+    """S -> I at a ``Halved`` rate reading the vaccination flow; infection is added first."""
+    state = Property("state", ("S", "I", "R"))
+    k = Param("vax_effect") / Param("pop_scale")  # parameter-only: hoistable
+    rate = Halved(Param("beta") * (1.0 - k * FlowRef("vaccination").sum()))
+    model = FlowModel(PropertyMap.from_property(state))
+    model.add_flow(TransitionFlow("infection", state["S"], state["I"], rate))
+    model.add_flow(TransitionFlow("vaccination", state["S"], state["R"], Param("nu")))
+    return model
+
+
+def test_rate_children_alone_orders_flow_refs_and_finds_params() -> None:
+    cm = _halved_model().compile()
+
+    assert cm.order.index("vaccination") < cm.order.index("infection")
+    assert set(cm.computed_paths) == {("beta",), ("nu",), ("pop_scale",), ("vax_effect",)}
+
+    p = _HALVED_PARAMS
+    s, i, r = 900.0, 100.0, 0.0
+    vaccination = p["nu"] * s
+    infection = 0.5 * p["beta"] * (1.0 - p["vax_effect"] / p["pop_scale"] * vaccination) * s
+    got = np.asarray(cm.vector_field(0.0, np.array([s, i, r]), p))
+    np.testing.assert_allclose(got, [-infection - vaccination, infection, vaccination], rtol=1e-6)
+
+
+def test_rate_children_alone_hoists_and_matches_unhoisted() -> None:
+    cm_on = _halved_model().compile(hoist=True)
+    cm_off = _halved_model().compile(hoist=False)
+
+    assert cm_on.hoist_table is not None
+    assert [(type(e.node).__name__, e.part) for e in cm_on.hoist_table.entries] == [
+        ("BinOp", "value")
+    ]
+    y = np.array([900.0, 100.0, 0.0])
+    np.testing.assert_allclose(
+        np.asarray(cm_on.vector_field(0.0, y, _HALVED_PARAMS)),
+        np.asarray(cm_off.vector_field(0.0, y, _HALVED_PARAMS)),
+        rtol=1e-12,
+    )
