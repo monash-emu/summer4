@@ -38,6 +38,7 @@ from summer4.flows.rates import (
     UnaryOp,
     _adjust_bytes,
     _adjust_field_paths,
+    _callable_key,
     _field_paths,
     _flow_rate_refs,
     _lookup_path,
@@ -682,35 +683,17 @@ def _fuse_scatter_add(
 
 def _collect_capture_meta(expr: RateOps) -> dict[str, tuple[Property, ...]]:
     """Walk a rate tree for nodes that expose ``__capture_meta__``."""
-    from summer4.flows.rates import BinOp, GaussianPulse, Interp, UnaryOp
+    from summer4.flows.rates import rate_children
 
     out: dict[str, tuple[Property, ...]] = {}
     meta_fn = getattr(expr, "__capture_meta__", None)
     if callable(meta_fn):
         name, props = meta_fn()
         out[name] = props
-    match expr:
-        case BinOp(left=left, right=right):
-            out.update(_collect_capture_meta(left))
-            out.update(_collect_capture_meta(right))
-        case UnaryOp(arg=arg):
-            out.update(_collect_capture_meta(arg))
-        case Interp(breakpoints=breakpoints, values=values, arg=arg):
-            for bp in breakpoints:
-                out.update(_collect_capture_meta(bp))
-            for value in values:
-                out.update(_collect_capture_meta(value))
-            out.update(_collect_capture_meta(arg))
-        case GaussianPulse(arg=arg, centre=centre, width=width, height=height):
-            out.update(_collect_capture_meta(arg))
-            out.update(_collect_capture_meta(centre))
-            out.update(_collect_capture_meta(width))
-            out.update(_collect_capture_meta(height))
-        case _:
-            custom = getattr(expr, "__capture_children__", None)
-            if callable(custom):
-                for child in custom():
-                    out.update(_collect_capture_meta(child))
+    custom = getattr(expr, "__capture_children__", None)
+    children = custom() if callable(custom) else rate_children(expr)
+    for child in children:
+        out.update(_collect_capture_meta(child))
     return out
 
 
@@ -777,10 +760,10 @@ def _model_digest(
     for name in order:
         hasher.update(_flow_digest(flows[name], edge_maps[name]))
     hasher.update(b"df")
-    hasher.update(str(id(derived_fn) if derived_fn is not None else 0).encode())
+    hasher.update(_callable_key(derived_fn).encode() if derived_fn is not None else b"0")
     hasher.update(repr(computed_paths).encode())
     hasher.update(b"pf")
-    hasher.update(str(id(prepare_fn) if prepare_fn is not None else 0).encode())
+    hasher.update(_callable_key(prepare_fn).encode() if prepare_fn is not None else b"0")
     hasher.update(b"hoist1" if hoist else b"hoist0")
     hasher.update(b"fuse1" if fuse_compartment_updates else b"fuse0")
     hasher.update(init_plan.digest_bytes() if init_plan is not None else b"noinit")

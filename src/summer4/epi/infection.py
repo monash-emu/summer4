@@ -311,25 +311,24 @@ class ForceOfInfection(RateOps):
                 f"ForceOfInfection group_by {group_by.name!r}."
             )
 
-    def __flow_refs__(self) -> set[str]:
-        return set()
+    def __rate_stage__(self) -> str:
+        """Always ``step``: the value reads ``y``, so the FOI itself is never hoisted whole."""
+        return "step"
 
-    def __field_paths__(self) -> set[tuple[str, ...]]:
-        paths = set()
-        from summer4.flows.rates import _field_paths
-
-        paths |= _field_paths(self.contact_rate)
+    def __rate_children__(self) -> tuple[RateOps, ...]:
+        """Contact rate, exponent, infectiousness weights and mixing matrix, as rate expressions."""
+        children: list[RateOps] = [self.contact_rate]
         if self.exponent is not None:
-            paths |= _field_paths(self.exponent)
-        if self.mixing is not None:
-            paths |= _field_paths(self.mixing.matrix)
+            children.append(self.exponent)
         if self.infectiousness is not None:
             for _selector, value in self.infectiousness:
-                paths |= _field_paths(value)
-        return paths
+                children.append(value)
+        if self.mixing is not None and isinstance(self.mixing.matrix, RateOps):
+            children.append(self.mixing.matrix)
+        return tuple(children)
 
     def __rate_bytes__(self) -> bytes:
-        from summer4.flows.rates import _rate_bytes, _selector_bytes
+        from summer4.flows.rates import _callable_key, _rate_bytes, _selector_bytes
 
         body = b"foi" + self.name.encode() + self.group_by.name.encode()
         body += _selector_bytes(self.infectious)
@@ -337,7 +336,7 @@ class ForceOfInfection(RateOps):
         if isinstance(self.kind, FOIKind):
             body += repr(self.kind.value).encode()
         else:
-            body += repr(id(self.kind)).encode()
+            body += _callable_key(self.kind).encode()
         body += repr(
             None if self.normalize_infectiousness is None else self.normalize_infectiousness.value
         ).encode()

@@ -11,7 +11,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from summer4.flows.join import selector_properties
-from summer4.flows.rates import Const, RateOps, _rate_bytes, as_rate
+from summer4.flows.rates import Const, RateOps, _callable_key, _rate_bytes, as_rate
 from summer4.flows.stages import rate_stage
 from summer4.jax.propertydata import PropertyData
 from summer4.properties import Property
@@ -382,7 +382,7 @@ def _concrete_float(w: object) -> float | None:
 
 def _base_digest(value: BaseValue) -> bytes:
     if callable(value) and not isinstance(value, RateOps):
-        return b"fn" + str(id(value)).encode()
+        return b"fn" + _callable_key(value).encode()
     if isinstance(value, (int, float, np.integer, np.floating)):
         return b"f" + np.float64(value).tobytes()
     assert isinstance(value, RateOps)
@@ -404,7 +404,7 @@ def _weight_digest(weights: WeightSpec, mapping_keys: tuple[str, ...] | None) ->
         return b"".join(parts)
     if isinstance(weights, RateOps):
         return b"r" + _rate_bytes(weights)
-    return b"fn" + str(id(weights)).encode()
+    return b"fn" + _callable_key(weights).encode()
 
 
 def _eval_base_value(
