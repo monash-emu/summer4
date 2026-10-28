@@ -74,30 +74,27 @@ Two conventions that are easy to get wrong:
 ## Running a step with tiered workers
 
 Steps that carry a `### Worker` section (31 onward) are run this way. The plan behind it is
-`plans/unified-lazy-idiom.plan.md` (*Execution model*). Haiku-tier models are used where a step is
-mechanical, and the tier steps up only when an independent checker fails the work.
+`plans/unified-lazy-idiom.plan.md` (*Execution model*). Haiku is used where a step is clearly
+defined, and the tier steps up only when an independent checker fails the work.
 
-**All coding is delegated to Cursor.** Every change a step makes to source, tests, notebooks or
-docs content is written by Cursor's local agent, through
-`/Users/s/delegates/bin/cursor-delegate` (the `delegate-to-cursor` skill). It is never written by
-a Claude subagent or by the orchestrator. Claude has two roles:
+**All coding is delegated to Claude worker subagents.** Every change a step makes to source,
+tests, notebooks or docs content is written by a worker subagent: `Agent(model="haiku")` or
+`Agent(model="sonnet")`, with a fresh context. It is never written by the orchestrator. Steps
+31–35 and 46–47 were run with Cursor implementers; their *Landed* and *Worker* lines record that
+and are left as they were. Claude has three roles:
 
 - **orchestrator**: summary, branch, briefs, checks, commits, PR, handoff and roadmap edits;
+- **worker**: implements the step from the brief;
 - **checker**: read-only review.
 
-If Cursor cannot run (`cursor-delegate` exits 2: not installed or not logged in), stop and ask the
-user to run `~/.local/bin/cursor-agent login`. Do not fall back to a Claude implementer.
+**Tier map.** A step's `### Worker` tier names the implementer:
 
-**Tier map.** A step's `### Worker` tier names a Cursor model:
+| Tier | Use it for | Implementer |
+|---|---|---|
+| haiku | clearly defined tasks: the plan names the files, the spellings and the tests | `Agent(model="haiku")` |
+| sonnet | anything else: design choices, cross-cutting refactors, typing work | `Agent(model="sonnet")` |
 
-| Tier | `cursor-delegate --model` |
-|---|---|
-| haiku | `claude-haiku-5-5-thinking-high` |
-| sonnet | `claude-sonnet-5-5-high` |
-| opus | `claude-opus-5-5-high` |
-
-If an id disappears from `cursor-agent models`, use the nearest model of the same family and
-tier, and record the substitution in the handoff.
+There is no opus implementer. When in doubt about a step's tier, use sonnet.
 
 The session told "next step" is the **orchestrator**. It may run on any model, and it writes no
 step code itself.
@@ -105,39 +102,33 @@ step code itself.
 1. **Present the step's *Summary*** to the user before any tool use, as in
    [How to run a step](#how-to-run-a-step).
 2. **Cut the branch** from *Cut from*, and record the base SHA.
-3. **Delegate the implementation to Cursor.**
-   - Write the brief to `.delegations/briefs/step-N-<tier>.md`. `.delegations/` is gitignored.
-     Cursor sees none of the conversation, so the brief is self-contained:
+3. **Delegate the implementation to a worker subagent.**
+   - Write the brief to `.delegations/briefs/step-N-<tier>.md` (`.delegations/` is gitignored),
+     then pass its contents as the worker's prompt. The worker sees none of the conversation, so
+     the brief is self-contained:
 
-     > You are implementing roadmap step N of summer4, in this checkout, on branch `<branch>`
-     > (already checked out). Read `AGENTS.md`, then `docs/dev/roadmap.md` § Step N (*What the
-     > previous worker left you*, *Read first*, *Do*, *Files*), then
+     > You are implementing roadmap step N of summer4, in the checkout at `<repo path>`, on branch
+     > `<branch>` (already checked out). Read `AGENTS.md`, then `docs/dev/roadmap.md` § Step N
+     > (*What the previous worker left you*, *Read first*, *Do*, *Files*), then
      > `plans/unified-lazy-idiom.plan.md` § Step N. Change only the files the step's *Files* line
      > names, plus its step plan, tests and notebook. Run the targeted pytest files the step names
      > (`pixi run pytest tests/<file>.py -q`), plus `pixi run lint` and `pixi run format-check`.
      > Do not edit the roadmap step table, *Current position* or any *Handoff*. Do not commit,
      > push, or open a PR. Do not delete, skip or loosen an existing test unless the step names
-     > that test. In the DELEGATE REPORT list:
+     > that test. End with a WORKER REPORT listing:
      > - the files changed;
      > - the commands you ran and their results;
      > - every deviation from the plan, with the reason.
 
      On an escalated attempt, append the checker's findings and the `wip/` branch name ("reuse
      what is correct").
-   - Run it in the background:
-     `/Users/s/delegates/bin/cursor-delegate -w <repo> --allow-shell --model <tier id> --timeout 3600 -f .delegations/briefs/step-N-<tier>.md`.
-     Note the `chat_id` and the receipt directory it prints.
-   - Exit codes:
-     - **124** (timeout): resume once with
-       `cursor-delegate --resume <chat_id> -w <repo> --allow-shell "Continue the task; finish with the DELEGATE REPORT."`.
-       A second timeout counts as a FAIL.
-     - **1** (Cursor error): counts as a FAIL.
-     - **2** (setup): stop, as above.
+   - If the worker stops without a WORKER REPORT, continue it once (`SendMessage` to the same
+     agent: "Continue the task; finish with the WORKER REPORT."). A second stop counts as a FAIL.
    - **Verify; don't trust the report.**
-     - Read `<receipt>/diff.patch` and `git diff`.
+     - Read `git diff` yourself.
      - Rerun the targeted tests yourself.
      - Then commit the working tree yourself, excluding `.delegations/`, with a message ending
-       `(Cursor <model id>)`.
+       `(Claude <tier> worker)`.
    - A step that needs ordered commits (step 35: the characterisation test first) is two
      delegations, with the orchestrator committing after each one.
 4. **Run the checks.**
@@ -150,11 +141,11 @@ step code itself.
      - On 2026-10-14 there was no checkout on the mini, so they run locally until one exists.
    - A red check counts as a FAIL, with the log as the finding.
 5. **Spawn the checker.** It is a Claude subagent: `Agent(model=<checker tier>)`, with a fresh
-   context. The checker reviews only; it never edits files. It is one tier above the implementer,
-   minimum sonnet: haiku→sonnet, sonnet→opus, opus→opus (fresh context). Pass it:
+   context. The checker reviews only; it never edits files. It is one tier above the implementer:
+   haiku→sonnet, sonnet→opus. Pass it:
    - the step's roadmap and plan sections;
    - `git diff <base>...HEAD`;
-   - Cursor's DELEGATE REPORT;
+   - the worker's WORKER REPORT;
    - the step's `### Sanity check` list;
    - this instruction:
 
@@ -167,7 +158,7 @@ step code itself.
    > - (d) no new `# type: ignore`, `pytest.skip`, `xfail`, bare `except`, or digest keyed on
    >   `id(` outside `_callable_key`;
    > - (e) the notebook section has a *What to check* box, a titled plot or a displayed object, and no asserts;
-   > - (f) every deviation in the DELEGATE REPORT is recorded in the step plan.
+   > - (f) every deviation in the WORKER REPORT is recorded in the step plan.
    >
    > Reply `VERDICT: PASS` or `VERDICT: FAIL`, then numbered findings, each citing a checklist item
    > and a file:line.
@@ -175,14 +166,14 @@ step code itself.
 6. **On FAIL, escalate.**
    - Commit the attempt and push it to `wip/<slug>-<tier>`.
    - Run `git reset --hard <base>` on the step branch.
-   - Delegate again to Cursor one tier up (haiku→sonnet→opus), in a new chat, with the findings
-     and the wip branch.
-   - After an opus failure, stop and ask the user.
+   - After a haiku failure, delegate again to a fresh sonnet worker, with the findings and the wip
+     branch.
+   - After a sonnet failure, try one more fresh sonnet worker with the findings. If that fails
+     too, stop and ask the user.
 7. **On PASS, hand off.**
    - Open the PR first, with the user-gate checklist; the `**Landed:**` line needs the PR number.
    - Then make the handoff commit: the standard handoff, plus this line under `**Landed:**`:
-     `**Worker:** Cursor <model id> (<tier>); checker <tier>; attempts <n> (<models tried>); receipts <.delegations ids>.`
-   - Receipts stay local (gitignored), but their ids let the user find them.
+     `**Worker:** Claude <tier>; checker <tier>; attempts <n> (<tiers tried>).`
    - **Stop for the user gate.** Do not merge.
 
 Gate notebooks for these steps are **acceptance** notebooks, in the style of notebooks 22 and 24:
@@ -191,7 +182,7 @@ Gate notebooks for these steps are **acceptance** notebooks, in the style of not
 - a titled Plotly plot or a displayed object;
 - no asserts; the asserts live in `tests/`.
 
-Each step that touches `src/` also has Cursor write a short step plan,
+Each step that touches `src/` also has its worker write a short step plan,
 `plans/<branch-slug>.plan.md`, so that `check-branch` sees a plan change.
 `plans/unified-lazy-idiom.plan.md` itself is never edited after it lands.
 
@@ -200,11 +191,11 @@ Each step that touches `src/` also has Cursor write a short step plan,
 <!-- roadmap:current -->
 | Field | Value |
 | --- | --- |
-| Step | 32 |
+| Step | 28 |
 | Status | next |
-| Branch | `feat/output-ufuncs` |
-| Cut from | `fix/likelihood-scale-expr` (stacked; see step 32) |
-| Last landed | `fix/likelihood-scale-expr` (PR #55, awaiting the user gate) |
+| Branch | `feat/calib-outputs` |
+| Cut from | `main` once PRs #55–#59 have merged; until then `fix/rate-children-fold` |
+| Last landed | `fix/rate-children-fold` (PR #59; Phase L PRs #55–#59 are stacked and awaiting the user gate) |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -230,7 +221,8 @@ step 28**. **Phase M** (steps 36–44, `CP6`) makes the rate tree the only
 expression type and lands **after step 28, before Track G resumes**. Step 45
 removes the deprecated doors and stays `blocked` until a release is cut after
 step 44. These steps are run with [tiered workers](#running-a-step-with-tiered-workers):
-all coding is delegated to Cursor, and Claude orchestrates and checks.
+all coding is delegated to Claude worker subagents (haiku or sonnet), and Claude
+orchestrates and checks.
 
 **Landing order after step 14.** Step numbers are not the landing order here.
 The order is fixed as:
@@ -274,14 +266,14 @@ before step 15 lands. Each handoff below names its successor explicitly;
 | 25 | J | WP19 | `feat/calib-multistart` | `plans/calibration-toolkit.plan.md` | Step 25 | done | CW5 CW6 |
 | 26 | J | WP19 | `feat/calib-gradient-free` | `plans/calibration-toolkit.plan.md` | Step 26 | done | CW7 |
 | 27 | J | WP19 | `feat/calib-seeded-mcmc` | `plans/calibration-toolkit.plan.md` | Step 27 | done | CW8 CW9 |
-| 28 | J | WP19 | `feat/calib-outputs` | `plans/calibration-toolkit.plan.md` | Step 28 | planned | CW10 CW11 |
+| 28 | J | WP19 | `feat/calib-outputs` | `plans/calibration-toolkit.plan.md` | Step 28 | next | CW10 CW11 |
 | 29 | K | CP1 | `feat/solve-composable` | `plans/solve-composable.plan.md` | Whole | done | CX1 CX2 CX3 CX4 CX5 |
 | 30 | K | CP2 | `feat/calib-composable` | `plans/calib-composable.plan.md` | Whole | done | CX16 CX17 CX18 CX19 CX24 |
 | 31 | L | CP5 | `fix/likelihood-scale-expr` | `plans/unified-lazy-idiom.plan.md` | Step 31 | done | CX26 |
-| 32 | L | CP5 | `feat/output-ufuncs` | `plans/unified-lazy-idiom.plan.md` | Step 32 | next | CX27 |
-| 33 | L | CP5 | `feat/output-defer` | `plans/unified-lazy-idiom.plan.md` | Step 33 | planned | CX28 |
-| 34 | L | CP5 | `feat/named-callables` | `plans/unified-lazy-idiom.plan.md` | Step 34 | planned | CX7 |
-| 35 | L | CP5 | `fix/rate-children-fold` | `plans/unified-lazy-idiom.plan.md` | Step 35 | planned | CX29 |
+| 32 | L | CP5 | `feat/output-ufuncs` | `plans/unified-lazy-idiom.plan.md` | Step 32 | done | CX27 |
+| 33 | L | CP5 | `feat/output-defer` | `plans/unified-lazy-idiom.plan.md` | Step 33 | done | CX28 |
+| 34 | L | CP5 | `feat/named-callables` | `plans/unified-lazy-idiom.plan.md` | Step 34 | done | CX7 |
+| 35 | L | CP5 | `fix/rate-children-fold` | `plans/unified-lazy-idiom.plan.md` | Step 35 | done | CX29 |
 | 36 | M | CP6 | `feat/stage-lattice` | `plans/unified-lazy-idiom.plan.md` | Step 36 | planned | — |
 | 37 | M | CP6 | `feat/post-stage-nodes` | `plans/unified-lazy-idiom.plan.md` | Step 37 | planned | — |
 | 38 | M | CP6 | `feat/outputset-on-rate-nodes` | `plans/unified-lazy-idiom.plan.md` | Step 38 | planned | CX30 |
@@ -317,6 +309,8 @@ changed about them is recorded here instead, and overrides them.
 | `tb-ports-feature-completeness` | §10.3 | The object `posterior_runs` returns must keep **per-draw outputs** (for example `runs.samples(scenario, output)` → shape `(n, t)`), not only quantiles, so step 28 can draw spaghetti plots from it. Keep its draw input a plain unconstrained/constrained site dict internally so step 28 can pass `Candidates` as well as `InferenceData` |
 | `tb-ports-feature-completeness` | §10.4 | Notebook `12-calibration` / step-15 `14-calibration` are taken. Step 13 ships `examples/notebooks/17-priors-and-likelihoods.ipynb`. Step 15 uses the next free `18-calibration.ipynb` |
 | `tb-ports-feature-completeness` | §10.2 | No `preprocess=` on `BayesianModel`. Run-start work uses `FlowModel.compile(prepare_fn=...)`. `futureplans/wp10-preprocess-is-prepare-fn.md` is deleted |
+| `unified-lazy-idiom` | Step 33 | `defer()` returns `Callable[..., Any]`, not `Callable[..., Defer \| OutputExpr]`. The union made every documented spelling a mypy error (`outputs[...] = defer(f)(...)`, `eval_closed(defer(...))`, `r: RateOps = defer(f)(Time())`). Keep `Any` until steps 36–38 merge the two expression languages, and do not re-widen it |
+| `unified-lazy-idiom` | *Execution model* | From 2026-10-29 workers are Claude subagents, not Cursor: haiku for clearly defined steps, sonnet for everything else, and no opus implementer (step 42 moves from opus to sonnet). A sonnet failure gets one more fresh sonnet attempt, then the orchestrator stops and asks. See [Running a step with tiered workers](#running-a-step-with-tiered-workers) |
 
 ---
 
@@ -2027,6 +2021,22 @@ notebook composes every stage, plus two shorter compositions. It lands on
   survey.
 - Your gate notebook is **`25-calibration-workflow.ipynb`** (23 went to step
   29, 24 to step 30; 26 is Phase L's, 27 is reserved for Phase M).
+- **Phase L is finished.** PRs #55–#59 (steps 31–35) are stacked and wait for
+  the user's notebook-26 sign-off. If they have not merged when you start, cut
+  `feat/calib-outputs` from `fix/rate-children-fold`, not `main`, so you have
+  the spellings below. Retarget onto `main` once they merge.
+- **Phase L worker tally:**
+
+  | Step | Final tier | Attempts | Escalated because |
+  |---|---|---|---|
+  | 31 | haiku | 1 | — |
+  | 32 | haiku | 1 | — |
+  | 33 | opus | 3 | an unrecorded deviation, then the plan's own wrong `defer` return annotation |
+  | 34 | haiku | 1 | — |
+  | 35 | opus | 2 | sonnet's code passed; its step plan omitted the deviations |
+
+  No haiku attempt ever failed on code correctness. Every failure was
+  bookkeeping, or an error in the master plan.
 - **Phase L (steps 31–35) landed before you.** Its spellings are available in
   notebook 25:
   - `defer(f)(outputs.ref(...), Param(...))` applies a function to outputs;
@@ -2273,6 +2283,9 @@ Set step 31 `done`, step 32 `next`.
 
 ## Step 32 — `feat/output-ufuncs`
 
+**Landed:** feat/output-ufuncs, PR #56, 2026-10-15.
+**Worker:** Cursor claude-haiku-5-5-thinking-high (haiku); checker sonnet; attempts 1 (haiku); receipts 20261015-061721.
+
 ### Summary
 
 `np.exp`, `np.sin`, `np.maximum`, `np.clip` and the named helpers (`tanh`,
@@ -2363,12 +2376,31 @@ Set step 32 `done`, step 33 `next`.
 
 ## Step 33 — `feat/output-defer`
 
+**Landed:** feat/output-defer, PR #57, 2026-10-15.
+**Worker:** Cursor claude-opus-5-5-high (opus); checker opus (fresh context); attempts 3 (haiku → sonnet → opus); receipts 20261015-064127, 20261015-065650, 20261015-070319.
+
 ### Summary
 
 `defer(f)(outputs.ref("incidence"), Param("delay"))` builds a post-solve node.
 It is the port of summer2's `Function(f, [DerivedOutput(...), Parameter(...)])`,
 with a documented return contract. The gate model gains notifications (delayed
 incidence). It lands on `feat/output-defer` and closes `CX28`.
+
+### What the previous worker left you
+
+- **Stacked again.** Cut from `feat/output-ufuncs`; the PR targets it (#56,
+  itself on #55). Retarget once the lower PRs merge.
+- `OutputExpr` now has `__array_ufunc__` / `__array_function__` (mode
+  `output_expr` in `algebra._apply_mode`, which calls `outputset._coerce` and
+  `outputset._binary`). The `rates` helpers (`_unary`, `_binary`, `clip`) build
+  `OutputExpr` nodes when an operand is one, and `RateOps` operators return
+  `NotImplemented` against an `OutputExpr`. Your `defer` branch sits alongside
+  these; `_is_output_expr` in `rates.py` is the helper to reuse.
+- Comparisons on an `OutputExpr` raise `ValueError` (via `DENY_OPS`), not
+  `TypeError`.
+- Section B of notebook 26 has two wording nits the checker flagged (an unused
+  `tanh` mention; "scores exactly like" in row B). The step 33 brief asks
+  Cursor to fix them while it edits the notebook.
 
 ### Worker
 
@@ -2432,6 +2464,9 @@ Set step 33 `done`, step 34 `next`.
 
 ## Step 34 — `feat/named-callables`
 
+**Landed:** feat/named-callables, PR #58, 2026-10-15.
+**Worker:** Cursor claude-haiku-5-5-thinking-high (haiku); checker sonnet; attempts 1 (haiku, two resumes for brief-permitted doc fixes); receipts 20261015-071856.
+
 ### Summary
 
 `named(fn, "seasonal")` gives any callable hook a stable digest key: Transform,
@@ -2439,6 +2474,22 @@ SaveFn, derived_fn, prepare_fn, InitialPopulation callables and FOI `kind`.
 Rebuilding a model with a fresh closure therefore hits the jit cache, under the
 same contract as `defer(name=)`. It lands on `feat/named-callables` and closes
 `CX7`.
+
+### What the previous worker left you
+
+- **Stacked:** cut from `feat/output-defer` (PR #57, on #56 and #55).
+- **Step 33 needed all three tiers.**
+  - Haiku's work was correct but left a deviation unrecorded.
+  - Sonnet then followed the master plan's `Defer | OutputExpr` return annotation, which an opus
+    checker showed breaks mypy for the documented spellings.
+  - `defer` now returns `Callable[..., Any]` (see *Corrections to committed plans*).
+  - Lesson for briefs: when a plan prescribes a type annotation, ask the implementer to prove it
+    with a `/tmp` mypy probe of the user-facing spellings.
+- `Defer.__rate_bytes__` is unchanged by step 33. Your `_callable_key` change there must keep the
+  unnamed encoding (`str(id(fn))`), so the `tests/test_rate_dispatch.py` goldens stay
+  byte-identical.
+- The step 34 brief also carries two cosmetic notebook-26 and step-plan fixes from the step 33
+  review.
 
 ### Worker
 
@@ -2504,6 +2555,9 @@ Set step 34 `done`, step 35 `next`.
 
 ## Step 35 — `fix/rate-children-fold`
 
+**Landed:** fix/rate-children-fold, PR #59, 2026-10-15.
+**Worker:** Cursor claude-opus-5-5-high (opus); checker opus (fresh context); attempts 2 (sonnet → opus; sonnet's code passed, its step plan omitted the deviations); receipts 20261015-080724 and its resumes, plus the opus fix-up.
+
 ### Summary
 
 One `rate_children(expr)` replaces the duplicated child walks, so a custom node
@@ -2511,6 +2565,19 @@ needs only `__rate_children__` and `__rate_bytes__`. This fixes `FlowRef`s lost
 under `ForceOfInfection` (never topologically ordered) and capture metadata lost
 under `TableInterp` / `Lookup`. A characterisation test is committed first. It
 lands on `fix/rate-children-fold` and closes `CX29`, which finishes Phase L.
+
+### What the previous worker left you
+
+- **Stacked:** cut from `feat/named-callables` (PR #58, on #57, #56, #55).
+- `_callable_key` (`src/summer4/flows/rates.py`) is the only place a digest keys on a callable.
+  `ForceOfInfection.__rate_bytes__` now uses it for a callable `kind`. Leave `__rate_bytes__`
+  alone in this step: the refold must not change `_rate_bytes` or `_eval_rate`.
+- **Run this step as two Cursor delegations** (briefs `step-35a-sonnet.md` and
+  `step-35b-sonnet.md`). Commit the characterisation test after the first, before delegating the
+  refactor.
+- The 35b brief also carries two cosmetic notebook-26 title-cell fixes from the step 34 review.
+- **Lesson from step 34:** a brief's "Also fix" list must also widen its *Constraints* file list.
+  Otherwise a careful implementer refuses the edit, rightly.
 
 ### Worker
 
@@ -2592,8 +2659,7 @@ lands on `feat/stage-lattice` and creates the Phase M gate notebook
 
 ### Worker
 
-Implementer: **haiku**, delegated to Cursor
-(`--model claude-haiku-5-5-thinking-high`). Checker: **sonnet**.
+Implementer: **haiku** (Claude worker subagent). Checker: **sonnet**.
 Escalate per [Running a step with tiered workers](#running-a-step-with-tiered-workers).
 
 ### Files
@@ -2661,7 +2727,7 @@ Post-solve quantities become `RateOps` nodes: `Saved(quantity)`,
 
 ### Worker
 
-Implementer: **sonnet**, delegated to Cursor (`--model claude-sonnet-5-5-high`).
+Implementer: **sonnet** (Claude worker subagent).
 Checker: **opus**. Escalate per [Running a step with tiered
 workers](#running-a-step-with-tiered-workers).
 
@@ -2731,7 +2797,7 @@ escape for the nine reserved names. Save specs dispatch `np.*`. It lands on
 
 ### Worker
 
-Implementer: **sonnet**, delegated to Cursor (`--model claude-sonnet-5-5-high`).
+Implementer: **sonnet** (Claude worker subagent).
 Checker: **opus**. Escalate per [Running a step with tiered
 workers](#running-a-step-with-tiered-workers).
 
@@ -2809,7 +2875,7 @@ hoisting. It lands on `feat/shared-nodes-and-fields`.
 
 ### Worker
 
-Implementer: **sonnet**, delegated to Cursor (`--model claude-sonnet-5-5-high`).
+Implementer: **sonnet** (Claude worker subagent).
 Checker: **opus**. Escalate per [Running a step with tiered
 workers](#running-a-step-with-tiered-workers).
 
@@ -2876,7 +2942,7 @@ are deprecated. It lands on `feat/save-expressions` and closes `CX32`.
 
 ### Worker
 
-Implementer: **sonnet**, delegated to Cursor (`--model claude-sonnet-5-5-high`).
+Implementer: **sonnet** (Claude worker subagent).
 Checker: **opus**. Escalate per [Running a step with tiered
 workers](#running-a-step-with-tiered-workers).
 
@@ -2945,7 +3011,7 @@ back. `derived_fn` models keep today's exact behaviour, R3 included, until step
 
 ### Worker
 
-Implementer: **sonnet**, delegated to Cursor (`--model claude-sonnet-5-5-high`).
+Implementer: **sonnet** (Claude worker subagent).
 Checker: **opus**. Escalate per [Running a step with tiered
 workers](#running-a-step-with-tiered-workers).
 
@@ -3018,7 +3084,7 @@ closes `CX33` and `CX11`.
 
 ### Worker
 
-Implementer: **sonnet**, delegated to Cursor (`--model claude-sonnet-5-5-high`).
+Implementer: **sonnet** (Claude worker subagent).
 Checker: **opus**. Escalate per [Running a step with tiered
 workers](#running-a-step-with-tiered-workers).
 
@@ -3090,8 +3156,8 @@ step opens with a go/no-go spike. It lands on `feat/typed-stages` and closes
 
 ### Worker
 
-Implementer: **opus**, delegated to Cursor (`--model claude-opus-5-5-high`).
-Checker: **opus (fresh context)**. Escalate per [Running a step with tiered
+Implementer: **sonnet** (Claude worker subagent; was opus under Cursor, and there is no
+opus implementer). Checker: **opus**. Escalate per [Running a step with tiered
 workers](#running-a-step-with-tiered-workers).
 
 ### Files
@@ -3163,7 +3229,7 @@ M user gate. It lands on `docs/unified-lazy-idiom` and finishes Phase M.
 
 ### Worker
 
-Implementer: **sonnet**, delegated to Cursor (`--model claude-sonnet-5-5-high`).
+Implementer: **sonnet** (Claude worker subagent).
 Checker: **opus**. Escalate per [Running a step with tiered
 workers](#running-a-step-with-tiered-workers).
 
@@ -3232,8 +3298,7 @@ on `chore/remove-deprecated-doors`.
 
 ### Worker
 
-Implementer: **haiku**, delegated to Cursor
-(`--model claude-haiku-5-5-thinking-high`). Checker: **sonnet**.
+Implementer: **haiku** (Claude worker subagent). Checker: **sonnet**.
 Escalate per [Running a step with tiered workers](#running-a-step-with-tiered-workers).
 
 ### Files
