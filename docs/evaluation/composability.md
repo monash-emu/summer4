@@ -39,7 +39,7 @@ pixi run composability         # statuses, evidence anchors, packages, totals
 ## Where things stand
 
 <!-- composability:totals -->
-Open findings: **9** (0 high, 2 medium, 7 low); planned: 6; deferred: 3; done: 16; rejected: 0.
+Open findings: **7** (0 high, 2 medium, 5 low); planned: 6; deferred: 3; done: 22; rejected: 0.
 <!-- /composability:totals -->
 
 The calibration workflow's MCMC stage (`CX25`), the solve (`CP1`, roadmap step
@@ -48,7 +48,7 @@ builds the diffrax, numpyro and optax objects; `run`, `sample`, `find_map` and
 `optimize` are documented compositions of public steps and return objects that
 can be inspected and extended. What remains:
 
-- extension points (`CP3`);
+- extension points (`CP3`; step 46 closed `CX21` and `CX35`);
 - tests that still reach private helpers (`CP4`);
 - the staged unification of summer4's lazy idioms: bridges between the rate tree and the
   post-solve outputs (`CP5`, roadmap steps 31-35), then one node set for rates, outputs and
@@ -79,8 +79,8 @@ can be inspected and extended. What remains:
 | CX18 | calibration | P3 | medium | done | Before step 30: `wf.optimize` returns no optimiser state, so a run cannot be extended; restarting from `result.candidates` resets Adam moments or the CMA-ES covariance. | Done in step 30: `wf.optimize` returns a `wf.OptimizeRun` holding the optimiser states; `run.extend(max_steps)` continues with Adam moments / CMA-ES state intact. | `src/summer4/epi/calibration/workflow/optimize.py::def extend(self, max_steps: int)` |
 | CX19 | calibration | P3, P4 | medium | done | Before step 30: `BayesianModel.find_map` returns only the final parameters (no loss trace, no state, no resume) and duplicates single-start `wf.optimize`. | Done in step 30: `find_map` is a one-start `wf.optimize` returning the `OptimizeRun` (`best_params` for the dict); `init_point` and `Candidates.from_z` are public. | `src/summer4/epi/calibration/model.py::def init_point(` |
 | CX20 | calibration | P1, P2 | medium | open | Likelihoods have no protocol, and nested prior scales are found only through attributes named `sd` or `dispersion`. A custom likelihood with a differently named prior scale silently loses that prior. | A `Likelihood` protocol with `log_prob(...)` and `prior_sites()`. | `src/summer4/epi/calibration/likelihoods.py::def prior_sites` |
-| CX21 | calibration | P1 | low | open | A prior must implement the `Prior` protocol; a bare numpyro distribution needs a hand-written wrapper. | `Prior.from_numpyro(name, dist)`, with `icdf` only where the distribution provides one. | `src/summer4/epi/calibration/priors.py::class Prior(Protocol)` |
-| CX22 | calibration | P2 | low | open | Tests call private `BayesianModel._ensure_potential()` for the initial point and the postprocess transform. | Public `init_point` / `postprocess_fn` beside the public `potential_fn`. | `tests/test_epi_calibration.py::_ensure_potential` |
+| CX21 | calibration | P1 | low | done | Before step 46: A prior must implement the `Prior` protocol; a bare numpyro distribution needs a hand-written wrapper. | Done in step 46: `NumpyroPrior(name, dist)` wraps any numpyro distribution; `icdf` uses the distribution's own and `has_icdf` says when there is none. Not `Prior.from_numpyro`: a static method on the `runtime_checkable` Protocol would become a protocol member that every structural prior lacks. | `src/summer4/epi/calibration/priors.py::class NumpyroPrior` |
+| CX22 | calibration | P2 | low | done | Before step 46: Tests call private `BayesianModel._ensure_potential()` for the initial point and the postprocess transform. | Done in step 46: public `postprocess_fn` beside `potential_fn` and `init_point`, on `BayesianModel` and `NumpyroPosterior`; tests use them. | `src/summer4/epi/calibration/model.py::def postprocess_fn` |
 | CX23 | calibration | P2 | low | open | How a `Scenario` rebinds params, model and outputs lives in private `_scenario_bindings`, so a scenario cannot be applied outside `posterior_runs`. | A public binding function, or a method on `Scenario`. | `src/summer4/epi/calibration/posterior_runs.py::def _scenario_bindings` |
 | CX24 | calibration | P3 | low | done | Before step 30: `OptimizeResult.history` holds only the optimise record, while its `candidates.history` is cumulative. | Done in step 30: `run.history` is the candidates' cumulative history, one record per `optimize` / `extend` call. | `src/summer4/epi/calibration/workflow/optimize.py::history=self._input_history + tuple(self._records)` |
 | CX25 | calibration | P1, P2, P3, P4 | high | done | The MCMC stage took `kind=` strings, bundled seeding, retries and stopping, and returned a sealed `SampleResult`. It is now the reference pattern: caller-built numpyro `MCMC`, `Candidates.init_params`, `wf.warmup_until`, `wf.sample_until` → `MCMCRun`, `wf.StopRule`, `wf.replay`, and `wf.run_mcmc` (PR #39). | — | `src/summer4/epi/calibration/workflow/mcmc.py::def sample_until` |
@@ -93,6 +93,10 @@ can be inspected and extended. What remains:
 | CX32 | results | P1 | medium | planned | An arbitrary step-stage expression (a seasonal rate, a per-age FOI) cannot be saved as an output without a `SaveFn` callable or a `derived_fn` path read by `ComputedValue`. | `outputs[name] = expr` saves any step-stage expression during the solve; `SaveFn` and `ComputedValue` deprecated (roadmap step 40). | `src/summer4/results/plan.py::class SaveFn` |
 | CX33 | rates | P1 | medium | planned | InitialPopulation base values and weights accept a `callable(params)` that bypasses the rate tree: it is keyed by `id()`, cannot be staged or inspected, and duplicates what a run-stage expression already does. | Deprecate the callables in favour of `defer(f)(Params())` (roadmap step 42). | `src/summer4/flows/initial.py::def _base_digest` |
 | CX34 | rates | P2 | medium | planned | Stage is a runtime property only: `Time()` in an initial population, a step-stage likelihood scale or (after CX30) a post-solve expression in a rate slot fails at compile or run time, never under mypy. | `RateOps` generic in a covariant stage marker (`Run <: Step <: Post`), with each slot annotated (roadmap step 43). | `src/summer4/flows/stages.py::Stage = Literal` |
+| CX35 | calibration | P1, P2 | medium | done | Before step 46: the workflow stages were bound to `BayesianModel`: `wf.lhs`, `prior_draws`, `evaluate`, `Candidates`, `optimize`, `run_mcmc` and `MCMCRun.candidates` read `numpyro_model`, `potential_fn`, `log_density`, `constrain`, `unconstrain`, `prior_names` and `site_priors`. A hand-written numpyro model (hierarchical latents, two likelihoods, sites shared between them) runs under `MCMC(NUTS(model))`, but not through LHS, multi-start optimisation, `Candidates.init_params` or replay. | Done in step 46: a `Posterior` protocol of exactly those members, which every stage takes; `NumpyroPosterior(model)` implements it for any model function; public `BayesianModel.log_likelihood(params)` so a joint model can `numpyro.factor` a compiled model's targets; `wf.lhs` / `prior_draws` draw sites without a stratifiable prior by `Predictive`. | `src/summer4/epi/calibration/workflow/design.py::def lhs(post: Posterior` |
+| CX36 | calibration | P2, P3 | medium | done | Before step 47: `wf.sample_until` / `MCMCRun` request only `diverging` from numpyro, so `num_steps` (gradient evaluations), `accept_prob` and the adapted step size of each draw are lost; tuning or costing a sampler means rerunning it outside the stage (tbcore `docs/summer4-workarounds.md` W8). | Done in step 47: `sample_until(..., extra_fields=)`; `MCMCRun.extra[name]` is `(chain, draw)` across chunks and `extend`, and lands in `idata.sample_stats`. | `src/summer4/epi/calibration/workflow/mcmc.py::extra = ("diverging",) if self._divergences else ()` |
+| CX37 | calibration | P2 | medium | done | Before step 47: `MCMCRun` reports one R-hat and ESS per site, averaged over a plate site's elements (`np.mean(split_gelman_rubin(x))`), so one unconverged element is hidden by its converged siblings and `StopRule` cannot judge on the worst element. | Done in step 47: progress rows and `MCMCRun.diagnostics` add `rhat_element_max` / `ess_bulk_element_min`; `StopRule(per_element=True)` judges on them (the default still averages, so existing runs stop where they did). | `src/summer4/epi/calibration/workflow/mcmc.py::float(np.mean(split_gelman_rubin(x)))` |
+| CX38 | calibration | P2, P3 | medium | done | Before step 47: `wf.warmup_until` cannot start from a given inverse mass matrix, restarts every doubling round from the factory's metric (discarding the previous round's adaptation), and reports nothing until it returns, so a long dense warm-up is a black box. | Done in step 47: `warmup_until(..., inverse_mass_matrix=, carry_metric=, on_round=)` calls `make_mcmc(n, inverse_mass_matrix=M)` when it has a metric; rows record `grad_evals`. | `src/summer4/epi/calibration/workflow/warmup.py::mcmc = make_mcmc(n)` |
 <!-- /composability:findings -->
 
 ## Work packages
@@ -102,17 +106,19 @@ findings are tracked by their `futureplans/` notes instead. **CP1** landed as
 roadmap step 29 and **CP2** as step 30. **CP3** and **CP4** are independent
 and can run alongside the roadmap. **CP5** and **CP6** are the staged
 unification of the lazy idioms (`plans/unified-lazy-idiom.plan.md`): CP5 is
-roadmap steps 31-35, CP6 steps 36-44.
+roadmap steps 31-35, CP6 steps 36-44. **CP7** is roadmap step 47, the NUTS
+tuning stage (`plans/nuts-tuning.plan.md`).
 
 <!-- composability:packages -->
 | Package | Title | Closes |
 | --- | --- | --- |
 | CP1 | The solve takes the caller's diffrax objects | CX1 CX2 CX3 CX4 CX5 |
 | CP2 | Calibration entry points built on the workflow pieces | CX16 CX17 CX18 CX19 CX24 |
-| CP3 | Public extension points | CX6 CX12 CX13 CX20 CX21 CX23 |
+| CP3 | Public extension points | CX6 CX12 CX13 CX20 CX21 CX23 CX35 |
 | CP4 | Tests use public API | CX8 CX10 CX22 |
 | CP5 | Bridges between the lazy idioms (roadmap steps 31-35) | CX7 CX26 CX27 CX28 CX29 |
 | CP6 | One lazy node set for rates, outputs and parameters (roadmap steps 36-44) | CX11 CX30 CX31 CX32 CX33 CX34 |
+| CP7 | NUTS tuning: sampler statistics, worst-element diagnostics, steerable warm-up (roadmap step 47) | CX36 CX37 CX38 |
 <!-- /composability:packages -->
 
 ## Patterns to copy

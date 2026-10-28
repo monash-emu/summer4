@@ -11,13 +11,14 @@ from __future__ import annotations
 
 import time
 import warnings
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
+from summer4.epi.calibration.posterior import Posterior
 from summer4.epi.calibration.workflow.candidates import Candidates, StageRecord
 
 # Warnings point at the caller's line, whichever public entry point was used.
@@ -56,6 +57,11 @@ class StopRule:
     unconverged (``"divergences"``); R-hat and ESS both passing ends it converged
     (``"diagnostics"``); otherwise a spent draw or time budget ends it
     unconverged (``"max_samples"`` / ``"max_seconds"``).
+
+    By default R-hat and ESS are each site's mean over its elements (a plate
+    site counts once). ``per_element=True`` judges on the worst element of
+    every site instead (``rhat_element_max`` / ``ess_bulk_element_min``), so one
+    unconverged member of a plate cannot hide behind its siblings.
     """
 
     rhat: float | None = 1.05
@@ -63,6 +69,7 @@ class StopRule:
     max_divergence_frac: float | None = None
     max_samples: int = 5000
     max_seconds: float | None = None
+    per_element: bool = False
 
     def __call__(self, row: Mapping[str, Any]) -> Decision | None:
         divergence = row.get("divergence_frac")
@@ -72,8 +79,13 @@ class StopRule:
             and float(divergence) > float(self.max_divergence_frac)
         ):
             return False, "divergences"
-        rhat_ok = self.rhat is None or float(row["rhat_max"]) <= float(self.rhat)
-        ess_ok = self.ess is None or float(row["ess_bulk_min"]) >= float(self.ess)
+        rhat_key, ess_key = (
+            ("rhat_element_max", "ess_bulk_element_min")
+            if self.per_element
+            else ("rhat_max", "ess_bulk_min")
+        )
+        rhat_ok = self.rhat is None or float(row[rhat_key]) <= float(self.rhat)
+        ess_ok = self.ess is None or float(row[ess_key]) >= float(self.ess)
         if rhat_ok and ess_ok:
             return True, "diagnostics"
         if int(row["samples"]) >= int(self.max_samples):
@@ -88,35 +100,37 @@ class StopRule:
         return None
 
 
-def _site_diagnostics(samples: Mapping[str, np.ndarray]) -> dict[str, tuple[float, float]]:
+SiteDiagnostics = tuple[float, float, float, float]
+"""Per site: mean R-hat, mean bulk ESS, worst-element R-hat, worst-element bulk ESS."""
+
+
+def _site_diagnostics(samples: Mapping[str, np.ndarray]) -> dict[str, SiteDiagnostics]:
     from numpyro.diagnostics import (  # type: ignore[import-untyped]
         effective_sample_size,
         split_gelman_rubin,
     )
 
-    out: dict[str, tuple[float, float]] = {}
+    out: dict[str, SiteDiagnostics] = {}
     for name, arr in samples.items():
+        # (chain, draw, ...) -> (chain, draw, elements); a scalar site has one element
         x = np.asarray(arr)
-        if x.ndim > 2:
-            # (chain, draw, ...) — one row per site, averaged over trailing dims
-            x = x.reshape(x.shape[0], x.shape[1], -1)
-            out[name] = (
-                float(np.mean(split_gelman_rubin(x))),
-                float(np.mean(effective_sample_size(x))),
-            )
-        else:
-            out[name] = (float(split_gelman_rubin(x)), float(effective_sample_size(x)))
+        x = x.reshape(x.shape[0], x.shape[1], -1)
+        rhat = np.asarray(split_gelman_rubin(x), dtype=float)
+        ess = np.asarray(effective_sample_size(x), dtype=float)
+        out[name] = (float(np.mean(rhat)), float(np.mean(ess)), float(rhat.max()), float(ess.min()))
     return out
 
 
 def _progress_row(
     samples: Mapping[str, np.ndarray], diverging: np.ndarray | None
-) -> tuple[dict[str, Any], dict[str, tuple[float, float]]]:
+) -> tuple[dict[str, Any], dict[str, SiteDiagnostics]]:
     site_rows = _site_diagnostics(samples)
     row = {
         "samples": int(np.shape(next(iter(samples.values())))[1]),
         "rhat_max": max(v[0] for v in site_rows.values()),
         "ess_bulk_min": min(v[1] for v in site_rows.values()),
+        "rhat_element_max": max(v[2] for v in site_rows.values()),
+        "ess_bulk_element_min": min(v[3] for v in site_rows.values()),
         "divergence_frac": None if diverging is None else float(np.mean(diverging)),
     }
     return row, site_rows
@@ -185,17 +199,24 @@ class MCMCRun:
     Built by :func:`sample_until`. ``mcmc`` is the caller's own object, so its
     kernel, adapted step size and last state are all reachable. :meth:`extend`
     samples further chunks from where the run stopped.
+
+    ``extra`` holds each requested numpyro extra field (``extra_fields`` of
+    :func:`sample_until`, for example ``"num_steps"`` or ``"accept_prob"``) as a
+    ``(chain, draw)`` array over every draw so far. ``diverging`` is always
+    recorded for HMC and NUTS.
     """
 
-    def __init__(self, mcmc: Any) -> None:
+    def __init__(self, mcmc: Any, *, extra_fields: Sequence[str] = ()) -> None:
         self.mcmc = mcmc
         self.sites: tuple[str, ...] = ()
         self.samples: dict[str, np.ndarray] = {}
         self.diverging: np.ndarray | None = None
+        self.extra: dict[str, np.ndarray] = {}
+        self.extra_fields = tuple(str(f) for f in extra_fields if f != "diverging")
         self.converged = False
         self.reason = "not started"
         self._rows: list[dict[str, Any]] = []
-        self._site_rows: dict[str, tuple[float, float]] = {}
+        self._site_rows: dict[str, SiteDiagnostics] = {}
         self._seconds = 0.0
         self._divergences = _records_divergences(mcmc)
 
@@ -208,6 +229,9 @@ class MCMCRun:
     def progress(self) -> Any:
         """One row per chunk: draws per chain, worst R-hat, smallest ESS, divergences, seconds.
 
+        ``rhat_max`` / ``ess_bulk_min`` take the worst site, each site averaged
+        over its elements; ``rhat_element_max`` / ``ess_bulk_element_min`` take
+        the worst single element. ``seconds`` is cumulative.
         Diagnostics cover every draw so far, not just that chunk. ``decision`` and
         ``converged`` are filled on each chunk that ended a call, else ``None``.
         """
@@ -216,10 +240,23 @@ class MCMCRun:
 
     @property
     def diagnostics(self) -> Any:
-        """Split R-hat and bulk ESS per site over every draw so far."""
+        """Split R-hat and bulk ESS per site over every draw so far.
+
+        ``rhat`` / ``ess_bulk`` average a site's elements; ``rhat_element_max`` /
+        ``ess_bulk_element_min`` are its worst element (equal for a scalar site).
+        """
         pd = _require_pandas()
         frame = pd.DataFrame(
-            [{"site": k, "rhat": v[0], "ess_bulk": v[1]} for k, v in self._site_rows.items()]
+            [
+                {
+                    "site": k,
+                    "rhat": v[0],
+                    "ess_bulk": v[1],
+                    "rhat_element_max": v[2],
+                    "ess_bulk_element_min": v[3],
+                }
+                for k, v in self._site_rows.items()
+            ]
         )
         return frame.set_index("site")
 
@@ -233,11 +270,14 @@ class MCMCRun:
                 "MCMCRun.idata requires arviz (calibration extra): pip install summer4[calibration]"
             ) from exc
         groups: dict[str, Any] = {"posterior": dict(self.samples)}
+        stats: dict[str, Any] = dict(self.extra)
         if self.diverging is not None:
-            groups["sample_stats"] = {"diverging": self.diverging}
+            stats["diverging"] = self.diverging
+        if stats:
+            groups["sample_stats"] = stats
         return az.from_dict(groups)
 
-    def candidates(self, bm: Any) -> Candidates:
+    def candidates(self, post: Posterior) -> Candidates:
         """Each chain's latest draw as :class:`Candidates`, for re-seeding another stage."""
         last = {name: np.asarray(self.samples[name])[:, -1] for name in self.sites}
         record = StageRecord(
@@ -245,7 +285,7 @@ class MCMCRun:
             settings={"chunks": self.chunks, "converged": self.converged, "reason": self.reason},
             seconds=self._seconds,
         )
-        base = Candidates.from_params(bm, last)
+        base = Candidates.from_params(post, last)
         return Candidates(sites=base.sites, z=base.z, params=base.params, history=(record,))
 
     def extend(self, stop: Stop, *, warn: bool = True) -> MCMCRun:
@@ -261,9 +301,9 @@ class MCMCRun:
                 return self
 
     def _sample(self, rng_key: Any, *, init_params: Any) -> None:
-        extra = ("diverging",) if self._divergences else ()
+        fields = (("diverging",) if self._divergences else ()) + self.extra_fields
         start = time.perf_counter()
-        self.mcmc.run(rng_key, init_params=init_params, extra_fields=extra)
+        self.mcmc.run(rng_key, init_params=init_params, extra_fields=fields)
         chunk = self.mcmc.get_samples(group_by_chain=True)
         if not self.sites:
             self.sites = tuple(chunk)
@@ -271,11 +311,16 @@ class MCMCRun:
             new = np.asarray(chunk[name])
             old = self.samples.get(name)
             self.samples[name] = new if old is None else np.concatenate([old, new], axis=1)
+        got = self.mcmc.get_extra_fields(group_by_chain=True) if fields else {}
         if self._divergences:
-            div = np.asarray(self.mcmc.get_extra_fields(group_by_chain=True)["diverging"])
+            div = np.asarray(got["diverging"])
             self.diverging = (
                 div if self.diverging is None else np.concatenate([self.diverging, div], axis=1)
             )
+        for name in self.extra_fields:
+            new = np.asarray(got[name])
+            old = self.extra.get(name)
+            self.extra[name] = new if old is None else np.concatenate([old, new], axis=1)
         self._seconds += time.perf_counter() - start
         row, self._site_rows = _progress_row(
             {k: self.samples[k] for k in self.sites}, self.diverging
@@ -307,6 +352,7 @@ def sample_until(
     init_params: Mapping[str, Any] | None = None,
     seed: int = 0,
     warn: bool = True,
+    extra_fields: Sequence[str] = (),
 ) -> MCMCRun:
     """Run a numpyro ``MCMC`` in chunks until ``stop`` decides.
 
@@ -323,6 +369,11 @@ def sample_until(
     up (``mcmc.post_warmup_state`` is set, for example by :func:`warmup_until`),
     sampling continues from that state with no further warmup, and
     ``init_params`` must be ``None``.
+
+    ``extra_fields`` names numpyro per-draw statistics to keep in
+    :attr:`MCMCRun.extra`, for example ``("num_steps", "accept_prob",
+    "adapt_state.step_size")``; ``num_steps`` is the number of gradient
+    evaluations of each draw.
     """
     from jax import random
 
@@ -333,7 +384,7 @@ def sample_until(
             "continue from mcmc.post_warmup_state. Pass init_params to the warmup instead."
         )
     _check_ensemble_init(mcmc, init_params)
-    run = MCMCRun(mcmc)
+    run = MCMCRun(mcmc, extra_fields=extra_fields)
     run._sample(random.PRNGKey(int(seed)), init_params=init_params)
     if run._decide(stop, warn=warn):
         return run
@@ -341,7 +392,7 @@ def sample_until(
 
 
 def run_mcmc(
-    bm: Any,
+    post: Posterior,
     init: Candidates | None = None,
     *,
     make_kernel: Callable[[], Any] | None = None,
@@ -360,7 +411,7 @@ def run_mcmc(
 
         def make_mcmc(n):
             return MCMC(
-                make_kernel() if make_kernel else NUTS(bm.numpyro_model()),
+                make_kernel() if make_kernel else NUTS(post.numpyro_model()),
                 num_warmup=n, num_samples=chunk_samples,
                 num_chains=num_chains, chain_method=chain_method, progress_bar=progress_bar,
             )
@@ -378,7 +429,7 @@ def run_mcmc(
 
     Write those lines yourself to use another kernel's options, inspect the
     ``MCMC`` object, or retry with a new kernel (for example
-    ``NUTS(bm.numpyro_model(), target_accept_prob=0.95)`` after a
+    ``NUTS(post.numpyro_model(), target_accept_prob=0.95)`` after a
     ``"divergences"`` stop).
     """
     _require_numpyro()
@@ -386,7 +437,7 @@ def run_mcmc(
 
     def make_mcmc(n: int) -> Any:
         return MCMC(
-            make_kernel() if make_kernel is not None else NUTS(bm.numpyro_model()),
+            make_kernel() if make_kernel is not None else NUTS(post.numpyro_model()),
             num_warmup=int(n),
             num_samples=int(chunk_samples),
             num_chains=int(num_chains),
@@ -418,6 +469,7 @@ def run_mcmc(
 __all__ = [
     "Decision",
     "MCMCRun",
+    "SiteDiagnostics",
     "Stop",
     "StopRule",
     "replay",

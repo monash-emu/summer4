@@ -194,8 +194,8 @@ Each step that touches `src/` also has its worker write a short step plan,
 | Step | 28 |
 | Status | next |
 | Branch | `feat/calib-outputs` |
-| Cut from | `main` once PRs #55–#59 have merged; until then `fix/rate-children-fold` |
-| Last landed | `fix/rate-children-fold` (PR #59; Phase L PRs #55–#59 are stacked and awaiting the user gate) |
+| Cut from | `main` |
+| Last landed | `fix/likelihood-scale-expr` (PR #55, carrying Phase L PRs #56–#59 and #62; notebook 26 signed off 2026-10-29) |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -211,7 +211,13 @@ tb-ports rows. **Phase K** (step 29 onward) works through the composability
 survey's packages ({doc}`../evaluation/composability`); its rows close `CX`
 findings and name `CP` packages. Step 29 (`CP1`) was inserted on 2026-09-28,
 after step 27, and lands before step 28; step 30 (`CP2`) was inserted on
-2026-09-28 after step 29, also before step 28.
+2026-09-28 after step 29, also before step 28. Step 46 (`CP3`, step NH2 of
+`plans/tb-nh-joint-calibration.plan.md`) was inserted on 2026-10-19, cut from
+`main` beside step 31: it lets the workflow stages run on any numpyro model, for
+the joint TB natural-history calibration in `monash-emu/tb-nh-joint-calibration`. Step 47
+(`CP7`) was inserted on 2026-10-20, cut from `main` after step 46: a NUTS tuning stage
+that picks a mass matrix, tree depth, target acceptance and warm-up length for any
+`Posterior` from short pilot runs.
 
 **Phases L and M** (steps 31–45) are the staged unification of summer4's lazy
 idioms (`plans/unified-lazy-idiom.plan.md`): one way to write rates, derived
@@ -228,13 +234,18 @@ orchestrates and checks.
 The order is fixed as:
 
 ```text
-14 → 15 → 24 → 25 → 26 → 27 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 28 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 16 → 17 → 18 → 19 → 45
+14 → 15 → 24 → 25 → 26 → 27 → 29 → 30 → 46 → 47 → 31 → 32 → 33 → 34 → 35 → 28 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 16 → 17 → 18 → 19 → 45
 ```
 
 Phase J comes **directly after step 15** and before Track G resumes at step 16.
 Steps 24–27 would technically run on step 14 alone, but they are not started
 before step 15 lands. Each handoff below names its successor explicitly;
 `tests/test_roadmap.py` checks that they agree with this line.
+Step 46 is independent of Phases L and M and does not move *Current position*;
+the line places it where it was cut. If Phase L steps merge first, whoever
+merges step 46 moves it in this line to where it actually landed and fixes the
+two handoffs either side.
+Step 47 is placed the same way, after step 46.
 
 <!-- roadmap:steps -->
 | Step | Phase | WP | Branch | Plan | Section | Status | Closes |
@@ -284,6 +295,8 @@ before step 15 lands. Each handoff below names its successor explicitly;
 | 43 | M | CP6 | `feat/typed-stages` | `plans/unified-lazy-idiom.plan.md` | Step 43 | planned | CX34 |
 | 44 | M | CP6 | `docs/unified-lazy-idiom` | `plans/unified-lazy-idiom.plan.md` | Step 44 | planned | — |
 | 45 | M | — | `chore/remove-deprecated-doors` | `plans/unified-lazy-idiom.plan.md` | Step 45 | blocked | — |
+| 46 | K | CP3 | `feat/calib-posterior-protocol` | `plans/tb-nh-joint-calibration.plan.md` | §4, §5 NH2 | done | CX21 CX22 CX35 |
+| 47 | K | CP7 | `feat/nuts-tuning` | `plans/nuts-tuning.plan.md` | all | done | CX36 CX37 CX38 |
 <!-- /roadmap:steps -->
 
 `Closes` lists row IDs of {doc}`../evaluation/tb-ports` (and, where a step moves
@@ -2021,10 +2034,19 @@ notebook composes every stage, plus two shorter compositions. It lands on
   survey.
 - Your gate notebook is **`25-calibration-workflow.ipynb`** (23 went to step
   29, 24 to step 30; 26 is Phase L's, 27 is reserved for Phase M).
-- **Phase L is finished.** PRs #55–#59 (steps 31–35) are stacked and wait for
-  the user's notebook-26 sign-off. If they have not merged when you start, cut
-  `feat/calib-outputs` from `fix/rate-children-fold`, not `main`, so you have
-  the spellings below. Retarget onto `main` once they merge.
+- **Phase L is on `main`.** The user signed off notebook 26 on 2026-10-29, and
+  PRs #56–#59 were merged down the stack into #55, which merged into `main`.
+  **This step is already implemented on PR #48** (`feat/calib-outputs`, handoff
+  commit 550329c, 2026-09-29), on a base older than Phase L and steps 46–47.
+  Do not start over: merge `main` into `feat/calib-outputs`, retarget #48 onto
+  `main`, resolve conflicts (keep both sides' ledger rows, then
+  `pixi run coverage-write` / `composability-write`), adapt anything Phase L
+  changed, rerun the exit checks, and stop for the notebook-25 user gate.
+- **Steps 46 and 47 also landed before you** (PRs #60, #61): workflow stages
+  take any `Posterior` (`NumpyroPosterior`), and notebooks 28 and 29 are taken.
+- **Workers are Claude subagents now, not Cursor** (PR #62): haiku for clearly
+  defined steps, sonnet for anything else. See
+  [Running a step with tiered workers](#running-a-step-with-tiered-workers).
 - **Phase L worker tally:**
 
   | Step | Final tier | Attempts | Escalated because |
@@ -2192,6 +2214,9 @@ objects (`.idata`, `.best_params`, `.candidates`).
 
 (Re-sequenced 2026-10-14: step 31 `next`. Phase L, steps 31–35, was inserted
 ahead of step 28, which now follows step 35.)
+
+(Re-sequenced 2026-10-19: step 46 `next` beside step 31. Step 46 was cut from
+`main` while step 31 was current and does not move *Current position*.)
 
 ---
 
@@ -3350,6 +3375,204 @@ text-only "before" cells.
 
 Set step 45 `done`. The lazy-idiom unification is complete; record the final
 tally of worker tiers across steps 31–45.
+
+---
+
+## Step 46 — `feat/calib-posterior-protocol`
+
+**Landed:** feat/calib-posterior-protocol, PR #60, 2026-10-19.
+
+**Worker:** Cursor composer-2.5 (substituted for sonnet: Cursor's Claude models were over their usage limit until 2026-10-26; the user chose a Cursor built-in model); checker opus; attempts 1 implementation plus 5 follow-ups in the same chat after two opus checks (first FAIL, second PASS) (composer-2.5); receipts 20261019-114102, 20261019-114109, 20261019-114220, 20261019-114245, 20261019-114314, 20261019-120013, 20261019-121511, 20261019-122403, 20261019-123142, 20261019-130405, 20261019-131541.
+
+**Pin:** tbcore NH4 and tb-nh-joint-calibration NH5 pin this PR's merge commit on `main`. Deviations from plan §4 are in `plans/calib-posterior-protocol.plan.md`.
+
+### Summary
+
+The calibration workflow stages (`wf.lhs`, `wf.prior_draws`, `wf.evaluate`,
+`Candidates`, `wf.optimize`, `wf.run_mcmc` and `MCMCRun.candidates`) accept any
+`Posterior`, not only a `BayesianModel`. `NumpyroPosterior` wraps a hand-written
+numpyro model (hierarchical latents, two likelihoods, shared sites);
+`BayesianModel.log_likelihood` lets such a model score a compiled model's
+targets; `NumpyroPrior` wraps a bare numpyro distribution; `init_point` and
+`postprocess_fn` are public. It is step NH2 of the joint TB natural-history
+calibration, lands on `feat/calib-posterior-protocol`, closes `CX21`, `CX22`
+and `CX35`, and ships `28-calibration-custom-posterior.ipynb`.
+
+### What the previous worker left you
+
+- **This step was inserted on 2026-10-19** for
+  `monash-emu/tb-nh-joint-calibration` (step NH2 of its plan, copied here as
+  `plans/tb-nh-joint-calibration.plan.md`; its runbook is that repo's
+  `docs/roadmap.md`). tbcore's NH4 and that repo's NH5 pin the commit this
+  step lands.
+- It runs beside Phase L and does not move *Current position*.
+- Notebooks 25–27 are reserved by steps 28, 31 and 44, so the gate notebook is
+  `28-calibration-custom-posterior.ipynb`.
+
+### Worker
+
+Design spike: **opus** (the orchestrator), committed as
+`plans/calib-posterior-protocol.plan.md` before delegating. Implementer:
+**sonnet**, delegated to Cursor (`--model claude-sonnet-5-5-high`). Checker:
+**opus**. Escalate per
+[Running a step with tiered workers](#running-a-step-with-tiered-workers).
+
+### Files
+
+`src/summer4/epi/calibration/{__init__.py,model.py,priors.py,posterior.py}`,
+`src/summer4/epi/calibration/workflow/*.py`, `tests/test_calib_posterior.py`
+(new), `tests/test_epi_calibration.py`,
+`examples/notebooks/28-calibration-custom-posterior.ipynb` (new),
+`docs/evaluation/composability.md`, `plans/calib-posterior-protocol.plan.md`
+(new step plan).
+
+### Read first
+
+1. `AGENTS.md` (§ *Composability is a design goal*)
+2. `plans/tb-nh-joint-calibration.plan.md` §4 and §5 *NH2*
+3. `plans/calib-posterior-protocol.plan.md` (the design spike; it wins over §4
+   where they differ)
+4. {doc}`../evaluation/composability`: rows `CX20`–`CX22`, `CX35`, package `CP3`
+5. `src/summer4/epi/calibration/model.py`, `priors.py`, `workflow/*.py`
+
+### Do
+
+Follow the design spike. Add `CX35` to the composability survey (package
+`CP3`) in this branch's first commit. Replace the untyped `bm` parameter of
+every workflow stage with `post: Posterior` wherever only the protocol's
+members are read; `posterior_runs` keeps `BayesianModel`. Write the §4
+equivalence test. Ship the gate notebook as an acceptance page: an SIR whose
+main data leave a ridge between infection and recovery rates, resolved by
+partially pooled "historical outbreaks" that share the recovery rate.
+
+Set `CX21`, `CX22` and `CX35` to `done` in the same commit as the code, then
+run `pixi run composability-write`.
+
+Cut from: `main`. Merges into: `main`.
+
+### Sanity check
+
+The checker verifies these items, plus the checklist every step gets (see
+[Running a step with tiered workers](#running-a-step-with-tiered-workers)):
+
+- The equivalence test passes: `NumpyroPosterior(bm.numpyro_model())` and `bm`
+  agree on `log_density`, `potential_fn`, `constrain` and `unconstrain` at
+  random points to 1e-10, and give the same `wf.lhs` and `wf.optimize` results
+  for the same seed.
+- `mypy --strict` on `src/summer4` is clean.
+- No workflow function annotates `bm: BayesianModel` (or an untyped `bm`)
+  unless it reads `compiled`, `outputs` or `targets`.
+- `NumpyroPosterior` is tested on a model with a `plate` and a non-centred
+  latent, including `wf.lhs` falling back to prior predictive draws for the
+  plate site.
+
+### Exit checks
+
+The [standard checks](#exit-checks-every-step), plus `pixi run composability`
+and `pixi run -e docs docs-strict`.
+**User gate:** `28-calibration-custom-posterior.ipynb`.
+
+### Handoff
+
+Set step 46 `done`. Leave *Current position* on the Phase L step that is
+current (on `main` when this step was cut: step 31 `next`). Step 47 was
+inserted after this step on 2026-10-20 and, like it, leaves step 31 current (in the landing
+order only: step 47 `next`). Record the commit
+tbcore and `tb-nh-joint-calibration` pin in the PR body and in that repo's NH2
+handoff, not here.
+
+---
+
+## Step 47 — `feat/nuts-tuning`
+
+**Landed:** feat/nuts-tuning, PR #61, 2026-10-20.
+
+### Summary
+
+A domain-neutral workflow stage that picks NUTS hyperparameters for any
+`Posterior` from short pilot runs seeded by `Candidates.init_params`: mass
+matrix (diagonal, dense from identity, dense or diagonal primed with a Laplace
+metric, Laplace fixed), `max_tree_depth`, `target_accept_prob`, initial step
+size and warm-up length (`warmup_until`'s doubling rounds). Each pilot is
+scored by effective draws per gradient evaluation and per wall second, with
+warm-up cost reported separately, and ranked by the cost of reaching a stated
+target ESS. It ships `wf.laplace_metric`, `wf.time_gradient`, `wf.NutsSetting`,
+`wf.pilot`, `wf.NutsTuning` and `wf.tune_nuts` on `feat/nuts-tuning`, closes
+`CX36`–`CX38` (`sample_until(extra_fields=)`, worst-element R-hat and ESS,
+`warmup_until(inverse_mass_matrix=, carry_metric=, on_round=)`) and ships
+`29-calibration-nuts-tuning.ipynb`.
+
+### What the previous worker left you
+
+- **This step was inserted on 2026-10-20** at the request of the TB
+  natural-history joint calibration (tbcore NH4): there, dense warm-up from an
+  identity metric took 54 minutes against 5 for diagonal, and then sampled
+  twice as fast. The stage makes that trade-off measurable for any model.
+- It runs beside Phase L and does not move *Current position*.
+- Notebooks 25–27 are reserved by steps 28, 31 and 44 and 28 is taken, so the
+  gate notebook is `29-calibration-nuts-tuning.ipynb`.
+
+### Worker
+
+Design spike and implementation: **opus** (one Claude Code session, at the
+user's request from the NH4 session), committed as `plans/nuts-tuning.plan.md`
+before the code.
+
+**Done (2026-10-20):** deviations from the plan are in the plan's own
+*Deviations found while building* table: ranking defaults to gradient cost,
+pilots use `wf.PILOT_WARMUP_RULE`, a `warmup_steps_mean` column was added, and
+each sampling chunk still recompiles numpyro's loop
+(`futureplans/mcmc-chunk-recompile.md`), so `ess_per_second` understates a
+long run for a cheap model. Two notes were written:
+`futureplans/nuts-metric-from-draws.md` (warm up from a previous run's draws)
+and `futureplans/candidates-to-frame-plate-sites.md` (`Candidates.to_frame`
+fails on plate sites).
+
+### Files
+
+`src/summer4/epi/calibration/workflow/{__init__.py,mcmc.py,warmup.py,tune.py}`,
+`tests/test_calib_workflow_mcmc.py`, `tests/test_calib_workflow_tune.py` (new),
+`tests/gate_nuts_tuning.py` (new),
+`examples/notebooks/29-calibration-nuts-tuning.ipynb` (new),
+`docs/evaluation/composability.md`, `plans/nuts-tuning.plan.md` (new),
+`futureplans/nuts-metric-from-draws.md` and
+`futureplans/candidates-to-frame-plate-sites.md` (new).
+
+### Read first
+
+1. `AGENTS.md` (§ *Composability is a design goal*)
+2. `plans/nuts-tuning.plan.md`
+3. {doc}`../evaluation/composability`: rows `CX25`, `CX36`–`CX38`, package `CP7`
+4. `src/summer4/epi/calibration/workflow/mcmc.py`, `warmup.py`
+
+### Do
+
+Follow the plan. Close the three gaps first (each with tests), then the tuning
+module. Keep `StopRule`'s default (mean over elements) so existing runs stop
+where they did. Set `CX36`–`CX38` to `done` in the same commit as the code,
+then run `pixi run composability-write`.
+
+Cut from: `main`. Merges into: `main`.
+
+### Sanity check
+
+- `extra_fields` survive `extend`; `StopRule(per_element=True)` refuses a
+  run whose plate site has one unconverged element.
+- `laplace_metric` recovers a known Gaussian covariance in `ravel_pytree`
+  order, for plate and scalar sites, and numpyro accepts it for dense and
+  diagonal kernels.
+- `tune_nuts` equals its documented expansion.
+- `mypy --strict` on `src/summer4` is clean.
+
+### Exit checks
+
+The [standard checks](#exit-checks-every-step), plus `pixi run composability`.
+**User gate:** `29-calibration-nuts-tuning.ipynb`.
+
+### Handoff
+
+Set step 47 `done`. Leave *Current position* on the Phase L step that is
+current (on `main` when this step was cut: step 31 `next`).
 
 ---
 

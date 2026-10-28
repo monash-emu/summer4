@@ -10,6 +10,8 @@ from typing import Any
 
 import numpy as np
 
+from summer4.epi.calibration.posterior import Posterior
+
 # Failed-solve sentinel from BayesianModel.numpyro_model; keep in sync.
 _OK_THRESHOLD = -1.0e29
 
@@ -188,9 +190,9 @@ class Candidates:
         return cls(sites=sites, z=z, params=params, log_density=ld, ok=ok, history=history)
 
     @classmethod
-    def from_params(cls, bm: Any, params: Mapping[str, Any]) -> Candidates:
+    def from_params(cls, post: Posterior, params: Mapping[str, Any]) -> Candidates:
         """Build unevaluated candidates from constrained site arrays (leading axis ``n``)."""
-        sites = tuple(bm.prior_names())
+        sites = tuple(post.prior_names())
         param_dict = {name: np.asarray(params[name]) for name in sites}
         n = int(np.asarray(param_dict[sites[0]]).shape[0])
         for name in sites:
@@ -199,13 +201,13 @@ class Candidates:
                 raise ValueError(
                     f"from_params length mismatch for {name!r}: {arr.shape[0]} vs {n}."
                 )
-        z = {k: np.asarray(v) for k, v in bm.unconstrain(param_dict).items()}
+        z = {k: np.asarray(v) for k, v in post.unconstrain(param_dict).items()}
         return cls(sites=sites, z=z, params=param_dict)
 
     @classmethod
-    def from_z(cls, bm: Any, z: Mapping[str, Any]) -> Candidates:
+    def from_z(cls, post: Posterior, z: Mapping[str, Any]) -> Candidates:
         """Build unevaluated candidates from unconstrained site arrays (leading axis ``n``)."""
-        sites = tuple(bm.prior_names())
+        sites = tuple(post.prior_names())
         z_dict = {name: np.asarray(z[name]) for name in sites}
         n = int(z_dict[sites[0]].shape[0])
         for name in sites:
@@ -213,13 +215,13 @@ class Candidates:
                 raise ValueError(
                     f"from_z length mismatch for {name!r}: {z_dict[name].shape[0]} vs {n}."
                 )
-        params = {k: np.asarray(v) for k, v in bm.constrain(z_dict).items()}
+        params = {k: np.asarray(v) for k, v in post.constrain(z_dict).items()}
         return cls(sites=sites, z=z_dict, params=params)
 
     @classmethod
     def from_idata(
         cls,
-        bm: Any,
+        post: Posterior,
         idata: Any,
         *,
         n: int | None = None,
@@ -228,7 +230,7 @@ class Candidates:
     ) -> Candidates:
         """Draw constrained posterior points from an ``arviz.InferenceData``."""
         posterior = idata.posterior
-        sites = tuple(bm.prior_names())
+        sites = tuple(post.prior_names())
         stacked: dict[str, np.ndarray] = {}
         for name in sites:
             if name not in posterior:
@@ -251,7 +253,7 @@ class Candidates:
             rng = np.random.default_rng(int(seed))
             idx = rng.choice(total, size=int(n), replace=False)
         params = {name: stacked[name][idx] for name in sites}
-        return cls.from_params(bm, params)
+        return cls.from_params(post, params)
 
 
 def ok_from_log_density(log_density: Any) -> Any:

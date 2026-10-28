@@ -374,7 +374,7 @@ def test_log_density_jittable_and_map_near_truth() -> None:
         y0=y0,
         run_kwargs=dict(t0=0.0, t1=80.0, dt=1.0, solver="euler"),
     )
-    _pot, _post, z = bm._ensure_potential()
+    z = bm.init_point()
     jitted = jax.jit(bm.log_density)
     np.testing.assert_allclose(float(jitted(z)), float(bm.log_density(z)), rtol=1e-5)
     mapped = bm.find_map(steps=80, seed=0).best_params
@@ -407,8 +407,8 @@ def test_solver_failure_penalises_log_density() -> None:
             atol=1e-6,
         ),
     )
-    z_h = healthy._ensure_potential()[2]
-    z_f = failed._ensure_potential()[2]
+    z_h = healthy.init_point()
+    z_f = failed.init_point()
     assert float(failed.log_density(z_f)) < float(healthy.log_density(z_h)) - 1e20
     assert not bool(failed._run(failed.merge_params({"infection": 0.35})).solver.ok)
 
