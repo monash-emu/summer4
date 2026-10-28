@@ -114,7 +114,7 @@ published as written.
 | 12 | Heterogeneous mixing introduction | `full` | None | `textbook/12-heterogeneous-mixing-intro.ipynb` |
 | 13 | Mixing and transmission types | `full` | None | `textbook/13-mixing-and-transmission-types.ipynb` |
 | 14 | Assortative mixing | `full` | None | `textbook/14-assortative-mixing.ipynb` |
-| 15 | Susceptibility and infectiousness matrices | `partial` | No FOI susceptibility surface symmetric to infectiousness | `textbook/15-susceptibility-infectiousness-matrices.ipynb` |
+| 15 | Susceptibility and infectiousness matrices | `full` | None | `textbook/15-susceptibility-infectiousness-matrices.ipynb` |
 | 16 | Thinking about contact surveys | `none` | Contact-survey data (WP9) | — |
 | 17 | Understanding empiric contact data | `none` | Contact-survey data | — |
 | 18 | Implementing empiric survey data | `none` | Contact-survey data | — |
@@ -233,7 +233,7 @@ package closes is recorded, by row ID, in {doc}`tb-ports`.
 | WP14 | Generalised force of infection | `plans/tb-ports-feature-completeness.plan.md` | **Applied.** `FOIKind.GENERALISED` with an exponent; selector-keyed infectiousness |
 | WP15 | Output algebra | `plans/tb-ports-feature-completeness.plan.md` | **Applied.** `Output` operators, windowed cumulative, multi-flow outputs, `OutputSet`, frames |
 | WP16 | Scale and solver safety | `plans/tb-ports-feature-completeness.plan.md` | **Applied.** TB-scale benchmark, `SolverInfo.ok`, span-derived `max_steps`, vmap-safe reciprocity |
-| WP17 | FOI susceptibility surface | `plans/wp17-foi-susceptibility.plan.md` | Settled there: `ForceOfInfection(susceptibility=...)`; raises textbook 15 to `full` |
+| WP17 | FOI susceptibility surface | `plans/wp17-foi-susceptibility.plan.md` | **Applied.** `ForceOfInfection(susceptibility=...)`; textbook 15 is `full` |
 | WP18 | Rate expression dispatch and deferred callables | `plans/rate-dispatch-and-defer.plan.md` | **Applied.** `__array_ufunc__` / `__array_function__` on the four wrapper types with canonical op names; a `Defer` node and `defer(fn)` curry for arbitrary user code in the rate slot |
 
 WP5 lands before WP6, and before WP3, because every other part of a model may be
