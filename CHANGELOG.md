@@ -9,6 +9,69 @@ Install from the matching git tag (see
 [Installation](docs/getting-started/installation.md)). Narrative release notes
 for the Sphinx site live under [docs/releases/](docs/releases/).
 
+## [0.2.0a6] — 2026-10-29
+
+Tag: [`v0.2.0a6`](https://github.com/monash-emu/summer4/releases/tag/v0.2.0a6)
+
+### Highlights
+
+- **Lazy-idiom bridges (Phase L, steps 31–35).** The spellings that work on
+  rates now work on likelihood scales and derived outputs: parameter
+  expressions as scales, NumPy ufuncs on output expressions, `defer()` over
+  outputs, `named()` for stable cache keys, and one walk over the rate tree.
+- **Composable solving and calibration.** Solver backends hold your own diffrax
+  objects; workflow stages take any `Posterior`; a NUTS tuning stage picks
+  sampler settings from short pilots.
+
+### Added
+
+- Likelihood scales accept parameter-only rate expressions such as
+  `np.exp(Param("log_k"))` (`fix/likelihood-scale-expr`, PR #55; `CX26`).
+- NumPy ufuncs and the named helpers on `outputs.ref(...)`, and
+  `Param * outputs.ref(...)` (`feat/output-ufuncs`, PR #56; `CX27`).
+- `defer(f)(outputs.ref(...), Param(...))` builds a post-solve derived output
+  (`feat/output-defer`, PR #57; `CX28`).
+- `named(fn, name)` / `Named`: digest keys on the name, not `id(fn)`, for every
+  callable hook (`feat/named-callables`, PR #58; `CX7`).
+- `rate_children`, `rate_stage` and `build_hoist_table` exported from
+  `summer4.flows`; custom nodes need only `__rate_children__` and
+  `__rate_bytes__` (`fix/rate-children-fold`, PR #59; `CX29`).
+- `summer4.solvers`: `Diffrax`, `Euler`, the `SolverBackend` protocol, public
+  `SolveSpec`, `CompiledModel.assemble_result`, `Result.final_state` /
+  `final_time` (`feat/solve-composable`, PR #44; `CX1`–`CX5`).
+- `wf.OptimizeRun` (resumable), public `wf.OptimizeBackend` /
+  `wf.OptimizeMethod`, `init_point`, `Candidates.from_z`
+  (`feat/calib-composable`, PR #45).
+- `Posterior` protocol and `NumpyroPosterior`; every workflow stage takes a
+  `Posterior`; `BayesianModel.log_likelihood` (`feat/calib-posterior-protocol`,
+  PR #60; `CX21`, `CX22`, `CX35`).
+- NUTS tuning: `wf.tune_nuts`, `wf.NutsTuning`, `wf.NutsSetting`, `wf.pilot`,
+  `wf.laplace_metric`, `wf.time_gradient`, `wf.metric_screen`,
+  `wf.trajectory_screen`, `wf.warmup_until(abort=)` (`feat/nuts-tuning`,
+  PR #61; `CX36`–`CX38`).
+- The composability survey, `docs/evaluation/composability.md`, checked by
+  `pixi run composability` (PR #43).
+
+### Changed
+
+- **Breaking:** `BayesianModel.sample` takes a numpyro `kernel` instead of
+  `kind=` and returns a `wf.MCMCRun`; `BayesianModel.find_map` returns a
+  `wf.OptimizeRun`; `OptimizeResult` is renamed `OptimizeRun` (PR #45).
+- `ForceOfInfection` declares its children and step stage, so its
+  parameter-only children hoist (PR #59).
+
+### Fixed
+
+- `SavePlan(ts=...)` is the save grid again (PR #49).
+- A `FlowRef` inside a `ForceOfInfection` is ordered before the FOI flow, and
+  capture metadata under `TableInterp`, `Lookup` and `Capture` is collected
+  (PR #59).
+
+### Known issues
+
+- Every `MCMC.run` call, and so every `wf.sample_until` chunk, still pays a
+  full XLA compile (`futureplans/mcmc-chunk-recompile.md`).
+
 ## [0.2.0a5] — 2026-09-28
 
 Tag: [`v0.2.0a5`](https://github.com/monash-emu/summer4/releases/tag/v0.2.0a5)
