@@ -36,6 +36,7 @@ from summer4.flows.rates import (
     InterpKind,
     Lookup,
     Multiply,
+    Named,
     Overwrite,
     Param,
     Reduce,
@@ -53,10 +54,12 @@ from summer4.flows.rates import (
     log,
     maximum,
     minimum,
+    named,
+    rate_children,
     sqrt,
     tanh,
 )
-from summer4.flows.stages import Prepared
+from summer4.flows.stages import Prepared, build_hoist_table, rate_stage
 from summer4.flows.types import EntryFlow, ExitFlow, TransitionFlow
 
 __all__ = [
@@ -81,6 +84,7 @@ __all__ = [
     "InterpKind",
     "Lookup",
     "Multiply",
+    "Named",
     "Overwrite",
     "Param",
     "Prepared",
@@ -99,6 +103,7 @@ __all__ = [
     "actualize",
     "as_adjust",
     "as_rate",
+    "build_hoist_table",
     "clip",
     "defer",
     "derived_refs",
@@ -110,7 +115,10 @@ __all__ = [
     "log",
     "maximum",
     "minimum",
+    "named",
     "numpy_euler",
+    "rate_children",
+    "rate_stage",
     "selector_properties",
     "selector_values",
     "sqrt",

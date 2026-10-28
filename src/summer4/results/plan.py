@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import numpy as np
 from numpy.typing import NDArray
 
+from summer4.flows.rates import _callable_key
 from summer4.properties import Property
 from summer4.selectors import Selector
 
@@ -164,7 +165,7 @@ def _quantity_bytes(what: Quantity) -> bytes:
         case GroupedOutput(name=name):
             return b"grouped" + name.encode()
         case SaveFn(fn=fn, reads=reads):
-            return b"fn" + str(id(fn)).encode() + repr(sorted(reads)).encode()
+            return b"fn" + _callable_key(fn).encode() + repr(sorted(reads)).encode()
         case _:
             raise TypeError(f"Unknown quantity {type(what).__name__}.")
 

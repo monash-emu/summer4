@@ -28,6 +28,7 @@ from summer4.flows.rates import (
     Time,
     Transform,
     UnaryOp,
+    rate_children,
 )
 
 PrepareFn = Callable[[Any], Any]
@@ -99,33 +100,12 @@ def rate_stage(expr: RateOps, *, params_are_static: bool) -> Stage:
         return "run" if params_are_static else "step"
     if isinstance(expr, (Time, FlowRef, Reduce, Capture)):
         return "step"
-    if isinstance(expr, BinOp):
-        left = rate_stage(expr.left, params_are_static=params_are_static)
-        right = rate_stage(expr.right, params_are_static=params_are_static)
-        return "step" if left == "step" or right == "step" else "run"
-    if isinstance(expr, UnaryOp):
-        return rate_stage(expr.arg, params_are_static=params_are_static)
-    if isinstance(expr, Interp):
-        parts = (
-            *expr.breakpoints,
-            *expr.values,
-            expr.arg,
-        )
-        if any(rate_stage(p, params_are_static=params_are_static) == "step" for p in parts):
+    if isinstance(expr, (BinOp, UnaryOp, Interp, GaussianPulse, TableInterp, Lookup)):
+        # A TableInterp's knot arrays are constants, so its stage is its argument's.
+        children = rate_children(expr)
+        if any(rate_stage(c, params_are_static=params_are_static) == "step" for c in children):
             return "step"
         return "run"
-    if isinstance(expr, GaussianPulse):
-        parts = (expr.arg, expr.centre, expr.width, expr.height)
-        if any(rate_stage(p, params_are_static=params_are_static) == "step" for p in parts):
-            return "step"
-        return "run"
-    if isinstance(expr, TableInterp):
-        # Knot arrays are constants. The stage is whatever the argument reads.
-        return rate_stage(expr.arg, params_are_static=params_are_static)
-    if isinstance(expr, Lookup):
-        table = rate_stage(expr.table, params_are_static=params_are_static)
-        index = rate_stage(expr.index, params_are_static=params_are_static)
-        return "step" if table == "step" or index == "step" else "run"
     stage_fn = getattr(expr, "__rate_stage__", None)
     if callable(stage_fn):
         result = _invoke_rate_stage(stage_fn, params_are_static=params_are_static)
@@ -203,28 +183,14 @@ def build_hoist_table(roots: Sequence[RateOps], *, params_are_static: bool) -> H
                 for v in node.values:
                     walk(v)
             return
-        if isinstance(node, BinOp):
-            walk(node.left)
-            walk(node.right)
-            return
-        if isinstance(node, GaussianPulse):
-            walk(node.arg)
-            walk(node.centre)
-            walk(node.width)
-            walk(node.height)
-            return
-        if isinstance(node, UnaryOp):
-            walk(node.arg)
-            return
         if isinstance(node, Lookup):
             walk(node.index)
             return
-        children_fn = getattr(node, "__rate_children__", None)
-        if callable(children_fn):
-            for child in children_fn():
-                walk(child)
+        if isinstance(node, Capture):
+            # Do not descend: a capture must evaluate where it sits.
             return
-        # Capture and unknown custom nodes: do not descend.
+        for child in rate_children(node):
+            walk(child)
 
     for root in roots:
         walk(root)
