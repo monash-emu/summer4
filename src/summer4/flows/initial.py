@@ -11,7 +11,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from summer4.flows.join import selector_properties
-from summer4.flows.rates import Const, RateOps, _callable_key, _rate_bytes, as_rate
+from summer4.flows.rates import Const, RateOps, _rate_bytes, as_rate
 from summer4.flows.stages import rate_stage
 from summer4.jax.propertydata import PropertyData
 from summer4.properties import Property
@@ -30,8 +30,8 @@ class _Remainder:
 
 REMAINDER: Final = _Remainder()
 
-BaseValue = float | RateOps | Callable[[Any], Any]
-WeightSpec = Mapping[str, float | RateOps | _Remainder] | RateOps | Callable[[Any], Any]
+BaseValue = float | RateOps
+WeightSpec = Mapping[str, float | RateOps | _Remainder] | RateOps
 
 
 @dataclass(frozen=True, slots=True)
@@ -284,9 +284,13 @@ class InitPlan:
         return PropertyData.wrap(self.pmap, y)
 
 
+_CALLABLE_MSG = (
+    "{where} was a callable; callables are no longer accepted here. Use a number, "
+    '``Param(...)``, or ``defer(f)(Param("a"), ...)`` instead.'
+)
+
+
 def _validate_base_value(value: BaseValue) -> BaseValue:
-    if callable(value) and not isinstance(value, RateOps):
-        return value
     if isinstance(value, (int, float, np.integer, np.floating)):
         return float(value)
     if isinstance(value, RateOps):
@@ -295,6 +299,8 @@ def _validate_base_value(value: BaseValue) -> BaseValue:
                 f"Base value rate expression must be run-stage, got step-stage {value!r}."
             )
         return value
+    if callable(value):
+        raise TypeError(_CALLABLE_MSG.format(where="base value"))
     raise TypeError(f"Unsupported base value type {type(value).__name__}.")
 
 
@@ -323,11 +329,6 @@ def _validate_weights(split: Split, prop: Property) -> tuple[tuple[str, ...] | N
         for trait, w in weights.items():
             if isinstance(w, _Remainder):
                 continue
-            if callable(w) and not isinstance(w, RateOps):
-                raise TypeError(
-                    f"Split on {prop.name!r}: callable weights must be the whole weights= "
-                    f"argument, not a per-trait mapping value."
-                )
             concrete_f = _concrete_float(w)
             if concrete_f is not None:
                 if concrete_f < 0:
@@ -368,7 +369,7 @@ def _validate_weights(split: Split, prop: Property) -> tuple[tuple[str, ...] | N
             raise ValueError(f"Split on {prop.name!r}: weights RateOps must be run-stage.")
         return None, weights
     if callable(weights):
-        return None, weights
+        raise TypeError(_CALLABLE_MSG.format(where="Split.weights"))
     raise TypeError(f"Unsupported Split.weights type {type(weights).__name__}.")
 
 
@@ -381,8 +382,6 @@ def _concrete_float(w: object) -> float | None:
 
 
 def _base_digest(value: BaseValue) -> bytes:
-    if callable(value) and not isinstance(value, RateOps):
-        return b"fn" + _callable_key(value).encode()
     if isinstance(value, (int, float, np.integer, np.floating)):
         return b"f" + np.float64(value).tobytes()
     assert isinstance(value, RateOps)
@@ -402,9 +401,8 @@ def _weight_digest(weights: WeightSpec, mapping_keys: tuple[str, ...] | None) ->
             else:
                 parts.append(b"f" + np.float64(float(w)).tobytes())
         return b"".join(parts)
-    if isinstance(weights, RateOps):
-        return b"r" + _rate_bytes(weights)
-    return b"fn" + _callable_key(weights).encode()
+    assert isinstance(weights, RateOps)
+    return b"r" + _rate_bytes(weights)
 
 
 def _eval_base_value(
@@ -416,8 +414,6 @@ def _eval_base_value(
 ) -> Any:
     import jax.numpy as jnp
 
-    if callable(value) and not isinstance(value, RateOps):
-        return jnp.asarray(value(params))
     if isinstance(value, (int, float, np.integer, np.floating)):
         return jnp.asarray(float(value))
     return jnp.asarray(
@@ -476,19 +472,16 @@ def _eval_weight_table(
             stacked = stacked.at[..., rem_i].set(1.0 - others)
         return stacked / stacked.sum(axis=-1, keepdims=True)
 
-    if isinstance(weights, RateOps):
-        raw = eval_rate(
-            weights,
-            derived=params,
-            flow_values={},
-            flow_meta={},
-            pmap=pmap,
-            t=None,
-            y_arr=None,
-            captures={},
-        )
-    else:
-        raw = weights(params)
+    raw = eval_rate(
+        weights,
+        derived=params,
+        flow_values={},
+        flow_meta={},
+        pmap=pmap,
+        t=None,
+        y_arr=None,
+        captures={},
+    )
     table = jnp.asarray(raw)
     expected_rank = len(sp.by_K) + 1
     if table.ndim != expected_rank:

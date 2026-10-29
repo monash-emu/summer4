@@ -93,7 +93,7 @@ def test_two_property_alignment_on_ragged_map() -> None:
         _align_grouped_rate(grouped, s_idx, pmap)
 
 
-def test_flow_ref_sum_over_still_works() -> None:
+def test_flow_ref_sum_by_still_works() -> None:
     """Regression: FlowRef.sum_by remains the producer of GroupedRate."""
     state = Property("state", ("S", "I"))
     loc = Property("location", ("north", "south"))

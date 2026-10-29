@@ -17,7 +17,6 @@ from typing import Any, Literal
 
 import numpy as np
 
-from summer4._deprecation import warn_cumulative, warn_renamed
 from summer4.flows.edges import edge_labels, rewrite_edge_selector, sum_by_edge
 from summer4.jax.propertydata import PropertyData
 from summer4.properties import Property, Trait
@@ -520,21 +519,6 @@ class Output:
             dims = self.dims[:-1] + ("group",)
         return self._with(values=reduced, dims=dims)
 
-    def sum_over(
-        self,
-        prop: Property | str,
-        side: Literal["source", "dest"] | None = None,
-    ) -> Output:
-        """Deprecated spelling of ``sum_by(prop, side=side)``."""
-        warn_renamed("Output.sum_over(prop)", "Output.sum_by(prop)")
-        return self.sum_by(prop, side=side)
-
-    def total(self) -> Output:
-        """Deprecated spelling of :meth:`sum_by` with no properties."""
-        warn_renamed("Output.total()", "Output.sum_by()")
-        data = _xp().sum(_as_array(self.values), axis=-1)
-        return self._with(values=data, dims=self.dims[:-1])
-
     def partition(self, prop: Property | str) -> dict[Trait, Output]:
         """Split into one Output per trait of ``prop`` (static keys; values traced)."""
         pmap = self._pmap()
@@ -606,7 +590,7 @@ class Output:
             raise ValueError(
                 f"at_times() needs a 'time' axis, but this output has dims {self.dims}: "
                 f"it was reduced over time (anchor {anchor}). Combine it with a series "
-                "first (series / total), read a running total with cumulative(), or give "
+                "first (series / total), read a running total with cumsum(), or give "
                 "an array times with with_values()."
             )
         xp = _xp()
@@ -788,15 +772,6 @@ class Output:
         window = running if i0 == 0 else running - running[i0]
         out = xp.moveaxis(_zero_outside(window, i0, i1), 0, t_ax)
         return self._with(values=_wrap_like(self.values, out))
-
-    def cumulative(self, *, start: When | None = None, end: When | None = None) -> Output:
-        """Deprecated: a plain running sum; use :meth:`cumsum` or :meth:`cumulative_integral`.
-
-        Returns exactly what :meth:`cumsum` returns. On a rate that is not a
-        cumulative count, which is why the name is going.
-        """
-        warn_cumulative("Output.cumulative()", "Output.")
-        return self.cumsum(start=start, end=end)
 
     def midpoint(self) -> Output:
         """Summer2's default flow-output convention (``raw_results=False``).

@@ -329,6 +329,8 @@ def _sum_over_property_name(expr: RateOps) -> str | None:
     match expr:
         case FlowRef(reduce=("sum_by", name)):
             return name
+        case Reduce(group_by=None):
+            return None
         case Reduce(group_by=group_by):
             return group_by.name if isinstance(group_by, Property) else group_by
         case Capture(inner=inner):

@@ -77,7 +77,7 @@ def _target_output(result: Result, key: str) -> Output:
     if "time" not in output.dims:
         raise ValueError(
             f"Target {key!r} names a time-free output (dims {output.dims}), reduced over "
-            "time. Score a series instead: a whole-period total is cumulative() read at "
+            "time. Score a series instead: a whole-period total is cumsum() read at "
             "the last time, with Target(times=[t_end])."
         )
     return output

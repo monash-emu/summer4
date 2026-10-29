@@ -42,13 +42,6 @@ class _OutputExprChain:
     def sum_by(self, *props: Property | str, side: Side | None = None) -> OutputExpr:
         return self._as_output_expr().sum_by(*props, side=side)
 
-    def total(self) -> OutputExpr:
-        """Deprecated spelling of :meth:`sum_by` with no properties."""
-        from summer4._deprecation import warn_renamed
-
-        warn_renamed("total()", "sum_by()")
-        return self._as_output_expr().sum_by()
-
     def rolling(
         self,
         window: int,
@@ -68,13 +61,6 @@ class _OutputExprChain:
         self, *, start: Any = None, end: Any = None, method: Literal["trapezoid"] = "trapezoid"
     ) -> OutputExpr:
         return self._as_output_expr().cumulative_integral(start=start, end=end, method=method)
-
-    def cumulative(self, *, start: Any = None, end: Any = None) -> OutputExpr:
-        """Deprecated: a plain running sum; use :meth:`cumsum` or :meth:`cumulative_integral`."""
-        from summer4._deprecation import warn_cumulative
-
-        warn_cumulative("cumulative()")
-        return self._as_output_expr().cumsum(start=start, end=end)
 
     def midpoint(self) -> OutputExpr:
         return self._as_output_expr().midpoint()
@@ -108,7 +94,6 @@ class Compartments(_OutputExprChain):
     """Save compartment densities (optionally filtered / reduced at save time).
 
     ``group_by=age`` saves one value per age instead of every compartment.
-    ``sum_over=`` is the deprecated spelling of ``group_by=``.
     """
 
     where: Selector | None = None
@@ -118,22 +103,9 @@ class Compartments(_OutputExprChain):
         self,
         where: Selector | None = None,
         group_by: Property | None = None,
-        *,
-        sum_over: Property | None = None,
     ) -> None:
         object.__setattr__(self, "where", where)
-        object.__setattr__(self, "group_by", _renamed_group_by("Compartments", group_by, sum_over))
-
-
-def _renamed_group_by(owner: str, group_by: Any, sum_over: Any) -> Any:
-    if sum_over is None:
-        return group_by
-    if group_by is not None:
-        raise TypeError(f"{owner}: pass group_by= only (sum_over= is its deprecated spelling).")
-    from summer4._deprecation import warn_renamed
-
-    warn_renamed(f"{owner}(sum_over=...)", f"{owner}(group_by=...)", stacklevel=4)
-    return sum_over
+        object.__setattr__(self, "group_by", group_by)
 
 
 def flow_names(flow: str | tuple[str, ...]) -> tuple[str, ...]:
@@ -156,7 +128,7 @@ class FlowMass(_OutputExprChain):
     evaluation raises and names the flows.
 
     ``group_by=(age, "source")`` saves one value per source age instead of every
-    edge; ``sum_over=`` is its deprecated spelling. A 200k-edge flow over 3650
+    edge. A 200k-edge flow over 3650
     days is ~5.8 GB dense and ~470 kB grouped by age. Post-hoc edge queries use
     ``Output.sum_by(..., side=)``, ``integrate_intervals``, and ``integrate``.
     """
@@ -170,19 +142,21 @@ class FlowMass(_OutputExprChain):
         flow: str | tuple[str, ...],
         where: Selector | NDArray[np.bool_] | None = None,
         group_by: tuple[Property, Side] | None = None,
-        *,
-        sum_over: tuple[Property, Side] | None = None,
     ) -> None:
         names = flow_names(flow)
         stored: str | tuple[str, ...] = names[0] if len(names) == 1 else names
         object.__setattr__(self, "flow", stored)
         object.__setattr__(self, "where", where)
-        object.__setattr__(self, "group_by", _renamed_group_by("FlowMass", group_by, sum_over))
+        object.__setattr__(self, "group_by", group_by)
 
 
 @dataclass(frozen=True, slots=True)
 class ComputedValue(_OutputExprChain):
-    """Capture a path from the derived-param struct produced by ``derived_fn``."""
+    """Capture a path from the derived-param struct produced by ``derived_fn``.
+
+    Legacy: removed in roadmap step 40, replaced by assigning an expression to an
+    ``OutputSet`` entry. Not used in the documentation.
+    """
 
     path: tuple[str, ...]
 
@@ -205,6 +179,9 @@ class SaveFn(_OutputExprChain):
 
     ``fn`` hashes by identity, so a lambda defined inside a loop retraces every
     call (same trap as ``derived_fn`` / ``Transform.fn``).
+
+    Legacy: removed in roadmap step 40, replaced by assigning an expression to an
+    ``OutputSet`` entry. Not used in the documentation.
     """
 
     fn: Callable[[Any], Any]

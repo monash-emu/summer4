@@ -71,15 +71,15 @@ reach, and it is the denominator for every percentage on this site.
 | P1 | `Parameter` | parameters | `full` | `FieldRef via derived_refs` | Schema-checked, IDE-completable |
 | P2 | `Function` | parameters | `full` | `defer / Transform / callables in derived_fn` | `defer` is the rate-slot door; `Transform` only adjusts an existing rate |
 | P3 | `Time` | parameters | `full` | `Time()` rate node; `t` on `derived_fn` | |
-| P4 | `DerivedOutput (as a rate input)` | parameters | `full` | `FlowRef, .sum(), .sum_by()` | Topologically ordered, cycles detected |
+| P4 | `DerivedOutput (as a rate input)` | parameters | `full` | `FlowRef, .sum_by()` | Topologically ordered, cycles detected |
 | P5 | `Data` | parameters | `full` | `summer4.data.Data` | Dated series → `Interp` via `Epoch` |
 | P6 | `get_linear_interpolation_function` | parameters | `full` | `summer4.timevarying.linear` | Structural `Interp`; x and y knots may be `FieldRef`s; clamps outside range |
 | P7 | `get_sigmoidal_interpolation_function` | parameters | `full` | `summer4.timevarying.sigmoidal` | `sharpness` is summer2 curvature; breakpoints may be `FieldRef`s |
 | P8 | `get_piecewise_function` | parameters | `full` | `summer4.timevarying.step` / `piecewise` | Right-continuous; breakpoints may be `FieldRef`s |
 | P9 | `get_time_callable` | parameters | `partial` | `compile() -> vf(t, y, params)` | A time callable, but not summer2's graph wrapper |
-| D1 | `request_output_for_flow` | outputs | `full` | `FlowMass` / `Output` edge queries | `sum_over(..., side=)`, `integrate_intervals`, `integrate` |
+| D1 | `request_output_for_flow` | outputs | `full` | `FlowMass` / `Output` edge queries | `sum_by(..., side=)`, `integrate_intervals`, `integrate` |
 | D2 | `request_output_for_compartments` | outputs | `full` | `Compartments(where=)` / `Output.select` |  |
-| D3 | `request_aggregate_output` | outputs | `full` | `Output.sum_over` / `total` / `partition` |  |
+| D3 | `request_aggregate_output` | outputs | `full` | `Output.sum_by` / `partition` |  |
 | D4 | `request_cumulative_output` | outputs | `full` | `Output.cumulative_integral()` on a rate; `Output.cumsum()` on amounts |  |
 | D5 | `request_function_output` | outputs | `full` | `SaveFn`; `Output` operators and `OutputSet` |  |
 | D6 | `request_computed_value_output` | outputs | `full` | `ComputedValue` | Path validated against `derived_fn` return schema |
@@ -127,17 +127,17 @@ published as written.
 <!-- ledger:summer2docs -->
 | Page | Status | Blocker | Ported |
 | --- | --- | --- | --- |
-| `examples/01-basic-model` | `full` | None | `summer2/01-basic-model.ipynb` |
-| `examples/03-derived-outputs` | `full` | None | `summer2/03-derived-outputs.ipynb` |
-| `examples/04-flow-types` | `full` | None | `summer2/04-flow-types.ipynb` |
-| `examples/06-stratification-introduction` | `full` | None | `summer2/06-stratification-introduction.ipynb` |
-| `examples/07-age-stratification` | `full` | None | `summer2/07-age-stratification.ipynb` |
-| `examples/08-strain-stratification` | `full` | None (`per_trait` FOI; no `StrainStratification` class) | `summer2/08-strain-stratification.ipynb` |
-| `examples/09-mixing-matrices` | `full` | None | `summer2/09-mixing-matrices.ipynb` |
-| `examples/10-derived-outputs-stratified` | `full` | None | `summer2/10-derived-outputs-stratified.ipynb` |
-| `examples/11-flows-between-strata` | `full` | None | `summer2/11-flows-between-strata.ipynb` |
-| `detailed/time-varying-functions` | `full` | None | `summer2/time-varying-functions.ipynb` |
-| `detailed/InitialPopulationGraphobject` | `full` | None | `summer2/initial-population-graphobject.ipynb` |
+| `examples/01-basic-model` | `full` | None | `guide/01-basic-model.ipynb` |
+| `examples/03-derived-outputs` | `full` | None | `guide/04-derived-outputs.ipynb` |
+| `examples/04-flow-types` | `full` | None | `guide/02-flow-types.ipynb` |
+| `examples/06-stratification-introduction` | `full` | None | `guide/05-stratification.ipynb` |
+| `examples/07-age-stratification` | `full` | None | `guide/06-mixing.ipynb` |
+| `examples/08-strain-stratification` | `partial` | `per_trait` FOI works and is tested (`tests/test_epi_multistrain.py`) but no built page documents it (the port is archived unbuilt in `guide/_sources/`); no `StrainStratification` class | — |
+| `examples/09-mixing-matrices` | `full` | None | `guide/06-mixing.ipynb` |
+| `examples/10-derived-outputs-stratified` | `full` | None | `guide/05-stratification.ipynb` |
+| `examples/11-flows-between-strata` | `full` | None | `guide/05-stratification.ipynb` |
+| `detailed/time-varying-functions` | `full` | None | `guide/03-rates.ipynb` |
+| `detailed/InitialPopulationGraphobject` | `full` | None | `guide/07-initial-population.ipynb` |
 <!-- /ledger:summer2docs -->
 
 ## Calibration workflow ledger
@@ -197,13 +197,13 @@ contains every branch above it.
 
 Every phase in the table is now on `main`, as of the merge of PR #7
 (`eceba1e`) and PR #8 (`769f9f1`). The first pinnable tag was `v0.2.0a1`; the
-current tag is `v0.2.0a7` (whole-population force of infection, output targets, `sum_by`). The table is kept as
+current tag is `v0.3.0a1` (the clean surface: renamed spellings removed, scalar `Reduce`, docs rebuilt and published). The table is kept as
 history of the stack order.
 
 Every phase shipped its notebook: `examples/notebooks/01-taxonomy.ipynb`
 through `11-run-stages.ipynb`, plus textbook chapters 1–12 and 14–15 (13
-ported on this stack), the summer2 pages under `docs/summer2/`, and
-`docs/case-studies/age-stratified-seirs.ipynb`.
+ported on this stack), and the guide pages under `docs/guide/` (the earlier
+summer2 ports, user guide and case study were folded into the guide in step 48).
 
 ### Planning status of the remaining packages
 
@@ -228,7 +228,7 @@ package closes is recorded, by row ID, in {doc}`tb-ports`.
 | — | Textbook / docs catch-up | `plans/textbook-catchup.plan.md` (C1–C4) | **Applied.** Ports for unblocked chapters and summer2 pages; evaluation prose refresh |
 | WP9 | Contact survey data | `plans/wp9-contact-surveys.plan.md` | Settled there: `ContactMatrix` loading and validation, rebinning, reciprocity, population adaptation, scaling, textbook 16-19 |
 | WP10 | Calibration | `plans/tb-ports-feature-completeness.plan.md` | Settled there: priors, likelihoods on `Target`, numpyro samplers (NUTS and gradient-free ensemble), MAP, posterior runs; lives in `summer4.epi` |
-| WP12 | Pinnable release | `plans/wp12-release.plan.md` | **Applied.** First tag `v0.2.0a1`; current tag `v0.2.0a7`. JAX is a core dependency; `frames` declares polars and pyarrow. Downstream smoke CI is step 3 of {doc}`../dev/roadmap` |
+| WP12 | Pinnable release | `plans/wp12-release.plan.md` | **Applied.** First tag `v0.2.0a1`; current tag `v0.3.0a1`. JAX is a core dependency; `frames` declares polars and pyarrow. Downstream smoke CI is step 3 of {doc}`../dev/roadmap` |
 | WP13 | Rate-tree math and tabular time series | `plans/tb-ports-feature-completeness.plan.md` | **Applied.** Math nodes, vector-valued table interpolation, `Lookup`, ageing sugar |
 | WP14 | Generalised force of infection | `plans/tb-ports-feature-completeness.plan.md` | **Applied.** `FOIKind.GENERALISED` with an exponent; selector-keyed infectiousness |
 | WP15 | Output algebra | `plans/tb-ports-feature-completeness.plan.md` | **Applied.** `Output` operators, windowed cumulative, multi-flow outputs, `OutputSet`, frames |
@@ -299,7 +299,7 @@ port remains to write (time-varying and FOI are applied);
 summer2 `03-derived-outputs`,
 `04-flow-types`, `10-derived-outputs-stratified`
 
-`FlowMass` outputs are `PropertyData` over the edge table. `sum_over(..., side=)`,
+`FlowMass` outputs are `PropertyData` over the edge table. `sum_by(..., side=)`,
 `.integrate()`, `.integrate_intervals()`, and validated `ComputedValue` paths are live.
 Textbook ports for 4 and 8 remain to write; chapter 10's honest blocker was WP5.
 Plan phase: `feat/flow-outputs`.
@@ -309,8 +309,8 @@ Plan phase: `feat/flow-outputs`.
 **Closes:** P5 P6 P7 P8 · **Unblocks:** summer2 `detailed/time-varying-functions`
 
 `Time()` in the rate tree, structural `Interp` / `GaussianPulse` nodes via
-`summer4.timevarying`, and dated-series `summer4.data.Data`. Ported at
-`docs/summer2/time-varying-functions.ipynb`.
+`summer4.timevarying`, and dated-series `summer4.data.Data`. Documented at
+`docs/guide/03-rates.ipynb`.
 
 ### WP6 — Force of infection and mixing (applied)
 
@@ -351,7 +351,7 @@ everything above, including WP11's declarative targets.
 **Closes:** *(no API rows)* · **Unblocks:** the Kiribati and tb_macro ports;
 see {doc}`tb-ports` for the rows each closes and the computed readiness after each.
 
-WP12 is **applied**: first tag `v0.2.0a1`, current tag `v0.2.0a7`. WP13 is
+WP12 is **applied**: first tag `v0.2.0a1`, current tag `v0.3.0a1`. WP13 is
 **applied**: math nodes, vector-valued table interpolation, `Lookup`, and ageing
 sugar. WP14 is **applied**: `FOIKind.GENERALISED` with a calibratable exponent,
 and infectiousness weights keyed by any selector, applied per compartment

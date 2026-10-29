@@ -250,8 +250,10 @@ class FlowRef(RateOps):
         """Sum this flow's contribution across its edges, keeping ``props``' traits.
 
         ``sum_by()`` is one scalar; ``sum_by(age)`` one value per age (a
-        :class:`~summer4.flows.compiled.GroupedRate`). A rate node is grouped by
-        at most one property, so pass none or one.
+        :class:`~summer4.flows.compiled.GroupedRate`). Like every rate expression it
+        is evaluated at each instant of the solve, so "one scalar" is the total at
+        that instant, not a summary over time. A rate node is grouped by at most one
+        property, so pass none or one.
         """
         if not props:
             return FlowRef(self.name, reduce="sum")
@@ -260,20 +262,6 @@ class FlowRef(RateOps):
         prop = props[0]
         name = prop.name if isinstance(prop, Property) else prop
         return FlowRef(self.name, reduce=("sum_by", name))
-
-    def sum(self) -> FlowRef:
-        """Deprecated spelling of :meth:`sum_by` with no properties."""
-        from summer4._deprecation import warn_renamed
-
-        warn_renamed("FlowRef.sum()", "FlowRef.sum_by()")
-        return self.sum_by()
-
-    def sum_over(self, prop: Property | str) -> FlowRef:
-        """Deprecated spelling of ``sum_by(prop)``."""
-        from summer4._deprecation import warn_renamed
-
-        warn_renamed("FlowRef.sum_over(prop)", "FlowRef.sum_by(prop)")
-        return self.sum_by(prop)
 
 
 @dataclass(frozen=True, slots=True)
@@ -311,36 +299,35 @@ class BinOp(RateOps):
 
 @dataclass(frozen=True, slots=True, init=False)
 class Reduce(RateOps):
-    """Sum compartment state into one value per trait of ``group_by``; ``where`` means KEEP.
+    """Number of individuals in the compartments matching ``where`` (a scalar), or per group.
 
-    ``Reduce(age, where=sel)`` sums only compartments matching ``sel``. That is
-    the opposite polarity of :meth:`PropertyData.where`, which *replaces*
-    matches — use :meth:`PropertyData.keep` for the same keep-shaped reading on
-    a :class:`PropertyData`. ``sum_over=`` is the deprecated spelling of
-    ``group_by=``.
+    ``Reduce(where=sel)`` is the total of all compartments matching ``sel``: one
+    scalar at each instant the rate is evaluated (it tracks the state over the
+    run), like ``FlowRef.sum_by()``. Multiply it by a rate to get "rate x
+    number of individuals in matching compartments", the core of mass-action
+    models: predation (``Param("a") * Reduce(where=species["predator"])``), births
+    and crowding. ``Reduce()`` is the whole population.
+
+    ``Reduce(age, where=sel)`` instead sums into one value per trait of ``age`` (a
+    :class:`~summer4.flows.compiled.GroupedRate`). ``where`` means KEEP: only
+    compartments matching ``sel`` are summed. That is the opposite polarity of
+    :meth:`PropertyData.where`, which *replaces* matches — use
+    :meth:`PropertyData.keep` for the same keep-shaped reading on a
+    :class:`PropertyData`.
+
+    A grouped ``Reduce`` used as a rate is aligned to the source compartment's own
+    group, so ``Reduce(species, where=species["predator"])`` as a rate on prey is 0;
+    use the scalar form for "number of predators".
     """
 
-    group_by: Property | str
+    group_by: Property | str | None
     where: Selector | None = None
 
     def __init__(
         self,
         group_by: Property | str | None = None,
         where: Selector | None = None,
-        *,
-        sum_over: Property | str | None = None,
     ) -> None:
-        if sum_over is not None:
-            if group_by is not None:
-                raise TypeError(
-                    "Reduce: pass group_by= only (sum_over= is its deprecated spelling)."
-                )
-            from summer4._deprecation import warn_renamed
-
-            warn_renamed("Reduce(sum_over=...)", "Reduce(group_by=...)")
-            group_by = sum_over
-        if group_by is None:
-            raise TypeError("Reduce needs group_by= (the property to keep).")
         object.__setattr__(self, "group_by", group_by)
         object.__setattr__(self, "where", where)
 
@@ -789,6 +776,9 @@ def derived_refs[T: NamedTuple](schema: type[T]) -> T:
     like ``D.migration.baseline`` is one path. The return is annotated as
     ``schema`` so IDEs complete only those fields. Runtime values are
     ``FieldRef`` paths (or nested schemas of them), not the declared types.
+
+    Legacy: removed in roadmap step 41, replaced by ``field_refs`` (step 39).
+    Not used in the documentation.
     """
     if not _is_namedtuple_class(schema):
         raise TypeError(f"derived_refs expects a NamedTuple class, got {schema!r}.")
@@ -1201,8 +1191,11 @@ def _rate_bytes(expr: RateOps) -> bytes:
                 + _rate_bytes(height)
             )
         case Reduce(group_by=group_by, where=where):
-            prop_name = group_by.name if isinstance(group_by, Property) else group_by
-            body = b"reduce" + prop_name.encode()
+            if group_by is None:
+                body = b"reduce-scalar"
+            else:
+                prop_name = group_by.name if isinstance(group_by, Property) else group_by
+                body = b"reduce" + prop_name.encode()
             if where is None:
                 return body + b"nowhere"
             return body + _selector_bytes(where)

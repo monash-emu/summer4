@@ -13,8 +13,8 @@ os.environ["PYTHONPATH"] = _project_root + os.pathsep + os.environ.get("PYTHONPA
 project = "summer4"
 copyright = "2026, Monash EMU"
 author = "Monash EMU"
-release = "0.2.0a7"
-version = "0.2.0a7"
+release = "0.3.0a1"
+version = "0.3.0a1"
 
 extensions = [
     "myst_nb",
@@ -30,9 +30,18 @@ extensions = [
 ]
 
 templates_path = ["_templates"]
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", ".jupyter_cache"]
+exclude_patterns = [
+    "_build",
+    "Thumbs.db",
+    ".DS_Store",
+    ".jupyter_cache",
+    "dev/**",
+    "evaluation/**",
+    "guide/_sources/**",
+]
 
 master_doc = "index"
+html_baseurl = "https://monash-emu.github.io/summer4/"
 language = "en"
 
 # MyST

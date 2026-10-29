@@ -3,7 +3,7 @@
 An assessment of one concrete modelling problem against the
 {doc}`coverage-ledger`, carried out by building and running the model rather
 than by reading the ledger. The runnable version is
-{doc}`../case-studies/age-stratified-seirs`.
+the case-study notebook, which was removed from the site in step 48 (it is in the git history).
 
 ```{admonition} Verdict
 :class: important

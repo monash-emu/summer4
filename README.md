@@ -1,8 +1,8 @@
 # summer4
 
-JAX-native compartmental modelling. Current tag: **`v0.2.0a7`**. See
-[CHANGELOG.md](CHANGELOG.md) and [docs/releases/](docs/releases/) for what each
-release does.
+JAX-native compartmental modelling. Current tag: **`v0.3.0a1`**. See
+[CHANGELOG.md](CHANGELOG.md) for what each release does. Documentation:
+<https://monash-emu.github.io/summer4/>.
 
 This release ships the compartment taxonomy (`Property`, `Trait`, a Kleene
 three-valued selector algebra, an immutable NumPy-backed `PropertyMap`) and a

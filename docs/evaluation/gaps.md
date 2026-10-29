@@ -53,7 +53,7 @@ select, aggregate, cumulative, calendar resample, rolling and interpolated
 `at_times`, and `to_frame` / `to_pandas` give the dataframe view. An `OutputSet`
 names a DAG of those operations and contributes only its leaves to the save
 plan; `Result.to_frame` stacks the evaluated names. Flow-output
-polarity queries (`sum_over(..., side=)`, `integrate_intervals`, `integrate`) and
+polarity queries (`sum_by(..., side=)`, `integrate_intervals`, `integrate`) and
 validated `ComputedValue` capture ship alongside.
 
 ### 1.6 `PropertyMap` must become hashable

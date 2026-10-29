@@ -49,9 +49,6 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
 - [`derived-fn-blocks-hoisting.md`](derived-fn-blocks-hoisting.md) — R3: a
   `derived_fn` makes every `FieldRef` step-stage and disables param hoisting.
   Scheduled: roadmap steps 39 and 41 (`plans/unified-lazy-idiom.plan.md`).
-- [`deprecated-lazy-doors-removal.md`](deprecated-lazy-doors-removal.md) — the
-  inventory roadmap step 45 removes once the lazy-idiom deprecations have
-  shipped in a release.
 - [`rates-maximum-ndarray-inconsistency.md`](rates-maximum-ndarray-inconsistency.md)
   — `rates.maximum(rate, ndarray)` raises while `np.maximum(rate, ndarray)`
   builds a node.
@@ -69,3 +66,6 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
   missing matmul.
 - [`nuts-gate-test-flaky.md`](nuts-gate-test-flaky.md) — the step-47 gate test
   `test_gate_recommended_run_converges_on_every_element` flakes across CI runners.
+- [`guide-on-ramp-sharp-edges.md`](guide-on-ramp-sharp-edges.md) — fourteen
+  places a modeller trips writing the new guide (no rate-as-output, two-call outputs, `side=`,
+  hidden `Data`/`timevarying`, `Poisson` mean default, …).

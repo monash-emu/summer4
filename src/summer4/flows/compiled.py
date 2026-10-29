@@ -339,7 +339,14 @@ def _eval_rate(
                 data = _sum_mass_over(values, edge_idx, pmap, prop)
                 return GroupedRate(data=data, properties=(prop,))
             return values
+        case Reduce(group_by=None, where=where):
+            if where is None:
+                return jnp.sum(y_arr, axis=-1)
+            # Constant host-built index array, one batched gather and sum.
+            idx = pmap.select(where)
+            return jnp.sum(jnp.take(y_arr, jnp.asarray(idx), axis=-1), axis=-1)
         case Reduce(group_by=group_by, where=where):
+            assert group_by is not None  # the scalar form is handled above
             prop = pmap.get_property(group_by.name if isinstance(group_by, Property) else group_by)
             pd = PropertyData(pmap, y_arr)
             if where is not None:
@@ -1397,6 +1404,10 @@ class FlowModel:
         Source-state gathers stay per-flow: concatenating them and slicing
         adds ``slice``→``pad`` cost under ``grad`` (see
         ``futureplans/vf-gather-and-mul-followups.md``).
+
+        Legacy: removed in roadmap step 41, replaced by
+        ``field_refs(defer(f)(Params(), y=StateArray(), t=Time()), Schema)`` (step 39).
+        Not used in the documentation.
         """
         from summer4.flows.stages import HoistTable, build_hoist_table, roots_of
 

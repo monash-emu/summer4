@@ -5,14 +5,34 @@ All notable changes to summer4 are recorded here. The format follows
 follow [PEP 440](https://peps.python.org/pep-0440/). summer4 is an alpha: the
 API is not stable.
 
-Install from the matching git tag (see
-[Installation](docs/getting-started/installation.md)). Narrative release notes
-for the Sphinx site live under [docs/releases/](docs/releases/).
+Install from the matching git tag (see [docs/index.md](docs/index.md#install)).
+Narrative release notes for the documentation site live in
+[docs/releases.md](docs/releases.md).
 
 ## [Unreleased]
 
+## [0.3.0a1] — 2026-10-30
+
+Tag: [`v0.3.0a1`](https://github.com/monash-emu/summer4/releases/tag/v0.3.0a1)
+
+The clean surface (roadmap step 48): renamed spellings removed with no deprecation period,
+documentation rebuilt in the unified idiom and published at
+<https://monash-emu.github.io/summer4/>.
+
 ### Added
 
+- Scalar `Reduce`: `Reduce(where=sel)` is the number of individuals in the matching
+  compartments (one scalar, so `Param("a") * Reduce(where=sel)` is mass action), and
+  `Reduce()` is the whole population. `Reduce(group_by, where=...)` is unchanged. Guide
+  page 09 uses it instead of `ForceOfInfection` (`feat/clean-surface`, step 48).
+- A GitHub Pages workflow builds the documentation on every push to `main` and
+  publishes it to <https://monash-emu.github.io/summer4/>. A `docs` job on pull
+  requests builds the same site as a downloadable artifact, so reviewers can read
+  it before merge (`feat/clean-surface`, step 48).
+- `tests/test_docs_idiom.py` fails if a page under `docs/` uses a removed or legacy
+  spelling (`derived_fn`, `derived_refs`, `SaveFn`, `ComputedValue`, `sum_over`,
+  `.total(`, `.cumulative(`, or a callable passed as `kind=`), so the documentation
+  stays on the unified idiom as Phase M lands.
 - Time-free outputs broadcast over time. An output reduced over time
   (`integrate()`, `at(t)`) has no `time` dim, and now combines with a series:
   `rate / rate.integrate()` is the share of the whole-period total at each time,
@@ -55,14 +75,34 @@ for the Sphinx site live under [docs/releases/](docs/releases/).
   A `Target` on an array output points at `with_values`.
 - `defer(f)(...)` with no output argument (only `array()` values, parameters and
   numbers) returns `f`'s value as an array output instead of raising.
+- The documentation is rebuilt from scratch on the unified idiom: a short guide
+  (`docs/guide/`), the textbook chapters migrated to the same idiom, a roadmap page
+  and release notes. The old tree (`docs/getting-started/`, `docs/user/`,
+  `docs/cookbook/`, `docs/case-studies/`, `docs/summer2/`) is gone
+  (`feat/clean-surface`, step 48).
+- `InitialPopulation` and `Split` accept numbers, `Param` expressions or run-stage
+  expressions only. Callable base values and weights are removed; use
+  `defer(f)(Param(...))` instead.
 
-### Deprecated
+### Removed
 
-- `cumulative()` (on `Output`, output expressions and save specs) still returns
-  the same running sum, with a `DeprecationWarning` naming `cumsum()` and
-  `cumulative_integral()`. On a rate it was not a cumulative count: with saves
-  two days apart it gave half the true number. It will be removed in a later
-  release.
+Each removal has a replacement that already works. No deprecation period: the
+old spelling is gone from this release. See the
+[migration table](docs/releases.md) for a before-and-after example of each.
+
+- `Output.sum_over(prop)` and `Output.total()`: use `Output.sum_by(...)`.
+- `sum_over` and `total` on `OutputSet` expressions, and on save specs
+  (`total()`, `owner(sum_over=...)`): use `sum_by` and `owner(group_by=...)`.
+- `PropertyData.sum_over(prop)`: use `PropertyData.sum_by(prop)`.
+- `FlowRef.sum()` and `FlowRef.sum_over(prop)`: use `FlowRef.sum_by(...)`.
+- `Reduce(sum_over=...)`: use `Reduce(group_by=...)`.
+- `Output.cumulative()` on all three surfaces (`Output`, output expressions and save
+  specs): use `cumulative_integral()` for a rate (people per unit time), or
+  `cumsum()` for amounts per interval (for example after `integrate_intervals()`).
+  On a rate, `cumulative()` gave about half the true count with saves two days apart.
+- Callable base values and weights in `InitialPopulation` and `Split`: use a number,
+  a `Param`, or `defer(f)(Param(...))`.
+- `src/summer4/_deprecation.py` and the `warn_renamed` helper.
 
 ## [0.2.0a7] — 2026-10-29
 

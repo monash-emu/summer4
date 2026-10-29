@@ -2,7 +2,7 @@
 
 The [summer textbook](https://github.com/monash-emu/summer-textbook) has twenty
 chapters. Per-chapter status and blockers live only in the
-{doc}`coverage ledger <../evaluation/coverage-ledger>` — this page holds what
+[coverage ledger](https://github.com/monash-emu/summer4/blob/main/docs/evaluation/coverage-ledger.md) — this page holds what
 the ledger does not: how a port is done, and how the chapters depend on the
 stack.
 
@@ -39,7 +39,7 @@ flowchart TB
 ```
 
 Tier 2 ships: `CompiledModel.run` returns a queryable `Result`, and `solver=`
-selects Euler or a diffrax method. See {doc}`../user/08-flows` for flows and
+selects Euler or a diffrax method. See {doc}`the flows guide <../guide/01-basic-model>` for flows and
 `examples/notebooks/05-solvers.ipynb` for solver selection.
 
 Tier 3 ships: `summer4.epi` provides `MixingMatrix` and `ForceOfInfection`.

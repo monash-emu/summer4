@@ -11,25 +11,25 @@ The site has four notebook-bearing sections plus prose and an API reference.
 
 | Page | Status | Ported | Blocker |
 |---|---|---|---|
-| `install.ipynb` | **Replaced** | — | Superseded by {doc}`../getting-started/installation` |
-| `examples/01-basic-model` | `full` | `summer2/01-basic-model.ipynb` | None |
-| `examples/03-derived-outputs` | `full` | `summer2/03-derived-outputs.ipynb` | None |
-| `examples/04-flow-types` | `full` | `summer2/04-flow-types.ipynb` | None |
-| `examples/06-stratification-introduction` | `full` | `summer2/06-stratification-introduction.ipynb` | None |
-| `examples/07-age-stratification` | `full` | `summer2/07-age-stratification.ipynb` | None |
-| `examples/08-strain-stratification` | `full` | `summer2/08-strain-stratification.ipynb` | None (`per_trait` FOI; no `StrainStratification` class) |
-| `examples/09-mixing-matrices` | `full` | `summer2/09-mixing-matrices.ipynb` | None |
-| `examples/10-derived-outputs-stratified` | `full` | `summer2/10-derived-outputs-stratified.ipynb` | None |
-| `examples/11-flows-between-strata` | `full` | `summer2/11-flows-between-strata.ipynb` | None |
-| `detailed/time-varying-functions` | `full` | `summer2/time-varying-functions.ipynb` | None |
-| `detailed/InitialPopulationGraphobject` | `full` | `summer2/initial-population-graphobject.ipynb` | None |
+| `install.ipynb` | **Replaced** | — | Superseded by {doc}`../index` (Install) |
+| `examples/01-basic-model` | `full` | `guide/01-basic-model.ipynb` | None |
+| `examples/03-derived-outputs` | `full` | `guide/04-derived-outputs.ipynb` | None |
+| `examples/04-flow-types` | `full` | `guide/02-flow-types.ipynb` | None |
+| `examples/06-stratification-introduction` | `full` | `guide/05-stratification.ipynb` | None |
+| `examples/07-age-stratification` | `full` | `guide/06-mixing.ipynb` | None |
+| `examples/08-strain-stratification` | `partial` | — | `per_trait` FOI works and is tested (`tests/test_epi_multistrain.py`) but no built page documents it (the port is archived unbuilt in `guide/_sources/`); no `StrainStratification` class |
+| `examples/09-mixing-matrices` | `full` | `guide/06-mixing.ipynb` | None |
+| `examples/10-derived-outputs-stratified` | `full` | `guide/05-stratification.ipynb` | None |
+| `examples/11-flows-between-strata` | `full` | `guide/05-stratification.ipynb` | None |
+| `detailed/time-varying-functions` | `full` | `guide/03-rates.ipynb` | None |
+| `detailed/InitialPopulationGraphobject` | `full` | `guide/07-initial-population.ipynb` | None |
 | `rationale.md` | **Portable** | — | Prose; adapted into {doc}`../dev/architecture` |
 | `api/*.rst` | **N/A** | — | summer4 has its own; see {doc}`../api/index` |
 | `dev-setup.md` | **Replaced** | — | Superseded by {doc}`../dev/pixi` |
 
-**11 of 11 notebooks reproduce in full.** Structure, flows, infection / mixing,
+**10 of 11 notebooks reproduce in full, and the strain page partially (it is tested but no built page documents it).** Structure, flows, infection / mixing,
 trajectories, results and initial population are no longer the blocker for this
-corpus. {doc}`../user/08-flows` is the summer4-native
+corpus. {doc}`../guide/index` is the summer4-native
 walkthrough.
 
 ## The summer textbook
@@ -80,11 +80,9 @@ remaining gaps explicitly:
 
 | Section | Pages | All code executed at build time |
 |---|---|---|
-| Getting started | 2 | Yes |
-| User guide | 9 (8 notebooks + migration guide) | Yes |
+| Guide | 8 (`docs/guide/01` to `08`) | Yes |
 | Developer guide | (Markdown + performance notebook) | Yes |
 | Textbook | Ported chapters under `docs/textbook/` | Yes |
-| summer2 ports | Ported pages under `docs/summer2/` | Yes |
 | Evaluation | 6 | n/a — prose |
 | API reference | generated from `__all__` | n/a |
 

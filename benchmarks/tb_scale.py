@@ -334,7 +334,7 @@ def build_tb_scale_model(*, fuse_compartment_updates: bool = True) -> TbScaleMod
 
     death = model.add_flow(ExitFlow("death", Everything(), death_rate))
     flow_names.append("death")
-    # Recycle deaths into (mtb_naive, age 0), preserving reachability via sum_over(age).
+    # Recycle deaths into (mtb_naive, age 0), preserving reachability via sum_by(age).
     model.add_flow(EntryFlow("recycle", state["mtb_naive"] & age["0"], death.sum_by(age)))
     flow_names.append("recycle")
 

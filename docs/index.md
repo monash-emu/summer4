@@ -1,75 +1,83 @@
-# summer4 documentation
+# summer4
 
-**summer4** is a JAX-native compartmental modelling platform under active
-development. The current tag (`0.2.0a7`) ships the **compartment taxonomy**, a
-**flows** layer, a **results** layer (`Output` / `OutputSet`), **epidemiology**
-(`summer4.epi`, including generalised FOI), **Bayesian calibration**
-(`summer4.epi.calibration` and its composable `workflow`), and **time-varying** rates
-(`summer4.timevarying` / `summer4.data`): declare compartments, attach named
-flows (including infection and mixing), compile to a vector field, and `run()`
-to a queryable `Result`. Repeated `run()` calls with the same save plan reuse
-the Diffrax / equinox JIT cache — including with plain `{str: float}` params.
-See {doc}`releases/v0.2.0a7` for what this tag adds.
+**summer4** is a library for building compartmental models: any system where
+quantities move between compartments through named flows. Epidemic models such
+as SIR and SEIR are one use; predator–prey ecology, pharmacokinetics and
+chemical kinetics are others. You describe the compartments and the flows
+between them, optionally split them into groups such as age bands, and run the
+model to get time series you can plot and fit to data. It is written on JAX,
+so models compile to fast code and can be fitted to data with Bayesian
+calibration.
 
-```{admonition} Read this first — scope of the current release
-:class: important
+summer4 is an alpha release (`0.3.0a1`) and the API may still change.
 
-The public API of summer4 today is the taxonomy (`Property`, `Trait`,
-`Selector`, `PropertyMap`, `Stratification`, `Groups`), flows
-(`FlowModel`, `CompiledModel`, `TransitionFlow` / `ExitFlow` / `EntryFlow`,
-`EdgeMap`, `Source` / `Dest`, rates and adjustments), results
-(`SavePlan`, `Result`, `Output`, `OutputSet`, `Epoch` / `TimeAxis`,
-`Target` / `TargetSet`), epidemiology (`ForceOfInfection`, `FOIKind`,
-`MixingMatrix`), and time-varying helpers (`Time()`, `summer4.timevarying`,
-`summer4.data`). Initial population / population split (WP3) is applied
-(`InitialPopulation` / `Split` / `CompiledModel.initial_state`). Bayesian
-calibration (WP10) is applied (`summer4.epi.calibration`: priors,
-likelihoods, `BayesianModel`, posterior runs), as are workflow steps 24–27,
-29, 30, 46 and 47 (`workflow`: designs, optimisation, seeded MCMC on any
-`Posterior`, NUTS tuning); sampled-output plots (step 28) are still ahead.
+## Install
 
-Material from the [summer2 documentation](https://summer2.readthedocs.io) and
-the [summer textbook](https://github.com/monash-emu/summer-textbook) that needs
-those missing pieces is **not reproduced as working code**. Ported chapters and
-pages are listed in {doc}`evaluation/coverage-ledger`; remaining gaps are
-catalogued in {doc}`evaluation/index`.
+summer4 is not published to PyPI. Install it from the git tag. With pixi,
+add this to your project:
+
+```toml
+[pypi-dependencies]
+summer4 = { git = "https://github.com/monash-emu/summer4.git", tag = "v0.3.0a1", extras = ["calibration", "pandas", "frames"] }
 ```
+
+Or with pip:
+
+```bash
+pip install "summer4[calibration,pandas,frames] @ git+https://github.com/monash-emu/summer4.git@v0.3.0a1"
+```
+
+| Extra | Packages | When you need it |
+| --- | --- | --- |
+| `calibration` | numpyro, optax | Sampling and MAP fits |
+| `pandas` | pandas | `Output.to_pandas`, `Result.to_frame(backend="pandas")` |
+| `frames` | polars, pyarrow | `Output.to_frame`, `Result.to_frame` |
+
+To work on summer4 itself, clone the repository and run `pixi install`, then
+`pixi run setup` to install the git hooks and `pixi run test` to run the
+tests. The documentation builds with `pixi run -e docs docs`; every notebook
+on this site is executed during the build.
+
+## A first model
+
+An epidemic (SIR) model with an infection flow, whose rate is the contact rate times the proportion
+of the population that is infectious, and a recovery flow, run for 60 days:
+
+```python
+import numpy as np
+from summer4 import (
+    Compartments, FlowModel, Param, Property, PropertyMap,
+    SavePlan, SaveRequest, TransitionFlow,
+)
+from summer4.epi import ForceOfInfection
+
+state = Property("state", ("S", "I", "R"))
+model = FlowModel(PropertyMap.from_property(state))
+infection = ForceOfInfection("infection", infectious=state["I"], contact_rate=Param("contact_rate"))
+model.add_flow(TransitionFlow("infection", state["S"], state["I"], infection))
+model.add_flow(TransitionFlow("recovery", state["I"], state["R"], 0.2))
+model.set_initial_population({state["S"]: 990.0, state["I"]: 10.0})
+
+plan = SavePlan(requests={"compartments": SaveRequest(Compartments())}, ts=np.arange(61.0))
+result = model.compile().run({"contact_rate": 0.5}, t0=0.0, t1=60.0, dt=0.1, save=plan)
+result["compartments"].to_pandas().plot()
+```
+
+## Where next
+
+- The {doc}`Guide <guide/index>` builds a model step by step, and ends with a
+  {doc}`predator–prey model <guide/09-predator-prey>` to show a system that is
+  not an epidemic.
+- The {doc}`Textbook <textbook/index>` is a port of the summer textbook on
+  infectious-disease modelling, written in summer4.
+- The {doc}`Roadmap <roadmap>` says what exists today and what is coming.
+- The {doc}`API reference <api/index>` lists every public name.
 
 ```{toctree}
 :maxdepth: 2
-:caption: Getting started
+:caption: Guide
 
-getting-started/installation
-getting-started/quickstart
-releases/index
-```
-
-```{toctree}
-:maxdepth: 2
-:caption: User guide
-
-user/index
-```
-
-```{toctree}
-:maxdepth: 2
-:caption: Case studies
-
-case-studies/index
-```
-
-```{toctree}
-:maxdepth: 2
-:caption: Cookbook
-
-cookbook/index
-```
-
-```{toctree}
-:maxdepth: 2
-:caption: Developer guide
-
-dev/index
+guide/index
 ```
 
 ```{toctree}
@@ -80,72 +88,22 @@ textbook/index
 ```
 
 ```{toctree}
-:maxdepth: 2
-:caption: summer2 documentation
+:maxdepth: 1
+:caption: Roadmap
 
-summer2/index
+roadmap
+```
+
+```{toctree}
+:maxdepth: 1
+:caption: Releases
+
+releases
 ```
 
 ```{toctree}
 :maxdepth: 2
-:caption: Project evaluation
-
-evaluation/index
-```
-
-```{toctree}
-:maxdepth: 2
-:caption: API reference
+:caption: API
 
 api/index
 ```
-
-## Documentation streams
-
-| Stream | Audience | Focus | Status |
-|--------|----------|-------|--------|
-| **User guide** | Modellers with moderate Python | Taxonomy, flows, epi, timevarying, and running to a `Result` | Taxonomy + flows + results + epi + timevarying |
-| **Cookbook** | Domain experts with limited programming | Short recipes for one practical task | Custom rates |
-| **Developer guide** | Contributors to summer4 | Kleene algebra, array layout, performance, workflow | Current |
-| **Textbook** | Modellers learning infectious-disease concepts | Chapters adapted from the summer textbook | Chapters 1–12 and 14 full (2, 15 partial); 13 and 16–20 blocked |
-| **summer2 ports** | Migrators from summer2 | Runnable ports of summer2 doc notebooks | 11 of 11 full |
-| **Evaluation** | Project stakeholders | Feature completeness, docs coverage, gaps | Current |
-| **API reference** | Developers needing lookup detail | Autogenerated from docstrings | Current |
-
-## Quick example
-
-Every compartment in summer4 is a row in an integer code table. You declare the
-axes, apply them (optionally to a subset), and query with a selector algebra:
-
-```python
-from summer4 import Property, PropertyMap
-
-state = Property("state", ("S", "I", "R"))
-age = Property("age", ("0-4", "5-9", "10+"))
-severity = Property("severity", ("mild", "severe"))
-
-pmap = (
-    PropertyMap.from_property(state)
-    .stratify(age)
-    .stratify(severity, where=state["I"])
-)
-
-pmap.select(state["I"] & age["0-4"])   # int32 indices
-pmap.select(severity.absent())         # compartments with no severity axis
-pmap.partition(age)                    # {Trait: indices} per age band
-```
-
-See {doc}`getting-started/quickstart` for the taxonomy walkthrough and
-{doc}`user/08-flows` for compiling flows over that map.
-
-## What is missing, in one paragraph
-
-summer4 can describe a stratified compartment space, compile named flows
-(including infection FOI and mixing), time-parameterise rates, select an
-adaptive solver, and `run()` to a queryable `Result` with interval integrals and
-dataframe export. It cannot yet wrap initial population / population split
-(WP3), load and scale empirical contact surveys (WP9), or run a Bayesian
-calibration workflow (WP10). Chapter 15 remains partial for lack of a FOI
-susceptibility surface symmetric to infectiousness. The consequences for
-documentation are quantified in {doc}`evaluation/feature-completeness` and
-{doc}`evaluation/docs-coverage`.

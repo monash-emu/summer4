@@ -185,14 +185,6 @@ class PropertyData:
         reduced = jnp.reshape(summed, self.data.shape[:-1] + (n_groups,))
         return PropertyData(product_map(resolved), reduced)
 
-    def sum_over(self, prop: Property | str) -> PropertyData:
-        """Deprecated spelling of :meth:`sum_by` with one property."""
-        from summer4._deprecation import warn_renamed
-
-        warn_renamed("PropertyData.sum_over(prop)", "PropertyData.sum_by(prop)")
-        result: PropertyData = self.sum_by(prop)
-        return result
-
     def broadcast_over(self, prop: Property | str, values: Any) -> PropertyData:
         """Expand per-trait ``values`` onto this map along ``prop``.
 
