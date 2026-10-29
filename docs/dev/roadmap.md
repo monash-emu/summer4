@@ -191,11 +191,11 @@ Each step that touches `src/` also has its worker write a short step plan,
 <!-- roadmap:current -->
 | Field | Value |
 | --- | --- |
-| Step | 28 |
-| Status | next |
-| Branch | `feat/calib-outputs` |
+| Step | 48 |
+| Status | in-progress |
+| Branch | `feat/clean-surface` |
 | Cut from | `main` |
-| Last landed | `fix/likelihood-scale-expr` (PR #55, carrying Phase L PRs #56–#59 and #62; notebook 26 signed off 2026-10-29) |
+| Last landed | `feat/float64-default` (PR #69; `main` at `516d05f`, after #70 and #71) |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -234,7 +234,7 @@ orchestrates and checks.
 The order is fixed as:
 
 ```text
-14 → 15 → 24 → 25 → 26 → 27 → 29 → 30 → 46 → 47 → 31 → 32 → 33 → 34 → 35 → 28 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 16 → 17 → 18 → 19 → 45
+14 → 15 → 24 → 25 → 26 → 27 → 29 → 30 → 46 → 47 → 31 → 32 → 33 → 34 → 35 → 48 → 28 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 16 → 17 → 18 → 19
 ```
 
 Phase J comes **directly after step 15** and before Track G resumes at step 16.
@@ -246,6 +246,11 @@ the line places it where it was cut. If Phase L steps merge first, whoever
 merges step 46 moves it in this line to where it actually landed and fixes the
 two handoffs either side.
 Step 47 is placed the same way, after step 46.
+**Phase N** (step 48, `feat/clean-surface`, `plans/clean-surface.plan.md`) was inserted on
+2026-10-30, after PRs #69–#71 merged and before step 28. It removes the spellings that already
+have working replacements, rebuilds the published documentation in the unified idiom only, and
+publishes it to GitHub Pages. From then on Phase M deletes each old door in the step that lands
+its replacement, so step 45 has nothing left to do and is marked `done` (absorbed).
 
 <!-- roadmap:steps -->
 | Step | Phase | WP | Branch | Plan | Section | Status | Closes |
@@ -277,7 +282,7 @@ Step 47 is placed the same way, after step 46.
 | 25 | J | WP19 | `feat/calib-multistart` | `plans/calibration-toolkit.plan.md` | Step 25 | done | CW5 CW6 |
 | 26 | J | WP19 | `feat/calib-gradient-free` | `plans/calibration-toolkit.plan.md` | Step 26 | done | CW7 |
 | 27 | J | WP19 | `feat/calib-seeded-mcmc` | `plans/calibration-toolkit.plan.md` | Step 27 | done | CW8 CW9 |
-| 28 | J | WP19 | `feat/calib-outputs` | `plans/calibration-toolkit.plan.md` | Step 28 | next | CW10 CW11 |
+| 28 | J | WP19 | `feat/calib-outputs` | `plans/calibration-toolkit.plan.md` | Step 28 | planned | CW10 CW11 |
 | 29 | K | CP1 | `feat/solve-composable` | `plans/solve-composable.plan.md` | Whole | done | CX1 CX2 CX3 CX4 CX5 |
 | 30 | K | CP2 | `feat/calib-composable` | `plans/calib-composable.plan.md` | Whole | done | CX16 CX17 CX18 CX19 CX24 |
 | 31 | L | CP5 | `fix/likelihood-scale-expr` | `plans/unified-lazy-idiom.plan.md` | Step 31 | done | CX26 |
@@ -294,9 +299,10 @@ Step 47 is placed the same way, after step 46.
 | 42 | M | CP6 | `feat/callable-doors` | `plans/unified-lazy-idiom.plan.md` | Step 42 | planned | CX33 CX11 |
 | 43 | M | CP6 | `feat/typed-stages` | `plans/unified-lazy-idiom.plan.md` | Step 43 | planned | CX34 |
 | 44 | M | CP6 | `docs/unified-lazy-idiom` | `plans/unified-lazy-idiom.plan.md` | Step 44 | planned | — |
-| 45 | M | — | `chore/remove-deprecated-doors` | `plans/unified-lazy-idiom.plan.md` | Step 45 | blocked | — |
+| 45 | M | — | `chore/remove-deprecated-doors` | `plans/unified-lazy-idiom.plan.md` | Step 45 | done | — |
 | 46 | K | CP3 | `feat/calib-posterior-protocol` | `plans/tb-nh-joint-calibration.plan.md` | §4, §5 NH2 | done | CX21 CX22 CX35 |
 | 47 | K | CP7 | `feat/nuts-tuning` | `plans/nuts-tuning.plan.md` | all | done | CX36 CX37 CX38 |
+| 48 | N | — | `feat/clean-surface` | `plans/clean-surface.plan.md` | Steps C0–C9 | in-progress | — |
 <!-- /roadmap:steps -->
 
 `Closes` lists row IDs of {doc}`../evaluation/tb-ports` (and, where a step moves
@@ -324,6 +330,10 @@ changed about them is recorded here instead, and overrides them.
 | `tb-ports-feature-completeness` | §10.2 | No `preprocess=` on `BayesianModel`. Run-start work uses `FlowModel.compile(prepare_fn=...)`. `futureplans/wp10-preprocess-is-prepare-fn.md` is deleted |
 | `unified-lazy-idiom` | Step 33 | `defer()` returns `Callable[..., Any]`, not `Callable[..., Defer \| OutputExpr]`. The union made every documented spelling a mypy error (`outputs[...] = defer(f)(...)`, `eval_closed(defer(...))`, `r: RateOps = defer(f)(Time())`). Keep `Any` until steps 36–38 merge the two expression languages, and do not re-widen it |
 | `unified-lazy-idiom` | *Execution model* | From 2026-10-29 workers are Claude subagents, not Cursor: haiku for clearly defined steps, sonnet for everything else, and no opus implementer (step 42 moves from opus to sonnet). A sonnet failure gets one more fresh sonnet attempt, then the orchestrator stops and asks. See [Running a step with tiered workers](#running-a-step-with-tiered-workers) |
+| `unified-lazy-idiom` | Steps 40, 41, 42, 45 | **Delete outright, no deprecation cycle** (user, 2026-10-30). Step 40 deletes `SaveFn` and `ComputedValue`; step 41 deletes `compile(derived_fn=...)`, `derived_refs`, rule R3 and the `params_are_static` keyword with its test call sites (the "hoist table unchanged for `derived_fn` models" test goes); step 42 deletes the bare-callable FOI `kind`. Each step migrates every caller and keeps equivalence tests only as replacement-only tests with hand values. Step 45 is absorbed and marked `done`. Notebook 27's "before" sections become text-only; its comparison plots use values saved from the old idiom before removal, or hand-computed references |
+| `unified-lazy-idiom` | Steps 36–44 | Step 48 rebuilt the published docs (`docs/guide/`, `docs/textbook/`, `docs/roadmap.md`). Each Phase M step that lands a replacement adds the new idiom to the matching guide page and deletes that door's row from `docs/roadmap.md` § *Still here, on the way out*. Step 44 only converts what Phase M added; `tests/test_docs_idiom.py` must keep passing |
+| `unified-lazy-idiom` | Step 42 | If step 48 (C2) removed the InitialPopulation callables, step 42's initial-population half is already done; see step 48's handoff |
+| `wp9-contact-surveys`, `wp17-foi-susceptibility` | Steps 16–19 | Step 48 replaced the docs tree. Open PRs #46, #47, #50 and #52 must rebase onto it: textbook pages go under `docs/textbook/`, user-guide material under `docs/guide/`, and nothing may use an idiom `tests/test_docs_idiom.py` forbids |
 
 ---
 
@@ -2666,7 +2676,7 @@ The [standard checks](#exit-checks-every-step), plus `pixi run composability`.
 
 ### Handoff
 
-Set step 35 `done`, step 28 `next`. Phase L is finished. Record in step 28's
+Set step 35 `done`, step 48 `next`. Phase L is finished. Record in step 28's
 *What the previous worker left you* which Phase L spellings notebook 25 may use,
 and the worker-tier tally for steps 31–35.
 
@@ -3301,11 +3311,15 @@ The [standard checks](#exit-checks-every-step), plus `pixi run composability`.
 ### Handoff
 
 Set step 44 `done`, step 16 `next`. Phase M is finished; Track G resumes. Step
-45 stays `blocked` until a release is cut after this step.
+45 was absorbed by steps 40–42 (see step 48).
 
 ---
 
 ## Step 45 — `chore/remove-deprecated-doors`
+
+**Landed:** nothing to land. Absorbed into steps 40–42 on 2026-10-30 (user decision recorded in
+`plans/clean-surface.plan.md`): each Phase M step deletes its door outright when its replacement
+lands. The text below is kept as history.
 
 ### Summary
 
@@ -3573,6 +3587,55 @@ The [standard checks](#exit-checks-every-step), plus `pixi run composability`.
 
 Set step 47 `done`. Leave *Current position* on the Phase L step that is
 current (on `main` when this step was cut: step 31 `next`).
+
+---
+
+## Step 48 — `feat/clean-surface`
+
+### Summary
+
+A provisional clean surface, cut from `main` after PRs #69–#71. It removes every spelling that
+already has a working replacement (`sum_over`, `total()`, `FlowRef.sum()`, `Reduce(sum_over=)`,
+`cumulative()`, and the InitialPopulation callables if `defer(f)(Param(...))` reproduces them).
+It tags the doors that still lack a replacement (`derived_fn`, `derived_refs`, `SaveFn`,
+`ComputedValue`, bare-callable FOI `kind`) as legacy without changing them. It rebuilds the
+published docs from scratch in the unified idiom (eight guide pages, migrated textbook chapters,
+a reader-facing roadmap page) and publishes them to <https://monash-emu.github.io/summer4/>
+through a GitHub Actions workflow.
+
+### What the previous worker left you
+
+- Inserted on 2026-10-30, after #69 (float64 by default), #70 (`cumulative_integral` / `cumsum`)
+  and #71 (time-free outputs) merged. `main` was at `516d05f`.
+- The plan was written and accepted in one session before any of the gating PRs merged; its gate
+  table records them as merged.
+
+### Worker
+
+Orchestrator: Claude (opus). Implementers and checkers per the plan's steps C1–C8.
+
+### Read first
+
+1. `AGENTS.md`
+2. `plans/clean-surface.plan.md`, all of it
+3. `futureplans/README.md`
+
+### Do
+
+Follow `plans/clean-surface.plan.md` steps C0–C9, one commit each. Where it and this section
+disagree, this section wins.
+
+Cut from: `main`. Merges into: `main`.
+
+### Exit checks
+
+The [standard checks](#exit-checks-every-step), plus `pixi run composability` and
+`pytest tests/test_docs_idiom.py`. **User gate:** the built site, downloaded from the PR's `docs`
+CI artifact and read page by page (approved deviation: no new example notebook).
+
+### Handoff
+
+Set step 48 `done`, step 28 `next`. Record which removals C2 made, and the worker-tier tally.
 
 ---
 
