@@ -268,13 +268,13 @@ def test_rolling_mean_matches_numpy() -> None:
     np.testing.assert_allclose(np.asarray(rolled.values), expected, rtol=1e-5)
 
 
-def test_cumulative_matches_cumsum() -> None:
+def test_cumsum_matches_numpy_cumsum() -> None:
     state, _age, _pmap, cm, y0 = _compiled_sir()
     plan = SavePlan(requests={"compartments": SaveRequest(Compartments())})
     res = cm.run({}, y0, t0=0.0, steps=10, dt=1.0, save=plan)
     total = res["compartments"].select(state["I"]).sum_by()
     np.testing.assert_allclose(
-        np.asarray(total.cumulative().values),
+        np.asarray(total.cumsum().values),
         np.cumsum(np.asarray(total.values)),
         rtol=1e-5,
     )
