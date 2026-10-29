@@ -27,6 +27,7 @@ from summer4 import (  # noqa: E402
     SaveRequest,
     Split,
     Time,
+    defer,
 )
 
 
@@ -54,7 +55,7 @@ def test_by_equals_prop_raises() -> None:
     with pytest.raises(ValueError, match="must not equal"):
         InitialPopulation(
             {Everything(): 1.0},
-            splits=(Split(age, lambda p: jnp.ones(2), by=(age,)),),
+            splits=(Split(age, defer(lambda x: jnp.ones(2) * x)(Param("x")), by=(age,)),),
         ).compile(pmap)
 
 
@@ -300,7 +301,9 @@ def test_by_function_and_wrong_shape() -> None:
         splits=(
             Split(
                 imm,
-                lambda p: jnp.array([[p["vy"], 1 - p["vy"]], [p["vo"], 1 - p["vo"]]]),
+                defer(lambda vy, vo: jnp.array([[vy, 1 - vy], [vo, 1 - vo]]))(
+                    Param("vy"), Param("vo")
+                ),
                 by=(age,),
             ),
         ),
@@ -317,10 +320,10 @@ def test_by_function_and_wrong_shape() -> None:
     )
     bad = InitialPopulation(
         {Everything(): 100.0},
-        splits=(Split(imm, lambda p: jnp.array([0.5, 0.5]), by=(age,)),),
+        splits=(Split(imm, defer(lambda x: jnp.array([0.5, 0.5]) * x)(Param("x")), by=(age,)),),
     ).compile(pmap)
     with pytest.raises(ValueError, match="shape|rank"):
-        bad.evaluate({})
+        bad.evaluate({"x": 1.0})
 
 
 def test_selector_pinning_ignores_zero_weight() -> None:
@@ -421,15 +424,17 @@ def test_jaxpr_size_independent_of_n() -> None:
         age = Property("age", tuple(f"a{i}" for i in range(n_traits)))
         state = Property("state", ("S", "I"))
         pmap = PropertyMap.from_property(age).stratify(state)
-        # Callable weights keep the traced graph independent of K (unlike a K-key mapping).
+        # Deferred weights keep the traced graph independent of K (unlike a K-key mapping).
         return InitialPopulation(
             {state["S"]: Param("pop")},
-            splits=(Split(age, lambda p, k=n_traits: jnp.ones(k) / float(k)),),
+            splits=(
+                Split(age, defer(lambda x, k=n_traits: jnp.ones(k) / float(k) * x)(Param("one"))),
+            ),
         ).compile(pmap)
 
     plan3 = make(3)
     plan30 = make(30)
-    params = {"pop": 100.0}
+    params = {"pop": 100.0, "one": 1.0}
     n3 = len(jax.make_jaxpr(plan3.evaluate)(params).jaxpr.eqns)
     n30 = len(jax.make_jaxpr(plan30.evaluate)(params).jaxpr.eqns)
     assert n3 == n30

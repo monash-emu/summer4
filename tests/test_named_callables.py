@@ -108,12 +108,12 @@ def _build_prepare(name: str | None) -> object:
 def _build_initial(name: str | None) -> object:
     state, pmap = _state_pmap()
 
-    def base(params: Any) -> Any:
-        return jnp.asarray(params["n"]) * 2.0
+    def base(n: Any) -> Any:
+        return jnp.asarray(n) * 2.0
 
     model = FlowModel(pmap)
     model.add_flow(EntryFlow("in", state["Y"], 0.0))
-    population = InitialPopulation({Everything(): _maybe_named(base, name)})
+    population = InitialPopulation({Everything(): defer(_maybe_named(base, name))(Param("n"))})
     model.set_initial_population(population)
     return model.compile()
 
