@@ -16,6 +16,7 @@ The guide builds up one model at a time:
 - {doc}`guide/06-mixing` adds ageing and mixing matrices, so that infection depends on who mixes with whom.
 - {doc}`guide/07-initial-population` sets how many people start in each compartment, including shares that depend on parameters.
 - {doc}`guide/08-calibration` fits parameters to observed data with a Bayesian model and a best-fitting (MAP) estimate.
+- {doc}`guide/09-predator-prey` builds a Lotka–Volterra model with a separate flow for each birth, death and predation process, to show that summer4 is not only for epidemics.
 
 The textbook chapters show the same ideas applied to fuller models.
 

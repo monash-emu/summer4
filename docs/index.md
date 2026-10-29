@@ -1,13 +1,15 @@
 # summer4
 
-**summer4** is a library for building compartmental models of disease spread,
-such as SIR and SEIR models. You describe the compartments and the flows
-between them, optionally split the population into groups such as age bands,
-and run the model to get time series you can plot and fit to data. It is
-written on JAX, so models can be fitted to data with Bayesian calibration.
+**summer4** is a library for building compartmental models: any system where
+quantities move between compartments through named flows. Epidemic models such
+as SIR and SEIR are one use; predator–prey ecology, pharmacokinetics and
+chemical kinetics are others. You describe the compartments and the flows
+between them, optionally split them into groups such as age bands, and run the
+model to get time series you can plot and fit to data. It is written on JAX,
+so models compile to fast code and can be fitted to data with Bayesian
+calibration.
 
-summer4 is an alpha release (`0.2.0a7`) and the API may still change. Pages
-marked as being written are placeholders.
+summer4 is an alpha release (`0.2.0a7`) and the API may still change.
 
 ## Install
 
@@ -38,7 +40,7 @@ on this site is executed during the build.
 
 ## A first model
 
-An SIR model with an infection flow, whose rate is the contact rate times the proportion
+An epidemic (SIR) model with an infection flow, whose rate is the contact rate times the proportion
 of the population that is infectious, and a recovery flow, run for 60 days:
 
 ```python
@@ -63,9 +65,11 @@ result["compartments"].to_pandas().plot()
 
 ## Where next
 
-- The {doc}`Guide <guide/index>` builds a model step by step.
-- The {doc}`Textbook <textbook/index>` teaches infectious-disease modelling
-  with summer4.
+- The {doc}`Guide <guide/index>` builds a model step by step, and ends with a
+  {doc}`predator–prey model <guide/09-predator-prey>` to show a system that is
+  not an epidemic.
+- The {doc}`Textbook <textbook/index>` is a port of the summer textbook on
+  infectious-disease modelling, written in summer4.
 - The {doc}`Roadmap <roadmap>` says what exists today and what is coming.
 - The {doc}`API reference <api/index>` lists every public name.
 
