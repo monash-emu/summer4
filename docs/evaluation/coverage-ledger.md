@@ -71,15 +71,15 @@ reach, and it is the denominator for every percentage on this site.
 | P1 | `Parameter` | parameters | `full` | `FieldRef via derived_refs` | Schema-checked, IDE-completable |
 | P2 | `Function` | parameters | `full` | `defer / Transform / callables in derived_fn` | `defer` is the rate-slot door; `Transform` only adjusts an existing rate |
 | P3 | `Time` | parameters | `full` | `Time()` rate node; `t` on `derived_fn` | |
-| P4 | `DerivedOutput (as a rate input)` | parameters | `full` | `FlowRef, .sum(), .sum_by()` | Topologically ordered, cycles detected |
+| P4 | `DerivedOutput (as a rate input)` | parameters | `full` | `FlowRef, .sum_by()` | Topologically ordered, cycles detected |
 | P5 | `Data` | parameters | `full` | `summer4.data.Data` | Dated series → `Interp` via `Epoch` |
 | P6 | `get_linear_interpolation_function` | parameters | `full` | `summer4.timevarying.linear` | Structural `Interp`; x and y knots may be `FieldRef`s; clamps outside range |
 | P7 | `get_sigmoidal_interpolation_function` | parameters | `full` | `summer4.timevarying.sigmoidal` | `sharpness` is summer2 curvature; breakpoints may be `FieldRef`s |
 | P8 | `get_piecewise_function` | parameters | `full` | `summer4.timevarying.step` / `piecewise` | Right-continuous; breakpoints may be `FieldRef`s |
 | P9 | `get_time_callable` | parameters | `partial` | `compile() -> vf(t, y, params)` | A time callable, but not summer2's graph wrapper |
-| D1 | `request_output_for_flow` | outputs | `full` | `FlowMass` / `Output` edge queries | `sum_over(..., side=)`, `integrate_intervals`, `integrate` |
+| D1 | `request_output_for_flow` | outputs | `full` | `FlowMass` / `Output` edge queries | `sum_by(..., side=)`, `integrate_intervals`, `integrate` |
 | D2 | `request_output_for_compartments` | outputs | `full` | `Compartments(where=)` / `Output.select` |  |
-| D3 | `request_aggregate_output` | outputs | `full` | `Output.sum_over` / `total` / `partition` |  |
+| D3 | `request_aggregate_output` | outputs | `full` | `Output.sum_by` / `partition` |  |
 | D4 | `request_cumulative_output` | outputs | `full` | `Output.cumulative_integral()` on a rate; `Output.cumsum()` on amounts |  |
 | D5 | `request_function_output` | outputs | `full` | `SaveFn`; `Output` operators and `OutputSet` |  |
 | D6 | `request_computed_value_output` | outputs | `full` | `ComputedValue` | Path validated against `derived_fn` return schema |
@@ -299,7 +299,7 @@ port remains to write (time-varying and FOI are applied);
 summer2 `03-derived-outputs`,
 `04-flow-types`, `10-derived-outputs-stratified`
 
-`FlowMass` outputs are `PropertyData` over the edge table. `sum_over(..., side=)`,
+`FlowMass` outputs are `PropertyData` over the edge table. `sum_by(..., side=)`,
 `.integrate()`, `.integrate_intervals()`, and validated `ComputedValue` paths are live.
 Textbook ports for 4 and 8 remain to write; chapter 10's honest blocker was WP5.
 Plan phase: `feat/flow-outputs`.
