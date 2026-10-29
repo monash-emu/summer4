@@ -39,7 +39,7 @@ pixi run composability         # statuses, evidence anchors, packages, totals
 ## Where things stand
 
 <!-- composability:totals -->
-Open findings: **7** (0 high, 2 medium, 5 low); planned: 6; deferred: 3; done: 24; rejected: 0.
+Open findings: **7** (0 high, 2 medium, 5 low); planned: 6; deferred: 4; done: 24; rejected: 0.
 <!-- /composability:totals -->
 
 The calibration workflow's MCMC stage (`CX25`), the solve (`CP1`, roadmap step
@@ -99,6 +99,7 @@ can be inspected and extended. What remains:
 | CX38 | calibration | P2, P3 | medium | done | Before step 47: `wf.warmup_until` cannot start from a given inverse mass matrix, restarts every doubling round from the factory's metric (discarding the previous round's adaptation), and reports nothing until it returns, so a long dense warm-up is a black box. | Done in step 47: `warmup_until(..., inverse_mass_matrix=, carry_metric=, on_round=)` calls `make_mcmc(n, inverse_mass_matrix=M)` when it has a metric; rows record `grad_evals`. | `src/summer4/epi/calibration/workflow/warmup.py::mcmc = make_mcmc(n)` |
 | CX39 | results | P2 | medium | done | Before `feat/time-free-outputs`: an output reduced over time (`integrate()`, `at(t)`) dropped the `time` dim but kept a one-point time axis, so `rate / rate.integrate()` raised *Output time axes differ*, eagerly and in an `OutputSet`; `at` was not a lazy post-op. Dividing a series by a whole-period total needed `defer`. | Done on `feat/time-free-outputs`: an output without `time` in `dims` is time-free and broadcasts across the other side's times; `at` is in `_CALLS`; `at_times` and `Target` on a time-free output raise with the remedy (`plans/time-free-outputs.plan.md`). | `src/summer4/results/output.py::left_timed = "time" in left.dims` |
 | CX40 | results | P1, P2 | medium | done | Before `feat/time-free-outputs`: the lazy output surface had no way out to a plain array (`OutputSet.evaluate` rejected any named output that was not an `Output`) and no way back from an array to an output with times, so array-level work and a target on its result both needed `defer`. | Done on `feat/time-free-outputs`: `array()` / `scalar()` nodes evaluate to arrays that compose with numbers, `Param`, ufuncs and `defer`; array names land in `Result.arrays`; `with_values(arr)` restores an output's times, dims and map. Each is a single post-op, so it ports to `PostOp` with `CX30`. | `src/summer4/results/outputset.py::return OutputExpr(kind="array", kids=(self,))` |
+| CX41 | run | P1 | low | deferred | Number width is process-wide: importing summer4 turns on `jax_enable_x64` for every JAX library in the process, and float32 means turning it off for all of them. A float32 model and a float64 model cannot run side by side, and a solve cannot be float32 while its likelihood sums in float64. | See the note. | `futureplans/per-model-dtype.md`; `src/summer4/_precision/__init__.py::jax.config).update("jax_enable_x64", True)` |
 <!-- /composability:findings -->
 
 ## Work packages

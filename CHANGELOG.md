@@ -40,6 +40,16 @@ for the Sphinx site live under [docs/releases/](docs/releases/).
 
 ### Changed
 
+- Importing summer4 turns on JAX's 64-bit mode (`jax_enable_x64`), so models, outputs
+  and likelihoods run in float64, as in summer2. Before, they ran in JAX's default
+  float32, which in a compartment of 100 million moves in steps of 8 people. The flag is
+  process-wide. For float32, set `JAX_ENABLE_X64=0` before starting Python, or call
+  `jax.config.update("jax_enable_x64", False)` after importing summer4 and before
+  compiling (`feat/float64-default`; `CX41`, deferred).
+- The NUTS tuning gate (notebook 29) claims the Laplace start cuts dense warm-up
+  trajectories by at least a third, not by half. In float64 the dense warm-up from the
+  identity sometimes adapts quickly, leaving the Laplace start about 2x ahead; the
+  diagonal claim (more than half) is unchanged.
 - `at_times()` on a time-free output, and a `Target` on one, raise a message that
   says the output was reduced over time and how to score a whole-period total.
   A `Target` on an array output points at `with_values`.

@@ -472,11 +472,13 @@ def test_sa_recovers_infection_in_95_interval() -> None:
         y0=y0,
         run_kwargs=dict(t0=0.0, t1=80.0, dt=1.0, solver="euler"),
     )
-    # SA wants a long warmup relative to NUTS; 500 is enough on this SIR.
+    # SA mixes slowly: 100 draws after 500 warm-up held about 30 distinct values, and whether
+    # that interval covered the truth depended on the seed. This length covers it for seeds 2-7
+    # in float64 and float32.
     run = bm.sample(
         "sa",
-        num_warmup=500,
-        num_samples=100,
+        num_warmup=2000,
+        num_samples=1000,
         num_chains=1,
         seed=2,
         progress_bar=False,
