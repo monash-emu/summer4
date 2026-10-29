@@ -1,4 +1,4 @@
-"""``sum_by``: one name for summing across strata, and the deprecated spellings it replaces."""
+"""``sum_by``: one name for summing across strata."""
 
 from __future__ import annotations
 
@@ -16,12 +16,9 @@ from summer4 import (
     PropertyData,
     PropertyMap,
     Reduce,
-    SavePlan,
-    SaveRequest,
     TransitionFlow,
 )
 from summer4.flows.compiled import CompiledModel
-from summer4.results.output import Output
 
 STATE = Property("state", ("S", "I", "R"))
 AGE = Property("age", ("child", "adult"))
@@ -142,72 +139,3 @@ def test_group_by_fields() -> None:
     assert Reduce(AGE).group_by == AGE
     with pytest.raises(TypeError, match="needs group_by"):
         Reduce()
-
-
-# Deprecated spellings: each warns, names its replacement, and gives the same result.
-
-
-def _warns(new: str) -> pytest.WarningsChecker:
-    return pytest.warns(DeprecationWarning, match=f"use .*{new}")
-
-
-def test_deprecated_output_methods() -> None:
-    res = _run()
-    comps, flow = res["compartments"], res["recovery"]
-    with _warns(r"sum_by\(\)"):
-        old_total = comps.total()
-    np.testing.assert_allclose(np.asarray(old_total.values), np.asarray(comps.sum_by().values))
-    with _warns(r"sum_by\(prop\)"):
-        old_over = flow.sum_over(AGE, side="source")
-    np.testing.assert_allclose(
-        np.asarray(old_over.values.data),
-        np.asarray(flow.sum_by(AGE, side="source").values.data),
-    )
-    with _warns(r"sum_by\(prop\)"):
-        old_pd = PropertyData.wrap(PMAP, Y).sum_over(AGE)
-    np.testing.assert_allclose(
-        np.asarray(old_pd.data), np.asarray(PropertyData.wrap(PMAP, Y).sum_by(AGE).data)
-    )
-
-
-def test_deprecated_expression_methods() -> None:
-    with _warns(r"sum_by\(\)"):
-        assert Compartments().total() == Compartments().sum_by()
-    with _warns(r"sum_by\(\)"):
-        assert Compartments().sum_by(AGE).total() == Compartments().sum_by(AGE).sum_by()
-    with _warns(r"sum_by\(prop\)"):
-        assert FlowMass("recovery").sum_by().sum_over(AGE, "source") == FlowMass(
-            "recovery"
-        ).sum_by().sum_by(AGE, side="source")
-
-
-def test_deprecated_flowref_methods() -> None:
-    with _warns(r"FlowRef.sum_by\(\)"):
-        assert FlowRef("x").sum() == FlowRef("x").sum_by()
-    with _warns(r"FlowRef.sum_by\(prop\)"):
-        assert FlowRef("x").sum_over(AGE) == FlowRef("x").sum_by(AGE)
-
-
-def test_deprecated_sum_over_keyword() -> None:
-    with _warns(r"Compartments\(group_by"):
-        assert Compartments(sum_over=AGE) == Compartments(group_by=AGE)
-    with _warns(r"FlowMass\(group_by"):
-        assert FlowMass("recovery", sum_over=(AGE, "source")) == FlowMass(
-            "recovery", group_by=(AGE, "source")
-        )
-    with _warns(r"Reduce\(group_by"):
-        assert Reduce(sum_over=AGE) == Reduce(AGE)
-    with pytest.raises(TypeError, match="group_by= only"):
-        Compartments(group_by=AGE, sum_over=AGE)
-
-
-def test_deprecated_keyword_saves_the_same() -> None:
-    cm = _model()
-    with _warns(r"Compartments\(group_by"):
-        old = SaveRequest(Compartments(sum_over=AGE))
-    plan_old = SavePlan(requests={"x": old})
-    plan_new = SavePlan(requests={"x": SaveRequest(Compartments(group_by=AGE))})
-    a = cm.run({"gamma": 0.1}, Y, save=plan_old, **RUN)["x"]
-    b = cm.run({"gamma": 0.1}, Y, save=plan_new, **RUN)["x"]
-    assert isinstance(a, Output)
-    np.testing.assert_allclose(np.asarray(a.values.data), np.asarray(b.values.data))

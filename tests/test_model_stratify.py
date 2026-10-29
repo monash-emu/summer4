@@ -200,7 +200,7 @@ def test_update_flow_replace_all_kinds() -> None:
         assert replaced.name == flow.name
 
 
-def test_flowref_sum_over_survives_stratify() -> None:
+def test_flowref_sum_by_survives_stratify() -> None:
     state, pmap = _sir()
     age = Property("age", ("young", "old"))
     model = FlowModel(pmap)

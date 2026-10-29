@@ -261,20 +261,6 @@ class FlowRef(RateOps):
         name = prop.name if isinstance(prop, Property) else prop
         return FlowRef(self.name, reduce=("sum_by", name))
 
-    def sum(self) -> FlowRef:
-        """Deprecated spelling of :meth:`sum_by` with no properties."""
-        from summer4._deprecation import warn_renamed
-
-        warn_renamed("FlowRef.sum()", "FlowRef.sum_by()")
-        return self.sum_by()
-
-    def sum_over(self, prop: Property | str) -> FlowRef:
-        """Deprecated spelling of ``sum_by(prop)``."""
-        from summer4._deprecation import warn_renamed
-
-        warn_renamed("FlowRef.sum_over(prop)", "FlowRef.sum_by(prop)")
-        return self.sum_by(prop)
-
 
 @dataclass(frozen=True, slots=True)
 class UnaryOp(RateOps):
@@ -316,8 +302,7 @@ class Reduce(RateOps):
     ``Reduce(age, where=sel)`` sums only compartments matching ``sel``. That is
     the opposite polarity of :meth:`PropertyData.where`, which *replaces*
     matches — use :meth:`PropertyData.keep` for the same keep-shaped reading on
-    a :class:`PropertyData`. ``sum_over=`` is the deprecated spelling of
-    ``group_by=``.
+    a :class:`PropertyData`.
     """
 
     group_by: Property | str
@@ -327,18 +312,7 @@ class Reduce(RateOps):
         self,
         group_by: Property | str | None = None,
         where: Selector | None = None,
-        *,
-        sum_over: Property | str | None = None,
     ) -> None:
-        if sum_over is not None:
-            if group_by is not None:
-                raise TypeError(
-                    "Reduce: pass group_by= only (sum_over= is its deprecated spelling)."
-                )
-            from summer4._deprecation import warn_renamed
-
-            warn_renamed("Reduce(sum_over=...)", "Reduce(group_by=...)")
-            group_by = sum_over
         if group_by is None:
             raise TypeError("Reduce needs group_by= (the property to keep).")
         object.__setattr__(self, "group_by", group_by)

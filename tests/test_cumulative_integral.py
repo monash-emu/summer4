@@ -8,7 +8,6 @@ import numpy as np
 import pytest
 
 from summer4 import (
-    Compartments,
     FlowMass,
     FlowModel,
     OutputSet,
@@ -170,32 +169,12 @@ def test_final_count_is_independent_of_save_spacing(spacing: float) -> None:
     assert float(rate.cumsum().values[-1]) == pytest.approx(true / spacing, rel=1e-2)
 
 
-def test_cumsum_is_the_old_cumulative() -> None:
+def test_cumsum_is_a_running_sum() -> None:
     series = _rate()
-    with pytest.warns(DeprecationWarning):
-        old = series.cumulative(start=0.5, end=6.0)
-    np.testing.assert_array_equal(
-        np.asarray(old.values), np.asarray(series.cumsum(start=0.5, end=6.0).values)
-    )
     np.testing.assert_allclose(np.asarray(series.cumsum().values), np.cumsum(RATE))
 
 
-def _warns_both() -> pytest.WarningsChecker:
-    return pytest.warns(DeprecationWarning, match=r"cumsum\(\).*cumulative_integral\(\)")
-
-
-def test_deprecated_cumulative_warns_naming_both_replacements() -> None:
-    with _warns_both():
-        _rate().cumulative()
-    with _warns_both():
-        old_leaf = FlowMass("infection").sum_by().cumulative(start=2.0)
-    assert old_leaf == FlowMass("infection").sum_by().cumsum(start=2.0)
-    with _warns_both():
-        old_chain = Compartments().cumulative()
-    assert old_chain == Compartments().cumsum()
-
-
-def test_output_set_evaluates_both_and_warns_once() -> None:
+def test_output_set_evaluates_named_outputs() -> None:
     cm, y0 = _sir()
     outputs = OutputSet()
     outputs["incidence"] = FlowMass("infection").sum_by()
@@ -203,9 +182,6 @@ def test_output_set_evaluates_both_and_warns_once() -> None:
     outputs["infections"] = outputs.ref("incidence").integrate_intervals()
     outputs["running"] = outputs.ref("infections").cumsum()
     outputs["from_leaf"] = FlowMass("infection").sum_by().cumulative_integral()
-    with _warns_both() as record:
-        outputs["old"] = outputs.ref("incidence").cumulative()
-    assert len(record) == 1
     res = cm.run({"beta": 0.3}, y0, t0=0.0, t1=20.0, dt=2.0, save=outputs.plan(SavePlan()))
     named = outputs.evaluate(res, {})
     rate = res["incidence"].sum_by()
@@ -215,7 +191,4 @@ def test_output_set_evaluates_both_and_warns_once() -> None:
     )
     np.testing.assert_allclose(
         np.asarray(named["from_leaf"].values)[1:], np.asarray(named["running"].values), rtol=1e-6
-    )
-    np.testing.assert_allclose(
-        np.asarray(named["old"].values), np.asarray(rate.cumsum().values), rtol=1e-6
     )

@@ -120,20 +120,6 @@ class OutputExpr:
             return self._call("sum_by", *props)
         return self._call("sum_by", *props, side=side)
 
-    def sum_over(self, prop: Any, side: Any = None) -> OutputExpr:
-        """Deprecated spelling of ``sum_by(prop, side=side)``."""
-        from summer4._deprecation import warn_renamed
-
-        warn_renamed("sum_over(prop)", "sum_by(prop)")
-        return self.sum_by(prop, side=side)
-
-    def total(self) -> OutputExpr:
-        """Deprecated spelling of :meth:`sum_by` with no properties."""
-        from summer4._deprecation import warn_renamed
-
-        warn_renamed("total()", "sum_by()")
-        return self._call("sum_by")
-
     def rolling(
         self,
         window: int,
@@ -153,13 +139,6 @@ class OutputExpr:
     ) -> OutputExpr:
         """Running integral of a rate; see :meth:`Output.cumulative_integral`."""
         return self._call("cumulative_integral", start=start, end=end, method=method)
-
-    def cumulative(self, *, start: Any = None, end: Any = None) -> OutputExpr:
-        """Deprecated: a plain running sum; use :meth:`cumsum` or :meth:`cumulative_integral`."""
-        from summer4._deprecation import warn_cumulative
-
-        warn_cumulative("cumulative()")
-        return self.cumsum(start=start, end=end)
 
     def midpoint(self) -> OutputExpr:
         return self._call("midpoint")
