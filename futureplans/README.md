@@ -66,3 +66,6 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
   missing matmul.
 - [`nuts-gate-test-flaky.md`](nuts-gate-test-flaky.md) — the step-47 gate test
   `test_gate_recommended_run_converges_on_every_element` flakes across CI runners.
+- [`guide-on-ramp-sharp-edges.md`](guide-on-ramp-sharp-edges.md) — fourteen
+  places a modeller trips writing the new guide (no rate-as-output, two-call outputs, `side=`,
+  hidden `Data`/`timevarying`, `Poisson` mean default, …).
