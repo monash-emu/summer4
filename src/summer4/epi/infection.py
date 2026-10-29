@@ -255,6 +255,9 @@ class ForceOfInfection(RateOps):
     both arguments have ``properties=()``; parameterised shapes use
     :attr:`FOIKind.GENERALISED` or rate-tree arithmetic on ``Reduce``.
 
+    Legacy: passing a plain function as ``kind`` is removed in roadmap step 42, replaced by
+    ``custom_kind(fn, Param(...))``. Not used in the documentation.
+
     ``where`` polarity on the infectious selector is KEEP (via :class:`Reduce`).
 
     ``infectiousness`` weights the source of transmission. A mapping of

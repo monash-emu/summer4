@@ -1397,6 +1397,10 @@ class FlowModel:
         Source-state gathers stay per-flow: concatenating them and slicing
         adds ``slice``→``pad`` cost under ``grad`` (see
         ``futureplans/vf-gather-and-mul-followups.md``).
+
+        Legacy: removed in roadmap step 41, replaced by
+        ``field_refs(defer(f)(Params(), y=StateArray(), t=Time()), Schema)`` (step 39).
+        Not used in the documentation.
         """
         from summer4.flows.stages import HoistTable, build_hoist_table, roots_of
 
