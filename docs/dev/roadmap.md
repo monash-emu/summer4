@@ -191,11 +191,11 @@ Each step that touches `src/` also has its worker write a short step plan,
 <!-- roadmap:current -->
 | Field | Value |
 | --- | --- |
-| Step | 48 |
-| Status | in-progress |
-| Branch | `feat/clean-surface` |
+| Step | 28 |
+| Status | next |
+| Branch | `feat/calib-outputs` |
 | Cut from | `main` |
-| Last landed | `feat/float64-default` (PR #69; `main` at `516d05f`, after #70 and #71) |
+| Last landed | `feat/clean-surface` (PR #72, step 48: clean surface, docs rebuilt and published) |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -282,7 +282,7 @@ its replacement, so step 45 has nothing left to do and is marked `done` (absorbe
 | 25 | J | WP19 | `feat/calib-multistart` | `plans/calibration-toolkit.plan.md` | Step 25 | done | CW5 CW6 |
 | 26 | J | WP19 | `feat/calib-gradient-free` | `plans/calibration-toolkit.plan.md` | Step 26 | done | CW7 |
 | 27 | J | WP19 | `feat/calib-seeded-mcmc` | `plans/calibration-toolkit.plan.md` | Step 27 | done | CW8 CW9 |
-| 28 | J | WP19 | `feat/calib-outputs` | `plans/calibration-toolkit.plan.md` | Step 28 | planned | CW10 CW11 |
+| 28 | J | WP19 | `feat/calib-outputs` | `plans/calibration-toolkit.plan.md` | Step 28 | next | CW10 CW11 |
 | 29 | K | CP1 | `feat/solve-composable` | `plans/solve-composable.plan.md` | Whole | done | CX1 CX2 CX3 CX4 CX5 |
 | 30 | K | CP2 | `feat/calib-composable` | `plans/calib-composable.plan.md` | Whole | done | CX16 CX17 CX18 CX19 CX24 |
 | 31 | L | CP5 | `fix/likelihood-scale-expr` | `plans/unified-lazy-idiom.plan.md` | Step 31 | done | CX26 |
@@ -302,7 +302,7 @@ its replacement, so step 45 has nothing left to do and is marked `done` (absorbe
 | 45 | M | — | `chore/remove-deprecated-doors` | `plans/unified-lazy-idiom.plan.md` | Step 45 | done | — |
 | 46 | K | CP3 | `feat/calib-posterior-protocol` | `plans/tb-nh-joint-calibration.plan.md` | §4, §5 NH2 | done | CX21 CX22 CX35 |
 | 47 | K | CP7 | `feat/nuts-tuning` | `plans/nuts-tuning.plan.md` | all | done | CX36 CX37 CX38 |
-| 48 | N | — | `feat/clean-surface` | `plans/clean-surface.plan.md` | Steps C0–C9 | in-progress | — |
+| 48 | N | — | `feat/clean-surface` | `plans/clean-surface.plan.md` | Steps C0–C9 | done | — |
 <!-- /roadmap:steps -->
 
 `Closes` lists row IDs of {doc}`../evaluation/tb-ports` (and, where a step moves
@@ -3592,6 +3592,10 @@ current (on `main` when this step was cut: step 31 `next`).
 
 ## Step 48 — `feat/clean-surface`
 
+**Landed:** feat/clean-surface, PR #72, 2026-10-30.
+
+**Worker:** Claude orchestrator (opus); implementers haiku (C1, C3, C7, C8) and sonnet (C2, C4, C5 ×3, C6); attempts 1 each. Checks by the orchestrator, not separate checker agents.
+
 ### Summary
 
 A provisional clean surface, cut from `main` after PRs #69–#71. It removes every spelling that
@@ -3636,6 +3640,28 @@ CI artifact and read page by page (approved deviation: no new example notebook).
 ### Handoff
 
 Set step 48 `done`, step 28 `next`. Record which removals C2 made, and the worker-tier tally.
+
+**Done (2026-10-30).**
+
+- **C2 removed every callable form.** It removed base values, per-trait weights (these were
+  already rejected) and whole-table weights. `defer` reproduced values and gradients for all three.
+- **Legacy tags.** `derived_fn`, `derived_refs`, `SaveFn`, `ComputedValue` and the bare-callable
+  FOI `kind` remain, tagged *Legacy* in their docstrings.
+- **Guide pages.**
+  - The guide lives in `docs/guide/01`–`08`.
+  - The summer2 ports are archived, unbuilt, under `docs/guide/_sources/`.
+  - The summer2 strain-stratification page is not in the guide, so ledger row
+    `examples/08-strain-stratification` is now `partial`.
+- **For step 28.**
+  - Its notebook may use the Phase L spellings and everything on the guide pages.
+  - Its user-facing plots also belong on a guide page or in the textbook, and must pass
+    `tests/test_docs_idiom.py`.
+- **Sharp edges.** `futureplans/guide-on-ramp-sharp-edges.md` lists 14 that the guide writers
+  hit. Step 40 should re-check guide page 03 (plotting a rate over time).
+- **Tooling.** The docs environment has no `nbconvert`; workers executed notebooks with
+  `nbclient`.
+- **On the mini.** `pixi` is at `/opt/homebrew/bin/pixi` and is not on the PATH that
+  `mini build` uses. Call it by its full path.
 
 ---
 
