@@ -282,9 +282,11 @@ class Output:
     def _combine(left: object, right: object, op: str) -> Output:
         """Binary op of an Output with a scalar, an array, or another Output.
 
-        Output ∘ Output requires the same time axis. Dim names broadcast when
-        they are equal or one side's names are a subset of the other's (a
-        per-age series divided by a total). Alignment is host-side; the
+        Output ∘ Output requires the same time axis when both sides have a
+        ``time`` dim. A time-free output (``integrate()``, ``at(t)``) has none:
+        it broadcasts across the other side's times, which the result keeps.
+        Dim names broadcast when they are equal or one side's names are a
+        subset of the other's (a per-age series divided by a total). Alignment is host-side; the
         arithmetic is traced through :func:`summer4.flows.algebra.apply_binary`.
 
         The result stays :class:`~summer4.jax.propertydata.PropertyData` when
@@ -326,7 +328,11 @@ class Output:
     def _combine_outputs(left: Output, right: Output, op: str) -> Output:
         from summer4.flows.algebra import apply_binary
 
-        _require_same_times(left.times, right.times)
+        left_timed = "time" in left.dims
+        right_timed = "time" in right.dims
+        if left_timed and right_timed:
+            _require_same_times(left.times, right.times)
+        times = right.times if right_timed and not left_timed else left.times
         dims = _broadcast_dim_order(left.dims, right.dims)
         left_arr = _broadcast_named(_as_array(left.values), left.dims, dims)
         right_arr = _broadcast_named(_as_array(right.values), right.dims, dims)
@@ -339,7 +345,7 @@ class Output:
             and values.shape[-1] == pmap.size
         ):
             values = PropertyData(pmap, values)
-        return Output(times=left.times, values=values, dims=dims)
+        return Output(times=times, values=values, dims=dims)
 
     def __neg__(self) -> Output:
         return self._map_unary("neg")
@@ -379,6 +385,51 @@ class Output:
 
     def _pmap(self) -> PropertyMap | None:
         return self.values.pmap if isinstance(self.values, PropertyData) else None
+
+    # --- plain arrays -----------------------------------------------------------------
+
+    def array(self) -> Any:
+        """The values as a plain array, axes in ``dims`` order.
+
+        A :class:`~summer4.jax.propertydata.PropertyData` is unwrapped; times,
+        dims and the map are dropped. Under ``jit`` this is the traced array
+        itself, with no added operations. :meth:`with_values` goes back.
+        """
+        return _as_array(self.values)
+
+    def scalar(self) -> Any:
+        """The value of a 0-d output (``dims == ()``), such as ``sum_by().integrate()``."""
+        arr = _as_array(self.values)
+        shape = tuple(np.shape(arr))
+        if shape != ():
+            raise ValueError(
+                f"scalar() needs a 0-d output, but dims {self.dims} have shape {shape}. "
+                "Reduce it first (sum_by(), integrate(), at()), or use array()."
+            )
+        return arr
+
+    def with_values(self, values: Any) -> Output:
+        """This output's times, dims and map with new ``values`` of the same shape.
+
+        The way back from :meth:`array`: compute on the plain array, then give
+        the result this output's axes so it can be plotted or scored by a
+        :class:`~summer4.results.targets.Target`.
+        """
+        if isinstance(values, Output):
+            raise TypeError(
+                "with_values() takes an array, not an Output. Combine Outputs directly, "
+                "or pass other.array()."
+            )
+        if isinstance(values, PropertyData):
+            values = values.data
+        want = tuple(np.shape(_as_array(self.values)))
+        got = tuple(np.shape(values))
+        if got != want:
+            raise ValueError(
+                f"with_values() got shape {got}; this output (dims {self.dims}) has shape "
+                f"{want}."
+            )
+        return self._with(values=_wrap_like(self.values, values))
 
     # --- compartment / edge selection -------------------------------------------------
 
@@ -528,7 +579,20 @@ class Output:
         return self._with(values=new_vals, times=new_times, dims=dims)
 
     def at_times(self, ts: Any) -> Output:
-        """Linearly interpolate onto ``ts`` (exact gather when on-grid)."""
+        """Linearly interpolate onto ``ts`` (exact gather when on-grid).
+
+        A time-free output (no ``time`` in ``dims``) raises: it has no series
+        to interpolate, and repeating one value at every requested time would
+        hide a total compared with a series.
+        """
+        if "time" not in self.dims:
+            anchor = _describe_times(self.times)
+            raise ValueError(
+                f"at_times() needs a 'time' axis, but this output has dims {self.dims}: "
+                f"it was reduced over time (anchor {anchor}). Combine it with a series "
+                "first (series / total), read a running total with cumulative(), or give "
+                "an array times with with_values()."
+            )
         xp = _xp()
         targets = np.asarray(ts, dtype=np.float64)
         idx, w = self.times.weights_for(targets)

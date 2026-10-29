@@ -9,6 +9,34 @@ Install from the matching git tag (see
 [Installation](docs/getting-started/installation.md)). Narrative release notes
 for the Sphinx site live under [docs/releases/](docs/releases/).
 
+## [Unreleased]
+
+### Added
+
+- Time-free outputs broadcast over time. An output reduced over time
+  (`integrate()`, `at(t)`) has no `time` dim, and now combines with a series:
+  `rate / rate.integrate()` is the share of the whole-period total at each time,
+  `prev - prev.at(t)` the change since `t`, and
+  `by_age / by_age.integrate().sum_by()` each age's share of the all-age total.
+  It used to raise *Output time axes differ*, eagerly and in an `OutputSet`
+  (`feat/time-free-outputs`; `CX39`).
+- `at(when)` is a lazy post-op: `outputs.ref("prev").at(10.0)` and
+  `Compartments(...).sum_by().at(10.0)` work in an `OutputSet`.
+- `array()` and `scalar()` give an output's values as a plain array, eagerly
+  (`Output.array()`) and lazily (`outputs.ref(name).array()`). Array nodes combine
+  with numbers, `Param` expressions, NumPy ufuncs and `defer`; an `OutputSet` name
+  that evaluates to an array is in `Result.arrays`, and `result[name]` finds it.
+  `with_values(arr)` goes back: the output's times, dims and map with new values of
+  the same shape, so the result can be plotted or scored by a `Target` (`CX40`).
+
+### Changed
+
+- `at_times()` on a time-free output, and a `Target` on one, raise a message that
+  says the output was reduced over time and how to score a whole-period total.
+  A `Target` on an array output points at `with_values`.
+- `defer(f)(...)` with no output argument (only `array()` values, parameters and
+  numbers) returns `f`'s value as an array output instead of raising.
+
 ## [0.2.0a7] — 2026-10-29
 
 Tag: [`v0.2.0a7`](https://github.com/monash-emu/summer4/releases/tag/v0.2.0a7)

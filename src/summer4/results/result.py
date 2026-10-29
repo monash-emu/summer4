@@ -118,6 +118,12 @@ class Result:
     Calling :meth:`evaluate` requires a finite ``max_steps`` at solve time and
     allocates that many interpolation coefficients — strictly heavier than any
     save grid based on ``ts`` alone.
+
+    ``arrays`` holds named outputs that are plain arrays rather than
+    :class:`~summer4.results.output.Output` objects (an
+    :class:`~summer4.results.outputset.OutputSet` name built with ``array()``
+    or ``scalar()``). ``result[name]``, ``in`` and :meth:`keys` see both;
+    a solve never fills it.
     """
 
     times: TimeAxis
@@ -127,21 +133,25 @@ class Result:
     _state_pmap: Any = field(default=None, repr=False, compare=False)
     final_state: Any | None = None
     final_time: Any | None = None
+    arrays: Mapping[str, Any] = field(default_factory=dict)
 
-    def __getitem__(self, key: str) -> Output:
-        try:
+    def __getitem__(self, key: str) -> Output | Any:
+        if key in self.outputs:
             return self.outputs[key]
-        except KeyError:
-            raise KeyError(f"Unknown result key {key!r}. Known: {list(self.outputs)}") from None
+        if key in self.arrays:
+            return self.arrays[key]
+        raise KeyError(f"Unknown result key {key!r}. Known: {list(self.keys())}")
 
     def __contains__(self, key: object) -> bool:
-        return isinstance(key, str) and key in self.outputs
+        return isinstance(key, str) and (key in self.outputs or key in self.arrays)
 
     def __iter__(self) -> Iterator[str]:
-        return iter(self.outputs)
+        return iter(self.keys())
 
     def keys(self) -> Any:
-        return self.outputs.keys()
+        if not self.arrays:
+            return self.outputs.keys()
+        return (*self.outputs.keys(), *self.arrays.keys())
 
     def with_params(self, params: object) -> ResultWithParams:
         """Host-side provenance wrapper; does not enter the pytree."""
@@ -191,6 +201,12 @@ class Result:
         if backend not in ("pandas", "polars"):
             raise ValueError(f"backend must be 'pandas' or 'polars', got {backend!r}.")
         chosen = _frame_names(self, names)
+        arrays = [name for name in chosen if name not in self.outputs]
+        if arrays:
+            raise TypeError(
+                f"Result.to_frame cannot format {arrays[0]!r}: it is a plain array with no "
+                "times. Give it an output's axes with with_values(), or pass names= without it."
+            )
         outputs = [(name, self.outputs[name]) for name in chosen]
         for name, output in outputs:
             _require_host_output(name, output)
@@ -225,6 +241,8 @@ class Result:
                 flat_children.append(tr.values)
                 pmaps.append(None)
         flat_children.extend(times_list)
+        array_keys = tuple(self.arrays.keys())
+        flat_children.extend(self.arrays[k] for k in array_keys)
         aux = (
             self.times.epoch,
             self.times.kind,
@@ -234,6 +252,7 @@ class Result:
             epochs,
             kinds,
             self._state_pmap,
+            array_keys,
         )
         return tuple(flat_children), aux
 
@@ -241,11 +260,12 @@ class Result:
     def tree_unflatten(cls, aux: Any, children: tuple[Any, ...]) -> Result:
         from summer4.jax.propertydata import PropertyData
 
-        epoch, kind, keys, dims, pmaps, epochs, kinds, state_pmap = aux
+        epoch, kind, keys, dims, pmaps, epochs, kinds, state_pmap, array_keys = aux
         time_values, solver, dense, final_state, final_time, *rest = children
         n = len(keys)
         vals = rest[:n]
-        trace_times = rest[n:]
+        trace_times = rest[n : 2 * n]
+        array_vals = rest[2 * n :]
         times = TimeAxis(values=time_values, epoch=epoch, kind=kind)
         outputs: dict[str, Output] = {}
         for key, dim, pmap, val, tvals, ep, kd in zip(
@@ -265,6 +285,7 @@ class Result:
             _state_pmap=state_pmap,
             final_state=final_state,
             final_time=final_time,
+            arrays=dict(zip(array_keys, array_vals, strict=True)),
         )
 
 

@@ -75,8 +75,20 @@ class _OutputExprChain:
     def integrate(self, method: Literal["trapezoid", "simpson"] = "trapezoid") -> OutputExpr:
         return self._as_output_expr().integrate(method)
 
+    def at(self, when: Any) -> OutputExpr:
+        return self._as_output_expr().at(when)
+
     def at_times(self, ts: Any) -> OutputExpr:
         return self._as_output_expr().at_times(ts)
+
+    def array(self) -> OutputExpr:
+        return self._as_output_expr().array()
+
+    def scalar(self) -> OutputExpr:
+        return self._as_output_expr().scalar()
+
+    def with_values(self, values: object) -> OutputExpr:
+        return self._as_output_expr().with_values(values)
 
 
 @dataclass(frozen=True, slots=True, init=False)
