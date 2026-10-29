@@ -9,7 +9,9 @@ Install from the matching git tag (see
 [Installation](docs/getting-started/installation.md)). Narrative release notes
 for the Sphinx site live under [docs/releases/](docs/releases/).
 
-## [Unreleased]
+## [0.2.0a8] — 2026-10-30
+
+Tag: [`v0.2.0a8`](https://github.com/monash-emu/summer4/releases/tag/v0.2.0a8)
 
 ### Added
 
@@ -19,7 +21,7 @@ for the Sphinx site live under [docs/releases/](docs/releases/).
   `prev - prev.at(t)` the change since `t`, and
   `by_age / by_age.integrate().sum_by()` each age's share of the all-age total.
   It used to raise *Output time axes differ*, eagerly and in an `OutputSet`
-  (`feat/time-free-outputs`; `CX39`).
+  (`feat/time-free-outputs`, PR #71; `CX39`).
 - `at(when)` is a lazy post-op: `outputs.ref("prev").at(10.0)` and
   `Compartments(...).sum_by().at(10.0)` work in an `OutputSet`.
 - `array()` and `scalar()` give an output's values as a plain array, eagerly
@@ -32,7 +34,7 @@ for the Sphinx site live under [docs/releases/](docs/releases/).
   rate over time, on the same save times and 0 at `start`. On a `FlowMass` it
   counts people whatever the save spacing. It equals
   `integrate_intervals().cumsum()` with a leading 0
-  (`feat/cumulative-integral`).
+  (`feat/cumulative-integral`, PR #70).
 - `Output.cumsum(start=, end=)`: the running sum `cumulative()` always was, for
   amounts per interval (`integrate_intervals()` output, `midpoint()` series,
   counts). Both are also on output expressions (`outputs.ref(...)`) and save
@@ -45,7 +47,7 @@ for the Sphinx site live under [docs/releases/](docs/releases/).
   float32, which in a compartment of 100 million moves in steps of 8 people. The flag is
   process-wide. For float32, set `JAX_ENABLE_X64=0` before starting Python, or call
   `jax.config.update("jax_enable_x64", False)` after importing summer4 and before
-  compiling (`feat/float64-default`; `CX41`, deferred).
+  compiling (`feat/float64-default`, PR #69; `CX41`, deferred).
 - The NUTS tuning gate (notebook 29) claims the Laplace start cuts dense warm-up
   trajectories by at least a third, not by half. In float64 the dense warm-up from the
   identity sometimes adapts quickly, leaving the Laplace start about 2x ahead; the
