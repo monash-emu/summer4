@@ -26,6 +26,8 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
 - [`state-ledgers-flow-integral.md`](state-ledgers-flow-integral.md) — opt-in
   exact flow accumulation via `State.ledgers` (post-hoc trapezoid is not the
   solver's own integral).
+- [`sa-multichain-init.md`](sa-multichain-init.md) — `bm.sample("sa", num_chains>1)`
+  fails in numpyro's vectorised SA init.
 - [`per-model-dtype.md`](per-model-dtype.md) — the number width is process-wide
   (`jax_enable_x64`); a per-model `compile(dtype=)` and a separate likelihood width.
 - [`trace-plot-backend-coupling.md`](trace-plot-backend-coupling.md) —

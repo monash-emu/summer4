@@ -19,7 +19,8 @@ We want float64 by default, with float32 still available.
 
 Option (a) of two considered: turn the flag on when summer4 is imported.
 
-- `src/summer4/_precision.py`, imported first by `summer4/__init__.py`, calls
+- `src/summer4/_precision/__init__.py` (a subpackage: top-level `summer4/*.py` modules stay
+  free of `import jax`), imported first by `summer4/__init__.py`, calls
   `jax.config.update("jax_enable_x64", True)` unless `JAX_ENABLE_X64` is in the
   environment (then JAX has already applied the user's choice).
 - Opting out: `JAX_ENABLE_X64=0` before starting Python, or
@@ -33,7 +34,7 @@ Option (b), a per-model `compile(dtype=)` with a separate likelihood width, is d
 
 ## Files
 
-- `src/summer4/_precision.py` (new), `src/summer4/__init__.py`
+- `src/summer4/_precision/__init__.py` (new), `src/summer4/__init__.py`
 - `tests/test_float64_default.py` (new)
 - `examples/notebooks/33-float64-default.ipynb` (acceptance)
 - `docs/user/09-running-and-results.ipynb` (a "Number precision" section),
@@ -50,7 +51,8 @@ Option (b), a per-model `compile(dtype=)` with a separate likelihood width, is d
 - A 100-million-person SIR seeded with one case: float64 conserves the population to
   1e-6 and records the first infections in S; float32 drifts by more than a person and
   S stays at exactly 1e8.
-- The whole suite passes in float64.
+- The whole suite passes in float64. `test_sa_recovers_infection_in_95_interval` gets a
+  longer chain: its 100-draw SA chain covered the truth only for lucky seeds.
 
 ## Acceptance notebook
 
