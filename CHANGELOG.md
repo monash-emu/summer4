@@ -28,6 +28,15 @@ for the Sphinx site live under [docs/releases/](docs/releases/).
   that evaluates to an array is in `Result.arrays`, and `result[name]` finds it.
   `with_values(arr)` goes back: the output's times, dims and map with new values of
   the same shape, so the result can be plotted or scored by a `Target` (`CX40`).
+- `Output.cumulative_integral(start=, end=)`: the running trapezoid integral of a
+  rate over time, on the same save times and 0 at `start`. On a `FlowMass` it
+  counts people whatever the save spacing. It equals
+  `integrate_intervals().cumsum()` with a leading 0
+  (`feat/cumulative-integral`).
+- `Output.cumsum(start=, end=)`: the running sum `cumulative()` always was, for
+  amounts per interval (`integrate_intervals()` output, `midpoint()` series,
+  counts). Both are also on output expressions (`outputs.ref(...)`) and save
+  specs (`FlowMass(...).sum_by().cumulative_integral()`).
 
 ### Changed
 
@@ -36,6 +45,14 @@ for the Sphinx site live under [docs/releases/](docs/releases/).
   A `Target` on an array output points at `with_values`.
 - `defer(f)(...)` with no output argument (only `array()` values, parameters and
   numbers) returns `f`'s value as an array output instead of raising.
+
+### Deprecated
+
+- `cumulative()` (on `Output`, output expressions and save specs) still returns
+  the same running sum, with a `DeprecationWarning` naming `cumsum()` and
+  `cumulative_integral()`. On a rate it was not a cumulative count: with saves
+  two days apart it gave half the true number. It will be removed in a later
+  release.
 
 ## [0.2.0a7] — 2026-10-29
 

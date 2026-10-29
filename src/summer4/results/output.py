@@ -17,7 +17,7 @@ from typing import Any, Literal
 
 import numpy as np
 
-from summer4._deprecation import warn_renamed
+from summer4._deprecation import warn_cumulative, warn_renamed
 from summer4.flows.edges import edge_labels, rewrite_edge_selector, sum_by_edge
 from summer4.jax.propertydata import PropertyData
 from summer4.properties import Property, Trait
@@ -211,26 +211,41 @@ def _shared_pmap(left: Output, right: Output) -> PropertyMap | None:
     return left_map if left_map is not None else right_map
 
 
-def _exact_save_index(times: np.ndarray, when: When, epoch: Any, *, bound: str) -> int:
+def _exact_save_index(times: np.ndarray, when: When, epoch: Any, *, op: str, bound: str) -> int:
     """Index of ``when`` on ``times``. ``when`` must be a save time."""
     if isinstance(when, (int, float, np.floating)):
         t = float(when)
     else:
         if epoch is None:
-            raise TypeError(
-                f"cumulative {bound}={when!r} needs TimeAxis.epoch to become a model time."
-            )
+            raise TypeError(f"{op} {bound}={when!r} needs TimeAxis.epoch to become a model time.")
         t = float(np.asarray(epoch.to_model(when)).reshape(-1)[0])
     hits = np.flatnonzero(np.isclose(times, t, rtol=0.0, atol=0.0))
     if hits.size != 1:
         hits = np.flatnonzero(np.isclose(times, t, rtol=0.0, atol=1e-8))
     if hits.size != 1:
         raise ValueError(
-            f"cumulative {bound}={when!r} (model time {t}) is not a save time. "
+            f"{op} {bound}={when!r} (model time {t}) is not a save time. "
             f"Save times run from {float(times[0])} to {float(times[-1])} "
             f"({times.size} points)."
         )
     return int(hits[0])
+
+
+def _time_first(data: Any, t_ax: int, n: int) -> Any:
+    """``data`` with time moved to axis 0, checked against ``n`` save times."""
+    data_t = _xp().moveaxis(data, t_ax, 0)
+    if int(data_t.shape[0]) != n:
+        raise ValueError(f"Time axis length {data_t.shape[0]} does not match {n} save times.")
+    return data_t
+
+
+def _zero_outside(data_t: Any, i0: int, i1: int) -> Any:
+    """Zero the time-first ``data_t`` outside save indexes ``[i0, i1]``."""
+    xp = _xp()
+    n = int(data_t.shape[0])
+    idx = np.arange(n)
+    mask = ((idx >= i0) & (idx <= i1)).reshape((n,) + (1,) * (data_t.ndim - 1))
+    return xp.where(xp.asarray(mask), data_t, xp.zeros_like(data_t))
 
 
 @dataclass(frozen=True, slots=True)
@@ -469,7 +484,8 @@ class Output:
         dims ``("time", "compartment")`` become ``("time",)``. ``sum_by(age)``
         keeps one column per age, and ``sum_by(age, strain)`` one per
         (age, strain) pair. Time is never summed; reduce it separately with
-        :meth:`integrate`, :meth:`cumulative`, :meth:`rolling` or :meth:`at`.
+        :meth:`integrate`, :meth:`cumulative_integral`, :meth:`cumsum`, :meth:`rolling`
+        or :meth:`at`.
 
         On an edge output with ``props``, ``side`` is required (``\"source\"``
         or ``\"dest\"``) — there is no safe default. On a compartment output,
@@ -481,7 +497,7 @@ class Output:
             if tuple(self.dims) == ("time",):
                 raise ValueError(
                     "sum_by() keeps time, and this output has nothing else to sum. "
-                    "Reduce over time with integrate(), cumulative() or rolling()."
+                    "Reduce over time with integrate(), cumulative_integral() or rolling()."
                 )
             data = _xp().sum(_as_array(self.values), axis=-1)
             return self._with(values=data, dims=self.dims[:-1])
@@ -695,8 +711,26 @@ class Output:
             out = PropertyData(self.values.pmap, out)
         return self._with(values=out)
 
-    def cumulative(self, *, start: When | None = None, end: When | None = None) -> Output:
-        """Cumulative sum along time.
+    def _save_window(
+        self, start: When | None, end: When | None, *, op: str
+    ) -> tuple[np.ndarray, int, int]:
+        """Concrete save times and the ``[i0, i1]`` indexes of ``start`` and ``end``."""
+        times = self.times._concrete(op=op)
+        n = int(times.size)
+        epoch = self.times.epoch
+        i0 = 0 if start is None else _exact_save_index(times, start, epoch, op=op, bound="start")
+        i1 = n - 1 if end is None else _exact_save_index(times, end, epoch, op=op, bound="end")
+        if i1 < i0:
+            raise ValueError(f"{op} end is before start (save indexes {i0} and {i1}).")
+        return times, i0, i1
+
+    def cumsum(self, *, start: When | None = None, end: When | None = None) -> Output:
+        """Running sum along time, for series that are already amounts per interval.
+
+        Use it on :meth:`integrate_intervals` output, a :meth:`midpoint` series
+        (summer2 parity) or observed counts. A flow *rate* (``FlowMass``) is
+        people per unit time: integrate it with :meth:`cumulative_integral`
+        instead, or ``integrate_intervals().cumsum()``.
 
         With no bounds this is ``cumsum``. ``start`` and ``end`` must be save
         times on this output (summer2 ``request_cumulative_output(start_time=)``
@@ -710,25 +744,59 @@ class Output:
         if start is None and end is None:
             out = xp.cumsum(data, axis=t_ax)
             return self._with(values=_wrap_like(self.values, out))
-        times = self.times._concrete(op="cumulative")
-        n = int(times.size)
-        i0 = (
-            0 if start is None else _exact_save_index(times, start, self.times.epoch, bound="start")
-        )
-        i1 = n - 1 if end is None else _exact_save_index(times, end, self.times.epoch, bound="end")
-        if i1 < i0:
-            raise ValueError(f"cumulative end is before start (save indexes {i0} and {i1}).")
-        data_t = xp.moveaxis(data, t_ax, 0)
-        if int(data_t.shape[0]) != n:
-            raise ValueError(f"Time axis length {data_t.shape[0]} does not match {n} save times.")
+        times, i0, i1 = self._save_window(start, end, op="cumsum")
+        data_t = _time_first(data, t_ax, int(times.size))
         csum = xp.cumsum(data_t, axis=0)
         window = csum if i0 == 0 else csum - csum[i0 - 1]
-        idx = xp.arange(n)
-        mask = (idx >= i0) & (idx <= i1)
-        mask = mask.reshape((n,) + (1,) * (data_t.ndim - 1))
-        out = xp.where(mask, window, xp.zeros_like(window))
-        out = xp.moveaxis(out, 0, t_ax)
+        out = xp.moveaxis(_zero_outside(window, i0, i1), 0, t_ax)
         return self._with(values=_wrap_like(self.values, out))
+
+    def cumulative_integral(
+        self,
+        *,
+        start: When | None = None,
+        end: When | None = None,
+        method: Literal["trapezoid"] = "trapezoid",
+    ) -> Output:
+        """Running integral over time of a rate, on the same save times.
+
+        ``out[i]`` is the trapezoid integral from ``start`` (default: the first
+        save time) to save time ``i``, so it is 0 at ``start`` and has the same
+        length as this output. On a ``FlowMass`` (people per unit time) it is
+        people, whatever the save spacing. It equals
+        ``integrate_intervals().cumsum()`` with a leading 0.
+
+        ``start`` and ``end`` must be save times; points outside the window are
+        zero, as in :meth:`cumsum`. The time steps come from the concrete save
+        times, so the traced program is one ``cumsum`` and does not grow with
+        trajectory length. See :meth:`integrate_intervals` for the quadrature
+        error; only ``method="trapezoid"`` is supported.
+        """
+        if method != "trapezoid":
+            raise ValueError(
+                f"cumulative_integral supports method='trapezoid' only, got {method!r}."
+            )
+        xp = _xp()
+        t_ax = _time_axis_index(self.dims)
+        times, i0, i1 = self._save_window(start, end, op="cumulative_integral")
+        data_t = _time_first(_as_array(self.values), t_ax, int(times.size))
+        trailing = (1,) * (data_t.ndim - 1)
+        dt = xp.asarray(np.diff(times)).reshape((-1,) + trailing)
+        panels = (data_t[:-1] + data_t[1:]) * (0.5 * dt)
+        zero = xp.zeros((1,) + tuple(panels.shape[1:]), dtype=panels.dtype)
+        running = xp.concatenate([zero, xp.cumsum(panels, axis=0)], axis=0)
+        window = running if i0 == 0 else running - running[i0]
+        out = xp.moveaxis(_zero_outside(window, i0, i1), 0, t_ax)
+        return self._with(values=_wrap_like(self.values, out))
+
+    def cumulative(self, *, start: When | None = None, end: When | None = None) -> Output:
+        """Deprecated: a plain running sum; use :meth:`cumsum` or :meth:`cumulative_integral`.
+
+        Returns exactly what :meth:`cumsum` returns. On a rate that is not a
+        cumulative count, which is why the name is going.
+        """
+        warn_cumulative("Output.cumulative()", "Output.")
+        return self.cumsum(start=start, end=end)
 
     def midpoint(self) -> Output:
         """Summer2's default flow-output convention (``raw_results=False``).

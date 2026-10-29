@@ -1,4 +1,4 @@
-"""Name-aligned Output arithmetic, windowed cumulative, midpoint, multi-flow mass."""
+"""Name-aligned Output arithmetic, windowed cumsum, midpoint, multi-flow mass."""
 
 from __future__ import annotations
 
@@ -97,25 +97,25 @@ def test_jit_grad_of_named_division() -> None:
     assert float(grad) != 0.0
 
 
-def test_cumulative_window_zeros_outside_and_requires_a_save_time() -> None:
+def test_cumsum_window_zeros_outside_and_requires_a_save_time() -> None:
     series = _series([1.0, 2.0, 3.0, 4.0], ("time",))
-    window = series.cumulative(start=1.0, end=2.0)
+    window = series.cumsum(start=1.0, end=2.0)
     np.testing.assert_allclose(np.asarray(window.values), [0.0, 2.0, 5.0, 0.0])
-    from_start = series.cumulative(start=2.0)
+    from_start = series.cumsum(start=2.0)
     np.testing.assert_allclose(np.asarray(from_start.values), [0.0, 0.0, 3.0, 7.0])
-    np.testing.assert_allclose(np.asarray(series.cumulative().values), [1.0, 3.0, 6.0, 10.0])
+    np.testing.assert_allclose(np.asarray(series.cumsum().values), [1.0, 3.0, 6.0, 10.0])
     with pytest.raises(ValueError, match="not a save time"):
-        series.cumulative(start=1.5)
+        series.cumsum(start=1.5)
     with pytest.raises(ValueError, match="end is before start"):
-        series.cumulative(start=3.0, end=1.0)
+        series.cumsum(start=3.0, end=1.0)
 
 
-def test_cumulative_under_jit() -> None:
+def test_cumsum_under_jit() -> None:
     times = _times(4)
 
     def run(scale: object) -> object:
         series = Output(times=times, values=jnp.arange(1.0, 5.0) * scale, dims=("time",))
-        return series.cumulative(start=1.0).values
+        return series.cumsum(start=1.0).values
 
     np.testing.assert_allclose(np.asarray(jax.jit(run)(1.0)), [0.0, 2.0, 5.0, 9.0], rtol=1e-5)
 

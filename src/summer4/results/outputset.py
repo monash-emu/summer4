@@ -9,8 +9,9 @@ solver. Interior nodes are arithmetic and the same post-ops on
 leaves, so a calibration run does not materialise series it never saves.
 
 The DAG is static. Evaluating it inside ``jit`` unrolls one step per named
-output; the arithmetic itself is traced. ``cumulative(start=)`` still needs a
-concrete time axis, as :meth:`~summer4.results.output.Output.cumulative` does.
+output; the arithmetic itself is traced. ``cumsum(start=)`` and
+``cumulative_integral()`` still need a concrete time axis, as
+:meth:`~summer4.results.output.Output.cumsum` does.
 """
 
 from __future__ import annotations
@@ -39,7 +40,8 @@ _CALLS = frozenset(
         "select",
         "sum_by",
         "rolling",
-        "cumulative",
+        "cumsum",
+        "cumulative_integral",
         "midpoint",
         "integrate_intervals",
         "integrate",
@@ -98,7 +100,7 @@ class OutputExpr:
             raise ValueError(f"Output name must be a non-empty string, got {name!r}.")
         return OutputExpr(kind="ref", name=name)
 
-    def _call(self, method: str, *args: Any, **kwargs: Any) -> OutputExpr:
+    def _call(self, method: str, /, *args: Any, **kwargs: Any) -> OutputExpr:
         if method not in _CALLS:
             raise AttributeError(method)
         return OutputExpr(
@@ -142,8 +144,22 @@ class OutputExpr:
     ) -> OutputExpr:
         return self._call("rolling", window, how=how, center=center, min_periods=min_periods)
 
+    def cumsum(self, *, start: Any = None, end: Any = None) -> OutputExpr:
+        """Running sum of amounts per interval; see :meth:`Output.cumsum`."""
+        return self._call("cumsum", start=start, end=end)
+
+    def cumulative_integral(
+        self, *, start: Any = None, end: Any = None, method: Literal["trapezoid"] = "trapezoid"
+    ) -> OutputExpr:
+        """Running integral of a rate; see :meth:`Output.cumulative_integral`."""
+        return self._call("cumulative_integral", start=start, end=end, method=method)
+
     def cumulative(self, *, start: Any = None, end: Any = None) -> OutputExpr:
-        return self._call("cumulative", start=start, end=end)
+        """Deprecated: a plain running sum; use :meth:`cumsum` or :meth:`cumulative_integral`."""
+        from summer4._deprecation import warn_cumulative
+
+        warn_cumulative("cumulative()")
+        return self.cumsum(start=start, end=end)
 
     def midpoint(self) -> OutputExpr:
         return self._call("midpoint")
