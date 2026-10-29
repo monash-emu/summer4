@@ -9,7 +9,7 @@ model to get time series you can plot and fit to data. It is written on JAX,
 so models compile to fast code and can be fitted to data with Bayesian
 calibration.
 
-summer4 is an alpha release (`0.2.0a7`) and the API may still change.
+summer4 is an alpha release (`0.3.0a1`) and the API may still change.
 
 ## Install
 
@@ -18,13 +18,13 @@ add this to your project:
 
 ```toml
 [pypi-dependencies]
-summer4 = { git = "https://github.com/monash-emu/summer4.git", tag = "v0.2.0a7", extras = ["calibration", "pandas", "frames"] }
+summer4 = { git = "https://github.com/monash-emu/summer4.git", tag = "v0.3.0a1", extras = ["calibration", "pandas", "frames"] }
 ```
 
 Or with pip:
 
 ```bash
-pip install "summer4[calibration,pandas,frames] @ git+https://github.com/monash-emu/summer4.git@v0.2.0a7"
+pip install "summer4[calibration,pandas,frames] @ git+https://github.com/monash-emu/summer4.git@v0.3.0a1"
 ```
 
 | Extra | Packages | When you need it |

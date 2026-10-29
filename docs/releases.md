@@ -1,11 +1,11 @@
 # Release notes
 
-## Unreleased: the clean surface (step 48)
+## 0.3.0a1: the clean surface (step 48)
 
 This release removes the renamed spellings that were kept only for compatibility, and
 leaves one way to write each thing. The documentation has been rebuilt from scratch on the
 unified idiom: a short guide, the textbook chapters migrated to the same idiom, and a roadmap
-page. Once this release is merged, the documentation will be published to
+page. The documentation is published at
 <https://monash-emu.github.io/summer4/>. Nothing is kept behind a deprecation warning: each
 removed spelling is gone, so update your code using the table below. One addition:
 `Reduce(where=sel)` with no `group_by` is now the scalar number of individuals in the matching

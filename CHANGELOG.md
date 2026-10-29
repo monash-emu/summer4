@@ -11,6 +11,14 @@ Narrative release notes for the documentation site live in
 
 ## [Unreleased]
 
+## [0.3.0a1] — 2026-10-30
+
+Tag: [`v0.3.0a1`](https://github.com/monash-emu/summer4/releases/tag/v0.3.0a1)
+
+The clean surface (roadmap step 48): renamed spellings removed with no deprecation period,
+documentation rebuilt in the unified idiom and published at
+<https://monash-emu.github.io/summer4/>.
+
 ### Added
 
 - Scalar `Reduce`: `Reduce(where=sel)` is the number of individuals in the matching

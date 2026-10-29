@@ -13,8 +13,8 @@ os.environ["PYTHONPATH"] = _project_root + os.pathsep + os.environ.get("PYTHONPA
 project = "summer4"
 copyright = "2026, Monash EMU"
 author = "Monash EMU"
-release = "0.2.0a7"
-version = "0.2.0a7"
+release = "0.3.0a1"
+version = "0.3.0a1"
 
 extensions = [
     "myst_nb",
