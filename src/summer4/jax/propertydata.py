@@ -20,6 +20,25 @@ from summer4.propertymap import PropertyMap
 from summer4.selectors import Selector
 
 
+def product_map(props: tuple[Property, ...]) -> PropertyMap:
+    """The map with one row per combination of ``props``' traits, first property slowest."""
+    pmap = PropertyMap.from_property(props[0])
+    for prop in props[1:]:
+        pmap = pmap.stratify(prop)
+    return pmap
+
+
+def group_ids(
+    codes: Any, columns: list[int], props: tuple[Property, ...]
+) -> tuple[np.ndarray, int]:
+    """Row index into :func:`product_map` for each row of ``codes``; ``-1`` where any is absent."""
+    picked = np.asarray(codes, dtype=np.int64)[:, columns]
+    sizes = [len(prop.traits) for prop in props]
+    valid = np.all(picked >= 0, axis=1)
+    flat = np.ravel_multi_index(tuple(np.where(valid[:, None], picked, 0).T), sizes)
+    return np.where(valid, flat, -1).astype(np.int32), int(np.prod(sizes))
+
+
 def _resolve_property(pmap: PropertyMap, prop: Property | str) -> Property:
     if isinstance(prop, str):
         return pmap.get_property(prop)
@@ -128,7 +147,7 @@ class PropertyData:
 
         Equivalent to ``where(~sel, other)``. Prefer this spelling when summing
         a subset of compartments so the polarity matches
-        ``select`` / ``sum_over`` / :class:`~summer4.flows.rates.Reduce`.
+        ``select`` / ``sum_by`` / :class:`~summer4.flows.rates.Reduce`.
         """
         return self.where(~sel, other)
 
@@ -136,29 +155,43 @@ class PropertyData:
         """Gather values for each trait of ``prop``."""
         return {trait: self.data[..., idx] for trait, idx in self.pmap.partition(prop).items()}
 
-    def sum_over(self, prop: Property | str) -> PropertyData:
-        """Sum compartments by trait of ``prop``.
+    def sum_by(self, *props: Property | str) -> Any:
+        """Sum compartments, keeping one value per combination of ``props``' traits.
 
-        The result map is ``PropertyMap.from_property(prop)``. Compartments
-        where ``prop`` is absent do not contribute.
+        ``sum_by(age)`` is one value per age; ``sum_by(age, strain)`` one per
+        (age, strain) pair, over ``PropertyMap.from_property(age).stratify(strain)``.
+        Compartments missing any of ``props`` do not contribute. ``sum_by()``
+        sums every compartment and returns a plain array (the map is gone).
         """
-        resolved = _resolve_property(self.pmap, prop)
-        col_i = self.pmap.column_index(resolved)
-        col = np.asarray(self.pmap.codes[:, col_i], dtype=np.int32)
-        n_traits = len(resolved.traits)
-        valid = col >= 0
-        safe_ids = np.where(valid, col, 0).astype(np.int32)
+        if not props:
+            return jnp.sum(self.data, axis=-1)
+        resolved = tuple(_resolve_property(self.pmap, prop) for prop in props)
+        names = [prop.name for prop in resolved]
+        if len(set(names)) != len(names):
+            raise ValueError(f"sum_by() repeats a property: {names}.")
+        safe_ids, n_groups = group_ids(
+            self.pmap.codes, [self.pmap.column_index(p) for p in resolved], resolved
+        )
+        valid = safe_ids >= 0
+        ids = np.where(valid, safe_ids, 0).astype(np.int32)
         weighted = self.data * valid
         n = self.pmap.size
 
         def _row(row: Any) -> Any:
-            return jax.ops.segment_sum(row, safe_ids, num_segments=n_traits)
+            return jax.ops.segment_sum(row, ids, num_segments=n_groups)
 
         flat = jnp.reshape(weighted, (-1, n))
         summed = jax.vmap(_row)(flat)
-        out_shape = self.data.shape[:-1] + (n_traits,)
-        reduced = jnp.reshape(summed, out_shape)
-        return PropertyData(PropertyMap.from_property(resolved), reduced)
+        reduced = jnp.reshape(summed, self.data.shape[:-1] + (n_groups,))
+        return PropertyData(product_map(resolved), reduced)
+
+    def sum_over(self, prop: Property | str) -> PropertyData:
+        """Deprecated spelling of :meth:`sum_by` with one property."""
+        from summer4._deprecation import warn_renamed
+
+        warn_renamed("PropertyData.sum_over(prop)", "PropertyData.sum_by(prop)")
+        result: PropertyData = self.sum_by(prop)
+        return result
 
     def broadcast_over(self, prop: Property | str, values: Any) -> PropertyData:
         """Expand per-trait ``values`` onto this map along ``prop``.

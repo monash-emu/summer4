@@ -61,8 +61,8 @@ def test_sum_over_source_vs_dest_ageing() -> None:
     plan = SavePlan(requests={"ageing": SaveRequest(FlowMass(flow="ageing"))})
     res = cm.run({}, y0, t0=0.0, steps=1, dt=1.0, save=plan)
     trace = res["ageing"]
-    by_src = trace.sum_over(age, side="source")
-    by_dest = trace.sum_over(age, side="dest")
+    by_src = trace.sum_by(age, side="source")
+    by_dest = trace.sum_by(age, side="dest")
     src = np.asarray(by_src.values.data)
     dest = np.asarray(by_dest.values.data)
     assert src.shape[-1] == 3
@@ -84,7 +84,7 @@ def test_sum_over_requires_side_on_edge() -> None:
     plan = SavePlan(requests={"ageing": SaveRequest(FlowMass(flow="ageing"))})
     res = cm.run({}, y0, t0=0.0, steps=1, dt=1.0, save=plan)
     with pytest.raises(ValueError, match="side='source' or side='dest'"):
-        res["ageing"].sum_over(age)
+        res["ageing"].sum_by(age)
 
 
 def test_select_source_and_dest() -> None:
@@ -193,7 +193,7 @@ def test_where_with_sum_over_uses_filtered_mass() -> None:
     plan = SavePlan(
         requests={
             "young": SaveRequest(
-                FlowMass(flow="ageing", where=Source(age["0-4"]), sum_over=(age, "source"))
+                FlowMass(flow="ageing", where=Source(age["0-4"]), group_by=(age, "source"))
             )
         }
     )
@@ -205,7 +205,7 @@ def test_where_with_sum_over_uses_filtered_mass() -> None:
     # Same via post-hoc query
     full = SavePlan(requests={"ageing": SaveRequest(FlowMass(flow="ageing"))})
     res2 = cm.run({}, y0, t0=0.0, steps=1, dt=1.0, save=full)
-    post = res2["ageing"].select(Source(age["0-4"])).sum_over(age, side="source")
+    post = res2["ageing"].select(Source(age["0-4"])).sum_by(age, side="source")
     np.testing.assert_allclose(np.asarray(post.values.data)[0], data[0])
 
 
@@ -254,7 +254,7 @@ def test_jit_grad_sum_over_dest_at_times() -> None:
     def loss(scale: object) -> object:
         y = y0 * scale
         res = cm.run({}, y, t0=0.0, steps=4, dt=0.25, save=plan)
-        return jnp.sum(res["ageing"].sum_over(age, side="dest").at_times(targets).values.data)
+        return jnp.sum(res["ageing"].sum_by(age, side="dest").at_times(targets).values.data)
 
     val = jax.jit(loss)(1.0)
     g = jax.grad(loss)(1.0)

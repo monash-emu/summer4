@@ -29,7 +29,7 @@ those targets.
 |---|---|---|
 | SEIRS crossed with three age bands | `PropertyMap.from_property(state).stratify(age)`, 12 rows | `S1` `S2` `full` |
 | Ageing between bands | `TraitChain.from_breakpoints(age)` (or explicit pairs) — one flow | `S6` `partial` |
-| Births replacing deaths | `EntryFlow(..., death.sum())`; flow-to-flow rates are topologically sorted | `F4` `F5` `full` |
+| Births replacing deaths | `EntryFlow(..., death.sum_by())`; flow-to-flow rates are topologically sorted | `F4` `F5` `full` |
 | Universal death | `ExitFlow("death", Everything(), rate)` | `F3` `full` |
 | Population that skews old | Emergent: integrate the demography alone to its steady state | — |
 | Initial state with `I == 0` | `PropertyData.wrap(...).at[sel].set(...)` passed as `run`'s `y0` | `L4` `L5` `S8` `none` |

@@ -59,7 +59,7 @@ reach, and it is the denominator for every percentage on this site.
 | F2 | `add_death_flow` | flows | `full` | `ExitFlow` |  |
 | F3 | `add_universal_death_flows` | flows | `full` | `ExitFlow(Everything(), rate)` |  |
 | F4 | `add_crude_birth_flow` | flows | `full` | `EntryFlow` | Absolute rate from a derived total |
-| F5 | `add_replacement_birth_flow` | flows | `full` | `EntryFlow(dest, death.sum_over(...))` |  |
+| F5 | `add_replacement_birth_flow` | flows | `full` | `EntryFlow(dest, death.sum_by(...))` |  |
 | F6 | `add_importation_flow` | flows | `full` | `EntryFlow` | Absolute rate |
 | F7 | `add_infection_frequency_flow` | flows | `full` | `ForceOfInfection(kind=FOIKind.FREQUENCY)` | Same object as F8; kind selects frequency vs density |
 | F8 | `add_infection_density_flow` | flows | `full` | `ForceOfInfection(kind=FOIKind.DENSITY)` | Same object as F7; kind selects frequency vs density |
@@ -71,7 +71,7 @@ reach, and it is the denominator for every percentage on this site.
 | P1 | `Parameter` | parameters | `full` | `FieldRef via derived_refs` | Schema-checked, IDE-completable |
 | P2 | `Function` | parameters | `full` | `defer / Transform / callables in derived_fn` | `defer` is the rate-slot door; `Transform` only adjusts an existing rate |
 | P3 | `Time` | parameters | `full` | `Time()` rate node; `t` on `derived_fn` | |
-| P4 | `DerivedOutput (as a rate input)` | parameters | `full` | `FlowRef, .sum(), .sum_over()` | Topologically ordered, cycles detected |
+| P4 | `DerivedOutput (as a rate input)` | parameters | `full` | `FlowRef, .sum(), .sum_by()` | Topologically ordered, cycles detected |
 | P5 | `Data` | parameters | `full` | `summer4.data.Data` | Dated series → `Interp` via `Epoch` |
 | P6 | `get_linear_interpolation_function` | parameters | `full` | `summer4.timevarying.linear` | Structural `Interp`; x and y knots may be `FieldRef`s; clamps outside range |
 | P7 | `get_sigmoidal_interpolation_function` | parameters | `full` | `summer4.timevarying.sigmoidal` | `sharpness` is summer2 curvature; breakpoints may be `FieldRef`s |

@@ -148,7 +148,7 @@ def _series_1d(output: Any) -> Any:
         return arr.reshape((arr.shape[0],))
     raise ValueError(
         "posterior_runs requires scalar time series outputs; got shape "
-        f"{tuple(arr.shape)}. Use OutputSet entries with .total() (or similar)."
+        f"{tuple(arr.shape)}. Use OutputSet entries with .sum_by() (or similar)."
     )
 
 
@@ -445,7 +445,7 @@ def _scenario_bindings(
             "run_kwargs must not include save=; posterior_runs builds the save "
             "plan from targets and outputs."
         )
-    save_plan = _build_save_plan(bm.targets.plan(SavePlan()), outputs)
+    save_plan = _build_save_plan(bm.save_plan, outputs)
     return compiled, outputs, run_kwargs, y0_fn, merge_fn, save_plan
 
 

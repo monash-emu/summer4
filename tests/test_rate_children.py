@@ -373,7 +373,7 @@ CASES: tuple[Case, ...] = (
     ),
     Case(
         id="reduce",
-        build=lambda: Reduce(sum_over="age"),
+        build=lambda: Reduce(group_by="age"),
         flow_refs=set(),
         field_paths=set(),
         capture_meta={},
@@ -434,7 +434,7 @@ def _vax_foi(*, reads: str = "vaccination") -> ForceOfInfection:
         infectious=_STATE["I"],
         group_by=_ONE_AGE,
         kind=FOIKind.FREQUENCY,
-        contact_rate=Param("beta") * (1.0 - k * FlowRef(reads).sum()),
+        contact_rate=Param("beta") * (1.0 - k * FlowRef(reads).sum_by()),
         mixing=MixingMatrix(_ONE_AGE, [[1.0]], check_reciprocal=False),
     )
 

@@ -2,7 +2,7 @@
 
 Leaves are save specs (:class:`~summer4.results.plan.Compartments`,
 :class:`~summer4.results.plan.FlowMass`, and the other quantities). A chain
-such as ``Compartments().total()`` or ``FlowMass("infection").midpoint()`` is
+such as ``Compartments().sum_by()`` or ``FlowMass("infection").midpoint()`` is
 still that leaf: the reduction runs in :meth:`OutputSet.evaluate`, not in the
 solver. Interior nodes are arithmetic and the same post-ops on
 :meth:`OutputSet.ref`. :meth:`OutputSet.plan` contributes only the distinct
@@ -37,8 +37,7 @@ _LEAF_TYPES = (Compartments, FlowMass, ComputedValue, SaveFn, GroupedOutput)
 _CALLS = frozenset(
     {
         "select",
-        "sum_over",
-        "total",
+        "sum_by",
         "rolling",
         "cumulative",
         "midpoint",
@@ -100,11 +99,25 @@ class OutputExpr:
     def select(self, sel: Any) -> OutputExpr:
         return self._call("select", sel)
 
+    def sum_by(self, *props: Any, side: Any = None) -> OutputExpr:
+        """Sum across the strata, keeping time and ``props``; see :meth:`Output.sum_by`."""
+        if side is None:
+            return self._call("sum_by", *props)
+        return self._call("sum_by", *props, side=side)
+
     def sum_over(self, prop: Any, side: Any = None) -> OutputExpr:
-        return self._call("sum_over", prop, side)
+        """Deprecated spelling of ``sum_by(prop, side=side)``."""
+        from summer4._deprecation import warn_renamed
+
+        warn_renamed("sum_over(prop)", "sum_by(prop)")
+        return self.sum_by(prop, side=side)
 
     def total(self) -> OutputExpr:
-        return self._call("total")
+        """Deprecated spelling of :meth:`sum_by` with no properties."""
+        from summer4._deprecation import warn_renamed
+
+        warn_renamed("total()", "sum_by()")
+        return self._call("sum_by")
 
     def rolling(
         self,
@@ -289,8 +302,8 @@ class OutputSet:
 
     ``plan`` saves each distinct leaf once. The save key is the first output
     name that uses that spec; a second spec in the same expression is
-    ``name__2``. ``sum_over`` on a save spec is that spec's save-time field,
-    not a post-op; group afterwards with ``outputs.ref(name).sum_over(...)``.
+    ``name__2``. ``group_by`` on a save spec is that spec's save-time field,
+    not a post-op; group afterwards with ``outputs.ref(name).sum_by(...)``.
     A name whose expression is only post-ops on that leaf still
     uses the name as the save key, and the solved ``Result`` holds the *raw*
     leaf there. :meth:`evaluate` is what returns the named values, including

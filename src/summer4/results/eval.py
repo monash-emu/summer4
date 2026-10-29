@@ -6,7 +6,7 @@ from typing import Any
 
 import numpy as np
 
-from summer4.flows.edges import EdgeMap, rewrite_edge_selector, sum_over_edge
+from summer4.flows.edges import EdgeMap, rewrite_edge_selector, sum_by_edge
 from summer4.flows.rates import _lookup_path
 from summer4.jax.propertydata import PropertyData
 from summer4.propertymap import PropertyMap
@@ -57,7 +57,7 @@ def _flow_piece(
     where: Selector | np.ndarray | None,
     sum_over: tuple[Any, Any] | None,
 ) -> Any:
-    """One flow's mass after ``where`` / ``sum_over``."""
+    """One flow's mass after ``where`` / ``group_by``."""
     if name not in ctx.flows:
         raise KeyError(f"Flow {name!r} not in SaveContext.flows.")
     mass = ctx.flows[name]
@@ -69,7 +69,7 @@ def _flow_piece(
     if sum_over is None:
         return PropertyData(table, mass)
     prop, side = sum_over
-    return sum_over_edge(mass, table, prop, side)
+    return sum_by_edge(mass, table, (prop,), side)
 
 
 def _sum_named_flows(
@@ -90,7 +90,7 @@ def _sum_named_flows(
         ):
             raise ValueError(
                 f"FlowMass flows {names[0]!r} and {name!r} do not share selected "
-                "dims after where/sum_over."
+                "dims after where/group_by."
             )
         acc = acc + piece
     return acc
@@ -107,7 +107,7 @@ def eval_quantity(
     import jax.numpy as jnp
 
     match what:
-        case Compartments(where=where, sum_over=sum_over):
+        case Compartments(where=where, group_by=group_by):
             y = ctx.y
             from summer4.jax.state import State
 
@@ -120,9 +120,9 @@ def eval_quantity(
                 active = pmap.take(idx)
                 data = data[..., idx]
             pd = PropertyData(active, data)
-            return pd.sum_over(sum_over) if sum_over is not None else pd
-        case FlowMass(flow=flow, where=where, sum_over=sum_over):
-            return _sum_named_flows(flow_names(flow), ctx, edge_maps, where, sum_over)
+            return pd.sum_by(group_by) if group_by is not None else pd
+        case FlowMass(flow=flow, where=where, group_by=group_by):
+            return _sum_named_flows(flow_names(flow), ctx, edge_maps, where, group_by)
         case ComputedValue(path=path):
             return _lookup_path(ctx.derived, path)
         case GroupedOutput(name=name):
@@ -150,14 +150,14 @@ def values_for(req: Any, raw: Any, model: Any) -> Any:
     """
     what = req.what if hasattr(req, "what") else req
     match what:
-        case Compartments(where=where, sum_over=sum_over):
-            if sum_over is not None:
-                return PropertyData(PropertyMap.from_property(sum_over), raw)
+        case Compartments(where=where, group_by=group_by):
+            if group_by is not None:
+                return PropertyData(PropertyMap.from_property(group_by), raw)
             if where is None:
                 return PropertyData(model.pmap, raw)
             idx = _select_idx(model.pmap, where, edge=False)
             return PropertyData(model.pmap.take(idx), raw)
-        case FlowMass(flow=flow, where=where, sum_over=sum_over):
+        case FlowMass(flow=flow, where=where, group_by=group_by):
             # Every named flow shares this layout; evaluation already rejected
             # a mismatch, so the first flow's map is the saved array's map.
             emap = model.edge_maps[flow_names(flow)[0]]
@@ -165,8 +165,8 @@ def values_for(req: Any, raw: Any, model: Any) -> Any:
             if where is not None:
                 idx = _select_idx(table, where, edge=True)
                 table = table.take(idx)
-            if sum_over is not None:
-                prop, _side = sum_over
+            if group_by is not None:
+                prop, _side = group_by
                 return PropertyData(PropertyMap.from_property(prop), raw)
             return PropertyData(table, raw)
         case GroupedOutput(name=name):
@@ -200,12 +200,12 @@ def dims_for_quantity(
     what: Compartments | FlowMass | ComputedValue | SaveFn | GroupedOutput,
 ) -> tuple[str, ...]:
     match what:
-        case Compartments(sum_over=sum_over):
-            if sum_over is not None:
+        case Compartments(group_by=group_by):
+            if group_by is not None:
                 return ("time", "group")
             return ("time", "compartment")
-        case FlowMass(sum_over=sum_over):
-            if sum_over is not None:
+        case FlowMass(group_by=group_by):
+            if group_by is not None:
                 return ("time", "group")
             return ("time", "edge")
         case GroupedOutput(name=name):

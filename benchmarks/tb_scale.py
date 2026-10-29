@@ -113,35 +113,35 @@ def _build_outputs(
 ) -> OutputSet:
     """About 150 named outputs: totals, per-age series, ratios, cumulatives."""
     outputs = OutputSet()
-    outputs["population"] = Compartments().total()
-    outputs["infected"] = Compartments(where=state["clin_inf"] | state["asympt"]).total()
-    outputs["latent"] = Compartments(where=state["early_latent"] | state["late_latent"]).total()
-    outputs["on_tx"] = Compartments(where=state["on_treatment"]).total()
-    outputs["reachable_pop"] = Compartments(where=reach["reachable"]).total()
+    outputs["population"] = Compartments().sum_by()
+    outputs["infected"] = Compartments(where=state["clin_inf"] | state["asympt"]).sum_by()
+    outputs["latent"] = Compartments(where=state["early_latent"] | state["late_latent"]).sum_by()
+    outputs["on_tx"] = Compartments(where=state["on_treatment"]).sum_by()
+    outputs["reachable_pop"] = Compartments(where=reach["reachable"]).sum_by()
     outputs["prevalence"] = outputs.ref("infected") / outputs.ref("population")
     outputs["latent_frac"] = outputs.ref("latent") / outputs.ref("population")
     outputs["reach_frac_out"] = outputs.ref("reachable_pop") / outputs.ref("population")
 
     for name in STATES:
-        outputs[f"total_{name}"] = Compartments(where=state[name]).total()
+        outputs[f"total_{name}"] = Compartments(where=state[name]).sum_by()
         outputs[f"frac_{name}"] = outputs.ref(f"total_{name}") / outputs.ref("population")
 
     for trait in age.traits:
         band = age[trait]
-        outputs[f"pop_age_{trait}"] = Compartments(where=band).total()
+        outputs[f"pop_age_{trait}"] = Compartments(where=band).sum_by()
         outputs[f"inf_age_{trait}"] = Compartments(
             where=(state["clin_inf"] | state["asympt"]) & band
-        ).total()
+        ).sum_by()
         outputs[f"prev_age_{trait}"] = outputs.ref(f"inf_age_{trait}") / outputs.ref(
             f"pop_age_{trait}"
         )
         outputs[f"latent_age_{trait}"] = Compartments(
             where=(state["early_latent"] | state["late_latent"]) & band
-        ).total()
-        outputs[f"tx_age_{trait}"] = Compartments(where=state["on_treatment"] & band).total()
-        outputs[f"naive_age_{trait}"] = Compartments(where=state["mtb_naive"] & band).total()
-        outputs[f"rec_age_{trait}"] = Compartments(where=state["recovered"] & band).total()
-        outputs[f"reach_age_{trait}"] = Compartments(where=reach["reachable"] & band).total()
+        ).sum_by()
+        outputs[f"tx_age_{trait}"] = Compartments(where=state["on_treatment"] & band).sum_by()
+        outputs[f"naive_age_{trait}"] = Compartments(where=state["mtb_naive"] & band).sum_by()
+        outputs[f"rec_age_{trait}"] = Compartments(where=state["recovered"] & band).sum_by()
+        outputs[f"reach_age_{trait}"] = Compartments(where=reach["reachable"] & band).sum_by()
 
     # Flow masses (midpoint), scaled, and cumulative from 2020.
     # Keep churn as midpoint-only so the named set stays near ~150.
@@ -166,20 +166,20 @@ def _build_outputs(
         )
     ]
     for fname in primary_flows:
-        outputs[f"flow_{fname}"] = FlowMass(fname).total().midpoint()
+        outputs[f"flow_{fname}"] = FlowMass(fname).sum_by().midpoint()
         outputs[f"cum_{fname}"] = outputs.ref(f"flow_{fname}").cumulative(start=2020.0)
         outputs[f"scaled_{fname}"] = outputs.ref(f"flow_{fname}") * Param("output_scale")
 
     for name in flow_names:
         if name.startswith("churn_"):
-            outputs[f"flow_{name}"] = FlowMass(name).total().midpoint()
+            outputs[f"flow_{name}"] = FlowMass(name).sum_by().midpoint()
 
     for trait in age.traits:
         outputs[f"inc_age_{trait}"] = (
-            FlowMass("inf_mtb_naive", where=Source(age[trait])).total().midpoint()
+            FlowMass("inf_mtb_naive", where=Source(age[trait])).sum_by().midpoint()
         )
         outputs[f"death_age_{trait}"] = (
-            FlowMass("death", where=Source(age[trait])).total().midpoint()
+            FlowMass("death", where=Source(age[trait])).sum_by().midpoint()
         )
 
     # Multi-flow incidence via Output algebra — FlowMass over several infection
@@ -335,7 +335,7 @@ def build_tb_scale_model(*, fuse_compartment_updates: bool = True) -> TbScaleMod
     death = model.add_flow(ExitFlow("death", Everything(), death_rate))
     flow_names.append("death")
     # Recycle deaths into (mtb_naive, age 0), preserving reachability via sum_over(age).
-    model.add_flow(EntryFlow("recycle", state["mtb_naive"] & age["0"], death.sum_over(age)))
+    model.add_flow(EntryFlow("recycle", state["mtb_naive"] & age["0"], death.sum_by(age)))
     flow_names.append("recycle")
 
     # Stratum births (importation into youngest naive band).

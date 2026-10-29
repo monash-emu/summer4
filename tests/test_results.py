@@ -122,10 +122,10 @@ def test_query_select_sum_between_dates() -> None:
     selected = res["compartments"].select(state["I"])
     assert selected.values.pmap.size == len(age.traits)
     assert selected.values.pmap.size < pmap.size
-    infected = selected.sum_over(age)
+    infected = selected.sum_by(age)
     windowed = infected.between(date(2020, 1, 5), date(2020, 1, 15))
     assert np.asarray(windowed.times.values).size == 11
-    total_i = selected.total()
+    total_i = selected.sum_by()
     assert float(np.asarray(total_i.at(date(2020, 1, 10)).values)) > 0
 
 
@@ -176,7 +176,7 @@ def test_compartments_where_in_saveplan_stays_map_aware() -> None:
     plan = SavePlan(
         requests={
             "infected": SaveRequest(Compartments(where=state["I"])),
-            "infected_by_age": SaveRequest(Compartments(where=state["I"], sum_over=age)),
+            "infected_by_age": SaveRequest(Compartments(where=state["I"], group_by=age)),
         }
     )
     res = cm.run({}, y0, t0=0.0, steps=4, dt=1.0, save=plan)
@@ -187,7 +187,7 @@ def test_compartments_where_in_saveplan_stays_map_aware() -> None:
     # Still queryable after a where=-restricted save.
     narrowed = infected.select(age["0-4"])
     assert narrowed.values.pmap.size == 1
-    by_age = infected.sum_over(age)
+    by_age = infected.sum_by(age)
     assert by_age.dims[-1] == "group"
     assert np.asarray(res["infected_by_age"].values.data).shape[-1] == len(age.traits)
 
@@ -203,7 +203,7 @@ def test_jit_select_gather_shrinks_under_jit() -> None:
         selected = res["compartments"].select(state["I"])
         # Shape is concrete under jit (static sub-map size).
         assert selected.values.pmap.size == len(age.traits)
-        pred = selected.total().at_times(np.array([5.0]))
+        pred = selected.sum_by().at_times(np.array([5.0]))
         return jnp.sum(jnp.asarray(pred.values) ** 2)
 
     jitted = jax.jit(loss)
@@ -239,7 +239,7 @@ def test_resample_me_matches_host_reference() -> None:
     epoch = Epoch(date(2020, 1, 1))
     plan = SavePlan(requests={"compartments": SaveRequest(Compartments())})
     res = cm.run({}, y0, t0=0.0, steps=59, dt=1.0, save=plan, epoch=epoch)
-    total = res["compartments"].select(state["I"]).total()
+    total = res["compartments"].select(state["I"]).sum_by()
     monthly = total.resample("ME", how="sum")
 
     # Host reference with stdlib datetime only (not pandas).
@@ -258,7 +258,7 @@ def test_rolling_mean_matches_numpy() -> None:
     state, _age, _pmap, cm, y0 = _compiled_sir()
     plan = SavePlan(requests={"compartments": SaveRequest(Compartments())})
     res = cm.run({}, y0, t0=0.0, steps=20, dt=1.0, save=plan)
-    total = res["compartments"].select(state["I"]).total()
+    total = res["compartments"].select(state["I"]).sum_by()
     rolled = total.rolling(7, how="mean", min_periods=1)
     raw = np.asarray(total.values, dtype=np.float64)
     expected = np.empty_like(raw)
@@ -272,7 +272,7 @@ def test_cumulative_matches_cumsum() -> None:
     state, _age, _pmap, cm, y0 = _compiled_sir()
     plan = SavePlan(requests={"compartments": SaveRequest(Compartments())})
     res = cm.run({}, y0, t0=0.0, steps=10, dt=1.0, save=plan)
-    total = res["compartments"].select(state["I"]).total()
+    total = res["compartments"].select(state["I"]).sum_by()
     np.testing.assert_allclose(
         np.asarray(total.cumulative().values),
         np.cumsum(np.asarray(total.values)),
@@ -284,7 +284,7 @@ def test_at_times_interpolates_and_on_grid_noop() -> None:
     state, _age, _pmap, cm, y0 = _compiled_sir()
     plan = SavePlan(requests={"compartments": SaveRequest(Compartments())})
     res = cm.run({}, y0, t0=0.0, steps=10, dt=1.0, save=plan)
-    total = res["compartments"].select(state["I"]).total()
+    total = res["compartments"].select(state["I"]).sum_by()
     on_grid = total.at_times(np.array([0.0, 5.0, 10.0]))
     np.testing.assert_allclose(
         np.asarray(on_grid.values),
@@ -313,7 +313,7 @@ def test_jit_grad_loss_ending_in_at_times() -> None:
         y = PropertyData(pmap, data)
         plan = SavePlan(requests={"compartments": SaveRequest(Compartments())})
         res = cm.run({}, y, t0=0.0, steps=5, dt=1.0, save=plan)
-        pred = res["compartments"].select(state["I"]).total().at_times(np.array([5.0]))
+        pred = res["compartments"].select(state["I"]).sum_by().at_times(np.array([5.0]))
         return jnp.sum(jnp.asarray(pred.values) ** 2)
 
     jitted = jax.jit(loss)

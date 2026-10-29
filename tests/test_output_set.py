@@ -46,8 +46,8 @@ def test_plan_saves_leaves_only_and_dedups_specs() -> None:
     state = Property("state", ("S", "I"))
     outputs = OutputSet()
     outputs["by_age"] = Compartments(where=state["I"])
-    outputs["infected"] = Compartments(where=state["I"]).total()
-    outputs["population"] = Compartments().total()
+    outputs["infected"] = Compartments(where=state["I"]).sum_by()
+    outputs["population"] = Compartments().sum_by()
     outputs["prevalence"] = outputs.ref("infected") / outputs.ref("population")
     plan = outputs.plan()
     assert set(plan.requests) == {"by_age", "population"}
@@ -59,7 +59,7 @@ def test_plan_saves_leaves_only_and_dedups_specs() -> None:
 def test_several_leaves_in_one_expression_get_suffixed_keys() -> None:
     state = Property("state", ("S", "I"))
     outputs = OutputSet()
-    outputs["ratio"] = Compartments(where=state["I"]).total() / Compartments().total()
+    outputs["ratio"] = Compartments(where=state["I"]).sum_by() / Compartments().sum_by()
     assert set(outputs.plan().requests) == {"ratio", "ratio__2"}
 
 
@@ -131,10 +131,10 @@ def test_assignment_rejects_a_bare_number() -> None:
 
 
 def test_chain_on_a_spec_is_an_expression() -> None:
-    expr = Compartments().total()
+    expr = Compartments().sum_by()
     assert isinstance(expr, OutputExpr)
     assert expr.kind == "call"
-    assert expr.method == "total"
+    assert expr.method == "sum_by"
 
 
 def _aged_model() -> tuple[Property, Property, Any, PropertyData]:
@@ -154,9 +154,9 @@ def test_evaluate_matches_manual_output_algebra() -> None:
     state, _age, cm, y0 = _aged_model()
     outputs = OutputSet()
     outputs["by_age"] = Compartments(where=state["I"])
-    outputs["infected"] = Compartments(where=state["I"]).total()
-    outputs["population"] = Compartments().total()
-    outputs["incidence"] = FlowMass("infection").total().midpoint()
+    outputs["infected"] = Compartments(where=state["I"]).sum_by()
+    outputs["population"] = Compartments().sum_by()
+    outputs["incidence"] = FlowMass("infection").sum_by().midpoint()
     outputs["prevalence"] = outputs.ref("infected") / outputs.ref("population")
     outputs["cum"] = outputs.ref("incidence").cumulative(start=2.0)
     outputs["scaled"] = outputs.ref("incidence") * Param("scale")
@@ -169,9 +169,9 @@ def test_evaluate_matches_manual_output_algebra() -> None:
     assert np.asarray(res["incidence"].values.data).ndim == 2
 
     named = outputs.evaluate(res, {"scale": 3.0})
-    infected = res["by_age"].total()
-    population = res["population"].total()
-    raw_total = res["incidence"].total()
+    infected = res["by_age"].sum_by()
+    population = res["population"].sum_by()
+    raw_total = res["incidence"].sum_by()
     np.testing.assert_allclose(np.asarray(named["infected"].values), np.asarray(infected.values))
     np.testing.assert_allclose(
         np.asarray(named["population"].values), np.asarray(population.values)

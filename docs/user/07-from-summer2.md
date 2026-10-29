@@ -136,7 +136,7 @@ pmap.to_dicts()    # {'state': 'I', 'age': '0-4'}
 | `model.get_stratification(name)` | `pmap.get_property(name)`, `pmap.history` | History records the `where=` selector too |
 | `add_transition_flow` | `TransitionFlow` | {doc}`08-flows` |
 | `add_death_flow` / `add_universal_death_flows` | `ExitFlow` | |
-| `add_crude_birth_flow` / `add_replacement_birth_flow` / `add_importation_flow` | `EntryFlow` | Replacement births via `death.sum_over(...)` |
+| `add_crude_birth_flow` / `add_replacement_birth_flow` / `add_importation_flow` | `EntryFlow` | Replacement births via `death.sum_by(...)` |
 | `query_flows` | `CompiledModel.edges` / `Source` / `Dest` | |
 | `Multiply` / `Overwrite` | same names on `adjust=` | Flow-owned, not on `Stratification` |
 | `np.exp(graph_object)` and other ufuncs | `np.exp(rate)` — the same spelling | `jnp.exp(rate)` does not work; JAX has no dispatch hook |

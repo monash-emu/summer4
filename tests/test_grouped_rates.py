@@ -94,14 +94,14 @@ def test_two_property_alignment_on_ragged_map() -> None:
 
 
 def test_flow_ref_sum_over_still_works() -> None:
-    """Regression: FlowRef.sum_over remains the producer of GroupedRate."""
+    """Regression: FlowRef.sum_by remains the producer of GroupedRate."""
     state = Property("state", ("S", "I"))
     loc = Property("location", ("north", "south"))
     pm = PropertyMap.from_property(state).stratify(loc)
     model = FlowModel(pm)
     refs = derived_refs(_DeathParams)
     death = model.add_flow(ExitFlow("death", Everything(), refs.death_rate))
-    model.add_flow(EntryFlow("birth", state["S"], death.sum_over(loc)))
+    model.add_flow(EntryFlow("birth", state["S"], death.sum_by(loc)))
     y = np.array([100.0, 300.0, 10.0, 30.0])
     dy = np.asarray(model.compile().vector_field(0.0, y, {"death_rate": 0.1}))
     north_deaths = 0.1 * (100.0 + 10.0)
@@ -112,7 +112,7 @@ def test_flow_ref_sum_over_still_works() -> None:
 
 
 def test_binop_preserves_grouped_rate_through_eval() -> None:
-    """FlowRef.sum_over * scalar stays GroupedRate through BinOp evaluation."""
+    """FlowRef.sum_by * scalar stays GroupedRate through BinOp evaluation."""
     pytest.importorskip("jax")
     state = Property("state", ("S", "I"))
     loc = Property("location", ("north", "south"))
@@ -121,7 +121,7 @@ def test_binop_preserves_grouped_rate_through_eval() -> None:
     refs = derived_refs(_DeathParams)
     death = model.add_flow(ExitFlow("death", Everything(), refs.death_rate))
     # Scale the per-location death total before using it as a birth rate.
-    model.add_flow(EntryFlow("birth", state["S"], death.sum_over(loc) * 2.0))
+    model.add_flow(EntryFlow("birth", state["S"], death.sum_by(loc) * 2.0))
     y = np.array([100.0, 300.0, 10.0, 30.0])
     dy = np.asarray(model.compile().vector_field(0.0, y, {"death_rate": 0.1}))
     north_deaths = 0.1 * (100.0 + 10.0)

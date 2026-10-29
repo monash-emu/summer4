@@ -236,7 +236,7 @@ def test_bayesian_model_prefers_true_contact_rate() -> None:
     cm = _sir(ForceOfInfection("foi", infectious=STATE["I"], contact_rate=Param("beta")))
     times = np.arange(5.0, 41.0, 5.0)
     truth = cm.run({"beta": 0.3}, Y, **RUN)
-    observed = np.asarray(truth["infection"].total().at_times(times).values).reshape(-1)
+    observed = np.asarray(truth["infection"].sum_by().at_times(times).values).reshape(-1)
     bm = BayesianModel(
         cm,
         {},

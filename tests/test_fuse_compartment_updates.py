@@ -30,7 +30,7 @@ def _sir_builder() -> FlowModel:
     model = FlowModel(pm)
     model.add_flow(TransitionFlow("inf", state["S"], state["I"], 0.1))
     death = model.add_flow(ExitFlow("death", Everything(), 0.01))
-    model.add_flow(EntryFlow("birth", state["S"], death.sum()))
+    model.add_flow(EntryFlow("birth", state["S"], death.sum_by()))
     model.add_flow(TransitionFlow("rec", state["I"], state["R"], 0.05))
     return model
 

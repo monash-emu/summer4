@@ -22,6 +22,35 @@ Tag: [`v0.2.0a7`](https://github.com/monash-emu/summer4/releases/tag/v0.2.0a7)
   infection is a `("time",)` series (`feat/foi-whole-population`, PR #65; `CX15`,
   in part).
 
+### Fixed
+
+- A calibration target can name an output of `BayesianModel(..., outputs=)`,
+  such as a 7-day rolling sum of infections. It used to raise `KeyError`, and
+  giving it the output's quantity instead pinned the output's input to the
+  observation times, so time-window outputs (`rolling`, `cumulative`) were
+  computed over the observations rather than the run. Outputs now save on the
+  run's grid and such a target is read from the evaluated output;
+  `BayesianModel.save_plan` shows the plan. `posterior_runs` takes the same plan
+  (`fix/bayesian-output-targets`).
+
+### Changed
+
+- `sum_by` is the one name for summing across strata, named for what it keeps
+  (`feat/sum-by`). `sum_by()` keeps only time (was `total()`, which kept time
+  despite its name); `sum_by(age)` keeps one value per age (was `sum_over(age)`,
+  which kept age despite its name); `sum_by(age, strain)` keeps each (age, strain)
+  pair and is new. On `Output`, output expressions, save specs, `PropertyData` and
+  `FlowRef` (`FlowRef.sum()` is now `sum_by()`). Time is never summed by
+  `sum_by`; use `integrate`, `cumulative`, `rolling` or `at`.
+- The save-time and rate-node keyword is `group_by=`: `Compartments(group_by=age)`,
+  `FlowMass(..., group_by=(age, "source"))`, `Reduce(age)` / `Reduce(group_by=age)`.
+
+### Deprecated
+
+- `total()`, `sum_over()`, `FlowRef.sum()` and the `sum_over=` keyword still work
+  and return the same results, with a `DeprecationWarning` naming the
+  replacement. They will be removed in a later release.
+
 ## [0.2.0a6] — 2026-10-29
 
 Tag: [`v0.2.0a6`](https://github.com/monash-emu/summer4/releases/tag/v0.2.0a6)
