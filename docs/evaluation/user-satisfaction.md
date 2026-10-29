@@ -47,7 +47,7 @@ immutable maps with replayable history — and a flows / epi / results stack tha
 covers 49 of 52 symbols with any working route (**44 of 52** at `full`). They
 can compile, run and plot; what still does not translate is initial population /
 population split and Bayesian calibration. The honest answer is in
-{doc}`../user/07-from-summer2`.
+{doc}`../roadmap` (what summer4 does today and what is on the way out).
 
 The risk to manage here is expectation around those remaining gaps, not around
 whether a run is publishable at all.
@@ -64,7 +64,7 @@ population / split). Onboarding friction is low and the next step is unambiguous
 
 Expert walkthroughs of landed behaviour (not user research) live in
 `examples/notebooks/` (WP5 time-varying, WP6 epi) and the ported textbook /
-summer2 pages under `docs/textbook/` and `docs/summer2/`.
+guide pages under `docs/guide/` and the textbook under `docs/textbook/`.
 
 ## API ergonomics review
 

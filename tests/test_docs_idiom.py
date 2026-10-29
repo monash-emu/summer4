@@ -4,8 +4,7 @@ Walks every ``.md`` and ``.ipynb`` under ``docs/`` (except build output, the
 developer and evaluation records, and the unbuilt ``guide/_sources`` archive)
 and fails, naming file and line, on a forbidden idiom. ``docs/roadmap.md`` and
 ``docs/releases.md`` may mention the names, because they list legacy and
-removed spellings. Textbook files are expected to fail until step C6 migrates
-them, so they are marked non-strict xfail.
+removed spellings.
 """
 
 from __future__ import annotations
@@ -71,14 +70,9 @@ def _violations(path: Path) -> list[str]:
     return found
 
 
-def _param(path: Path) -> object:
-    marks: list[pytest.MarkDecorator] = []
-    if path.relative_to(DOCS).parts[0] == "textbook":
-        marks.append(pytest.mark.xfail(strict=False, reason="textbook migration lands in C6"))
-    return pytest.param(path, marks=marks, id=str(path.relative_to(DOCS)))
-
-
-@pytest.mark.parametrize("path", [_param(p) for p in _doc_files()])
+@pytest.mark.parametrize(
+    "path", [pytest.param(p, id=str(p.relative_to(DOCS))) for p in _doc_files()]
+)
 def test_no_forbidden_idioms(path: Path) -> None:
     if path in ALLOWED_FILES:
         pytest.skip("lists legacy and removed spellings")

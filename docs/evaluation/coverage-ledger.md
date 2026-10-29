@@ -127,17 +127,17 @@ published as written.
 <!-- ledger:summer2docs -->
 | Page | Status | Blocker | Ported |
 | --- | --- | --- | --- |
-| `examples/01-basic-model` | `full` | None | `summer2/01-basic-model.ipynb` |
-| `examples/03-derived-outputs` | `full` | None | `summer2/03-derived-outputs.ipynb` |
-| `examples/04-flow-types` | `full` | None | `summer2/04-flow-types.ipynb` |
-| `examples/06-stratification-introduction` | `full` | None | `summer2/06-stratification-introduction.ipynb` |
-| `examples/07-age-stratification` | `full` | None | `summer2/07-age-stratification.ipynb` |
-| `examples/08-strain-stratification` | `full` | None (`per_trait` FOI; no `StrainStratification` class) | `summer2/08-strain-stratification.ipynb` |
-| `examples/09-mixing-matrices` | `full` | None | `summer2/09-mixing-matrices.ipynb` |
-| `examples/10-derived-outputs-stratified` | `full` | None | `summer2/10-derived-outputs-stratified.ipynb` |
-| `examples/11-flows-between-strata` | `full` | None | `summer2/11-flows-between-strata.ipynb` |
-| `detailed/time-varying-functions` | `full` | None | `summer2/time-varying-functions.ipynb` |
-| `detailed/InitialPopulationGraphobject` | `full` | None | `summer2/initial-population-graphobject.ipynb` |
+| `examples/01-basic-model` | `full` | None | `guide/01-basic-model.ipynb` |
+| `examples/03-derived-outputs` | `full` | None | `guide/04-derived-outputs.ipynb` |
+| `examples/04-flow-types` | `full` | None | `guide/02-flow-types.ipynb` |
+| `examples/06-stratification-introduction` | `full` | None | `guide/05-stratification.ipynb` |
+| `examples/07-age-stratification` | `full` | None | `guide/06-mixing.ipynb` |
+| `examples/08-strain-stratification` | `partial` | `per_trait` FOI works and is tested (`tests/test_epi_multistrain.py`) but no built page documents it (the port is archived unbuilt in `guide/_sources/`); no `StrainStratification` class | — |
+| `examples/09-mixing-matrices` | `full` | None | `guide/06-mixing.ipynb` |
+| `examples/10-derived-outputs-stratified` | `full` | None | `guide/05-stratification.ipynb` |
+| `examples/11-flows-between-strata` | `full` | None | `guide/05-stratification.ipynb` |
+| `detailed/time-varying-functions` | `full` | None | `guide/03-rates.ipynb` |
+| `detailed/InitialPopulationGraphobject` | `full` | None | `guide/07-initial-population.ipynb` |
 <!-- /ledger:summer2docs -->
 
 ## Calibration workflow ledger
@@ -202,8 +202,8 @@ history of the stack order.
 
 Every phase shipped its notebook: `examples/notebooks/01-taxonomy.ipynb`
 through `11-run-stages.ipynb`, plus textbook chapters 1–12 and 14–15 (13
-ported on this stack), the summer2 pages under `docs/summer2/`, and
-`docs/case-studies/age-stratified-seirs.ipynb`.
+ported on this stack), and the guide pages under `docs/guide/` (the earlier
+summer2 ports, user guide and case study were folded into the guide in step 48).
 
 ### Planning status of the remaining packages
 
@@ -309,8 +309,8 @@ Plan phase: `feat/flow-outputs`.
 **Closes:** P5 P6 P7 P8 · **Unblocks:** summer2 `detailed/time-varying-functions`
 
 `Time()` in the rate tree, structural `Interp` / `GaussianPulse` nodes via
-`summer4.timevarying`, and dated-series `summer4.data.Data`. Ported at
-`docs/summer2/time-varying-functions.ipynb`.
+`summer4.timevarying`, and dated-series `summer4.data.Data`. Documented at
+`docs/guide/03-rates.ipynb`.
 
 ### WP6 — Force of infection and mixing (applied)
 
