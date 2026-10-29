@@ -30,9 +30,18 @@ extensions = [
 ]
 
 templates_path = ["_templates"]
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", ".jupyter_cache"]
+exclude_patterns = [
+    "_build",
+    "Thumbs.db",
+    ".DS_Store",
+    ".jupyter_cache",
+    "dev/**",
+    "evaluation/**",
+    "guide/_sources/**",
+]
 
 master_doc = "index"
+html_baseurl = "https://monash-emu.github.io/summer4/"
 language = "en"
 
 # MyST

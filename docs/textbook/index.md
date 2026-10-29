@@ -12,7 +12,7 @@ code is written against the summer4 API. See {doc}`porting` for the convention.
 ```
 
 Status of every chapter lives in the
-{doc}`coverage ledger <../evaluation/coverage-ledger>` (including which pages
+[coverage ledger](https://github.com/monash-emu/summer4/blob/main/docs/evaluation/coverage-ledger.md) (including which pages
 are already ported). This tree holds the published notebooks only.
 
 ```{toctree}

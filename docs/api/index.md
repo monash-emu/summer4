@@ -1,5 +1,7 @@
 # API reference
 
+Items marked *Legacy* are on their way out; see the {doc}`../roadmap`.
+
 The complete public API of summer4. Every name below is exported from
 `summer4.__all__`, except the solver backends, which live in `summer4.solvers`;
 anything not listed here is internal and may change without notice.
@@ -102,8 +104,6 @@ compartment {class}`PropertyMap` they raise.
    SaveRequest
    Compartments
    FlowMass
-   ComputedValue
-   SaveFn
    Result
    Output
    OutputSet
@@ -175,15 +175,12 @@ so a later `run` can continue from where one ended.
    minimum
    clip
    eval_closed
-   derived_refs
    as_rate
    as_adjust
 ```
 
 ## What is not here
 
-There is no mixing matrix, force-of-infection primitive, interpolation helpers,
-initial-population wrapper, or Bayesian calibration likelihood. Sparse
-`Target` / `TargetSet` gathering ships; probabilistic priors are WP10. See
-{doc}`../evaluation/feature-completeness` for the full accounting and
-{doc}`../user/07-from-summer2` for the summer2 symbols that have no equivalent.
+Features still ahead are listed on the {doc}`../roadmap` page. For the full
+accounting, see the
+[feature-completeness evaluation](https://github.com/monash-emu/summer4/blob/main/docs/evaluation/feature-completeness.md).
