@@ -20,6 +20,17 @@ for the Sphinx site live under [docs/releases/](docs/releases/).
   infection is a `("time",)` series (`feat/foi-whole-population`; `CX15`, in
   part).
 
+### Fixed
+
+- A calibration target can name an output of `BayesianModel(..., outputs=)`,
+  such as a 7-day rolling sum of infections. It used to raise `KeyError`, and
+  giving it the output's quantity instead pinned the output's input to the
+  observation times, so time-window outputs (`rolling`, `cumulative`) were
+  computed over the observations rather than the run. Outputs now save on the
+  run's grid and such a target is read from the evaluated output;
+  `BayesianModel.save_plan` shows the plan. `posterior_runs` takes the same plan
+  (`fix/bayesian-output-targets`).
+
 ## [0.2.0a6] — 2026-10-29
 
 Tag: [`v0.2.0a6`](https://github.com/monash-emu/summer4/releases/tag/v0.2.0a6)
