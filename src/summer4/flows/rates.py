@@ -250,8 +250,10 @@ class FlowRef(RateOps):
         """Sum this flow's contribution across its edges, keeping ``props``' traits.
 
         ``sum_by()`` is one scalar; ``sum_by(age)`` one value per age (a
-        :class:`~summer4.flows.compiled.GroupedRate`). A rate node is grouped by
-        at most one property, so pass none or one.
+        :class:`~summer4.flows.compiled.GroupedRate`). Like every rate expression it
+        is evaluated at each instant of the solve, so "one scalar" is the total at
+        that instant, not a summary over time. A rate node is grouped by at most one
+        property, so pass none or one.
         """
         if not props:
             return FlowRef(self.name, reduce="sum")
@@ -300,7 +302,8 @@ class Reduce(RateOps):
     """Number of individuals in the compartments matching ``where`` (a scalar), or per group.
 
     ``Reduce(where=sel)`` is the total of all compartments matching ``sel``: one
-    scalar, like ``FlowRef.sum_by()``. Multiply it by a rate to get "rate x
+    scalar at each instant the rate is evaluated (it tracks the state over the
+    run), like ``FlowRef.sum_by()``. Multiply it by a rate to get "rate x
     number of individuals in matching compartments", the core of mass-action
     models: predation (``Param("a") * Reduce(where=species["predator"])``), births
     and crowding. ``Reduce()`` is the whole population.
