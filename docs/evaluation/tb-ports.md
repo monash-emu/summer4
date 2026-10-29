@@ -61,7 +61,7 @@ original analyses re-run on numpyro.
 | KI10 | Kiribati | Per-age time series from UN tables (death rates, treatment outcomes) | `full` | `Data.table(times, values, over=age).interp()` — one `TableInterp`, a `GroupedRate` over age | — |
 | KI11 | Kiribati | Interpolation knots derived with log / max (screening rate, outcome floors) | `full` | `log` / `maximum` on a `TableInterp` or on scalar `Interp` knots | — |
 | KI12 | Kiribati | Computed values (detection rates, matrix distance) | `full` | `ComputedValue` over `derived_fn` | — |
-| KI13 | Kiribati | Outputs summed over several flows and filtered by strata | `full` | `OutputSet` leaf `FlowMass(flow=(...), where=..., sum_over=...)`; derived names are not saved | — |
+| KI13 | Kiribati | Outputs summed over several flows and filtered by strata | `full` | `OutputSet` leaf `FlowMass(flow=(...), where=..., group_by=...)`; derived names are not saved | — |
 | KI14 | Kiribati | Output arithmetic: per-capita, percentages, × parameter | `full` | `outputs.ref(a) / outputs.ref(b)` and `outputs.ref(a) * Param(...)` inside an `OutputSet` | — |
 | KI15 | Kiribati | Cumulative output from a start year | `full` | `outputs.ref(name).cumulative(start=)` in an `OutputSet`; `start` must be a save time | — |
 | KI16 | Kiribati | summer2 midpoint flow-output convention (parity) | `full` | `FlowMass(...).midpoint()` as an `OutputSet` post-op (`out[0] = f[0]`, then the average with the previous sample) | — |

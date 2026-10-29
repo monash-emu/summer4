@@ -178,49 +178,60 @@ def edge_labels(table: PropertyMap) -> tuple[str, ...]:
     return tuple(out)
 
 
-def sum_over_edge(
+def sum_by_edge(
     mass: object,
     table: PropertyMap,
-    prop: Property | str,
+    props: tuple[Property | str, ...],
     side: str,
 ) -> Any:
-    """Sum per-edge ``mass`` by trait of ``prop`` on ``side`` (``source`` or ``dest``).
+    """Sum per-edge ``mass`` by the traits of ``props`` on ``side`` (``source`` or ``dest``).
 
-    Returns a :class:`~summer4.jax.propertydata.PropertyData` over
-    :meth:`PropertyMap.from_property` so group columns are labelled by trait name.
+    Returns a :class:`~summer4.jax.propertydata.PropertyData` with one column per
+    combination of ``props``' traits (``product_map``), labelled by trait name.
+    Edges whose ``side`` endpoint lacks any of ``props`` do not contribute.
     """
     import jax
     import jax.numpy as jnp
 
-    from summer4.jax.propertydata import PropertyData
+    from summer4.jax.propertydata import PropertyData, group_ids, product_map
 
     if side not in ("source", "dest"):
         raise ValueError(f"side must be 'source' or 'dest', got {side!r}.")
-    if isinstance(prop, Property):
-        resolved = prop
-    else:
-        mangled_lookup = table.get_property(f"{prop}@{side}")
-        resolved = Property(prop, mangled_lookup.traits)
-
-    mangled = table.get_property(f"{resolved.name}@{side}")
-    col_i = table.column_index(mangled)
-    codes = np.asarray(table.codes[:, col_i], dtype=np.int32)
-    n_traits = len(resolved.traits)
-    valid = codes >= 0
-    safe = np.where(valid, codes, 0).astype(np.int32)
+    resolved: list[Property] = []
+    for prop in props:
+        name = prop.name if isinstance(prop, Property) else prop
+        mangled = table.get_property(f"{name}@{side}")
+        resolved.append(prop if isinstance(prop, Property) else Property(name, mangled.traits))
+    names = [prop.name for prop in resolved]
+    if len(set(names)) != len(names):
+        raise ValueError(f"sum_by() repeats a property: {names}.")
+    columns = [table.column_index(table.get_property(f"{name}@{side}")) for name in names]
+    ids, n_groups = group_ids(table.codes, columns, tuple(resolved))
+    valid = ids >= 0
+    safe = np.where(valid, ids, 0).astype(np.int32)
     mass_j = jnp.asarray(mass)
     weighted = mass_j * jnp.asarray(valid)
 
     def _row(row: Any) -> Any:
-        return jax.ops.segment_sum(row, safe, num_segments=n_traits)
+        return jax.ops.segment_sum(row, safe, num_segments=n_groups)
 
     if mass_j.ndim == 1:
         reduced: Any = _row(weighted)
     else:
         flat = jnp.reshape(weighted, (-1, mass_j.shape[-1]))
         summed = jax.vmap(_row)(flat)
-        reduced = jnp.reshape(summed, mass_j.shape[:-1] + (n_traits,))
-    return PropertyData(PropertyMap.from_property(resolved), reduced)
+        reduced = jnp.reshape(summed, mass_j.shape[:-1] + (n_groups,))
+    return PropertyData(product_map(tuple(resolved)), reduced)
+
+
+def sum_over_edge(
+    mass: object,
+    table: PropertyMap,
+    prop: Property | str,
+    side: str,
+) -> Any:
+    """One-property :func:`sum_by_edge` (kept for existing callers)."""
+    return sum_by_edge(mass, table, (prop,), side)
 
 
 @dataclass(frozen=True, slots=True)

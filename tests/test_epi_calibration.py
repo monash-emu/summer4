@@ -493,7 +493,7 @@ def _sir_with_outputs(
     cm, y0, targets, params, _ = _sir_fixture(infection=infection)
     state = Property("state", ("S", "I", "R"))
     outputs = OutputSet()
-    outputs["I"] = Compartments(where=state["I"]).total()
+    outputs["I"] = Compartments(where=state["I"]).sum_by()
     outputs["cum_I"] = outputs.ref("I").cumulative()
     return cm, y0, targets, params, outputs
 

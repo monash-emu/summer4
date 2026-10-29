@@ -155,7 +155,7 @@ def _halved_model() -> FlowModel:
     """S -> I at a ``Halved`` rate reading the vaccination flow; infection is added first."""
     state = Property("state", ("S", "I", "R"))
     k = Param("vax_effect") / Param("pop_scale")  # parameter-only: hoistable
-    rate = Halved(Param("beta") * (1.0 - k * FlowRef("vaccination").sum()))
+    rate = Halved(Param("beta") * (1.0 - k * FlowRef("vaccination").sum_by()))
     model = FlowModel(PropertyMap.from_property(state))
     model.add_flow(TransitionFlow("infection", state["S"], state["I"], rate))
     model.add_flow(TransitionFlow("vaccination", state["S"], state["R"], Param("nu")))

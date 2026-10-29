@@ -17,7 +17,8 @@ from typing import Any, Literal
 
 import numpy as np
 
-from summer4.flows.edges import edge_labels, rewrite_edge_selector, sum_over_edge
+from summer4._deprecation import warn_renamed
+from summer4.flows.edges import edge_labels, rewrite_edge_selector, sum_by_edge
 from summer4.jax.propertydata import PropertyData
 from summer4.properties import Property, Trait
 from summer4.propertymap import Groups, PropertyMap
@@ -406,42 +407,66 @@ class Output:
         data = _as_array(self.values)[..., idx]
         return self._with(values=PropertyData(submap, data))
 
-    def sum_over(
+    def sum_by(
         self,
-        prop: Property | str,
+        *props: Property | str,
         side: Literal["source", "dest"] | None = None,
     ) -> Output:
-        """Sum the aligned axis by trait of ``prop``.
+        """Sum across the strata, keeping time and the traits of ``props``.
 
-        On an edge output, ``side`` is required (``\"source\"`` or ``\"dest\"``) —
-        there is no safe default. On a compartment output, ``side`` must be
-        omitted.
+        ``sum_by()`` adds up every compartment (or edge) at each saved time:
+        dims ``("time", "compartment")`` become ``("time",)``. ``sum_by(age)``
+        keeps one column per age, and ``sum_by(age, strain)`` one per
+        (age, strain) pair. Time is never summed; reduce it separately with
+        :meth:`integrate`, :meth:`cumulative`, :meth:`rolling` or :meth:`at`.
+
+        On an edge output with ``props``, ``side`` is required (``\"source\"``
+        or ``\"dest\"``) — there is no safe default. On a compartment output,
+        ``side`` must be omitted.
         """
+        if not props:
+            if side is not None:
+                raise ValueError("side= is only valid with properties to keep.")
+            if tuple(self.dims) == ("time",):
+                raise ValueError(
+                    "sum_by() keeps time, and this output has nothing else to sum. "
+                    "Reduce over time with integrate(), cumulative() or rolling()."
+                )
+            data = _xp().sum(_as_array(self.values), axis=-1)
+            return self._with(values=data, dims=self.dims[:-1])
         pmap = self._pmap()
         if pmap is None:
-            raise TypeError("sum_over() requires PropertyData values.")
+            raise TypeError("sum_by(prop, ...) requires PropertyData values.")
         if _is_edge_output(self.dims):
             if side is None:
                 raise ValueError(
-                    "sum_over() on a flow (edge) output requires side='source' or "
+                    "sum_by() on a flow (edge) output requires side='source' or "
                     "side='dest'; neither is a safe default."
                 )
-            reduced = sum_over_edge(_as_array(self.values), pmap, prop, side)
+            reduced = sum_by_edge(_as_array(self.values), pmap, props, side)
         else:
             if side is not None:
                 raise ValueError("side= is only valid on edge outputs.")
-            reduced = PropertyData(pmap, _as_array(self.values)).sum_over(prop)
+            reduced = PropertyData(pmap, _as_array(self.values)).sum_by(*props)
         dims = tuple("group" if d in ("compartment", "edge") else d for d in self.dims)
         if "group" not in dims:
             dims = self.dims[:-1] + ("group",)
         return self._with(values=reduced, dims=dims)
 
+    def sum_over(
+        self,
+        prop: Property | str,
+        side: Literal["source", "dest"] | None = None,
+    ) -> Output:
+        """Deprecated spelling of ``sum_by(prop, side=side)``."""
+        warn_renamed("Output.sum_over(prop)", "Output.sum_by(prop)")
+        return self.sum_by(prop, side=side)
+
     def total(self) -> Output:
-        """Sum over the aligned (last) axis."""
-        xp = _xp()
-        data = xp.sum(_as_array(self.values), axis=-1)
-        dims = self.dims[:-1]
-        return self._with(values=data, dims=dims)
+        """Deprecated spelling of :meth:`sum_by` with no properties."""
+        warn_renamed("Output.total()", "Output.sum_by()")
+        data = _xp().sum(_as_array(self.values), axis=-1)
+        return self._with(values=data, dims=self.dims[:-1])
 
     def partition(self, prop: Property | str) -> dict[Trait, Output]:
         """Split into one Output per trait of ``prop`` (static keys; values traced)."""

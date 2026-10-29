@@ -29,7 +29,7 @@ from summer4.selectors import (
 if TYPE_CHECKING:
     from summer4.results.outputset import OutputExpr
 
-type FlowReduce = Literal["identity", "sum"] | tuple[Literal["sum_over"], str]
+type FlowReduce = Literal["identity", "sum"] | tuple[Literal["sum_by"], str]
 type Adjustment = Multiply | Overwrite | Transform
 type AdjustSpec = Sequence[object] | None
 
@@ -246,14 +246,34 @@ class FlowRef(RateOps):
     name: str
     reduce: FlowReduce = "identity"
 
+    def sum_by(self, *props: Property | str) -> FlowRef:
+        """Sum this flow's contribution across its edges, keeping ``props``' traits.
+
+        ``sum_by()`` is one scalar; ``sum_by(age)`` one value per age (a
+        :class:`~summer4.flows.compiled.GroupedRate`). A rate node is grouped by
+        at most one property, so pass none or one.
+        """
+        if not props:
+            return FlowRef(self.name, reduce="sum")
+        if len(props) > 1:
+            raise ValueError("FlowRef.sum_by() keeps at most one property in a rate expression.")
+        prop = props[0]
+        name = prop.name if isinstance(prop, Property) else prop
+        return FlowRef(self.name, reduce=("sum_by", name))
+
     def sum(self) -> FlowRef:
-        """Return this flow's contribution reduced to a scalar."""
-        return FlowRef(self.name, reduce="sum")
+        """Deprecated spelling of :meth:`sum_by` with no properties."""
+        from summer4._deprecation import warn_renamed
+
+        warn_renamed("FlowRef.sum()", "FlowRef.sum_by()")
+        return self.sum_by()
 
     def sum_over(self, prop: Property | str) -> FlowRef:
-        """Reduce this flow's contribution onto one property's traits."""
-        name = prop.name if isinstance(prop, Property) else prop
-        return FlowRef(self.name, reduce=("sum_over", name))
+        """Deprecated spelling of ``sum_by(prop)``."""
+        from summer4._deprecation import warn_renamed
+
+        warn_renamed("FlowRef.sum_over(prop)", "FlowRef.sum_by(prop)")
+        return self.sum_by(prop)
 
 
 @dataclass(frozen=True, slots=True)
@@ -289,18 +309,40 @@ class BinOp(RateOps):
             object.__setattr__(self, "op", canonical)
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, init=False)
 class Reduce(RateOps):
-    """Reduce compartment state over a grouping; ``where`` means KEEP.
+    """Sum compartment state into one value per trait of ``group_by``; ``where`` means KEEP.
 
-    ``Reduce(where=sel, sum_over=prop)`` sums only compartments matching
-    ``sel``. That is the opposite polarity of :meth:`PropertyData.where`,
-    which *replaces* matches — use :meth:`PropertyData.keep` for the same
-    keep-shaped reading on a :class:`PropertyData`.
+    ``Reduce(age, where=sel)`` sums only compartments matching ``sel``. That is
+    the opposite polarity of :meth:`PropertyData.where`, which *replaces*
+    matches — use :meth:`PropertyData.keep` for the same keep-shaped reading on
+    a :class:`PropertyData`. ``sum_over=`` is the deprecated spelling of
+    ``group_by=``.
     """
 
-    sum_over: Property | str
+    group_by: Property | str
     where: Selector | None = None
+
+    def __init__(
+        self,
+        group_by: Property | str | None = None,
+        where: Selector | None = None,
+        *,
+        sum_over: Property | str | None = None,
+    ) -> None:
+        if sum_over is not None:
+            if group_by is not None:
+                raise TypeError(
+                    "Reduce: pass group_by= only (sum_over= is its deprecated spelling)."
+                )
+            from summer4._deprecation import warn_renamed
+
+            warn_renamed("Reduce(sum_over=...)", "Reduce(group_by=...)")
+            group_by = sum_over
+        if group_by is None:
+            raise TypeError("Reduce needs group_by= (the property to keep).")
+        object.__setattr__(self, "group_by", group_by)
+        object.__setattr__(self, "where", where)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1155,8 +1197,8 @@ def _rate_bytes(expr: RateOps) -> bytes:
                 + _rate_bytes(width)
                 + _rate_bytes(height)
             )
-        case Reduce(sum_over=sum_over, where=where):
-            prop_name = sum_over.name if isinstance(sum_over, Property) else sum_over
+        case Reduce(group_by=group_by, where=where):
+            prop_name = group_by.name if isinstance(group_by, Property) else group_by
             body = b"reduce" + prop_name.encode()
             if where is None:
                 return body + b"nowhere"

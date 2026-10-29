@@ -224,8 +224,8 @@ def scale_infectious_pool(
     if mode is InfectiousnessNormalize.MEAN:
         if group_by is None:
             return GroupedRate(data / jnp.mean(weights), infectious.properties)
-        count = PropertyData(pmap, jnp.ones(pmap.size, dtype=weights.dtype)).sum_over(group_by).data
-        sum_w = PropertyData(pmap, weights).sum_over(group_by).data
+        count = PropertyData(pmap, jnp.ones(pmap.size, dtype=weights.dtype)).sum_by(group_by).data
+        sum_w = PropertyData(pmap, weights).sum_by(group_by).data
         effective = jnp.where(count > 0, sum_w / jnp.maximum(count, 1.0), 1.0)
         return GroupedRate(data / jnp.mean(effective), infectious.properties)
     raise ValueError(f"Unknown normalize_infectiousness {mode!r}.")
@@ -437,7 +437,7 @@ def _eval_force_of_infection(
     def group_sum(data: Any) -> Any:
         if prop is None:
             return jnp.sum(jnp.asarray(data), axis=-1, keepdims=True)
-        return PropertyData(pmap, data).sum_over(prop).data
+        return PropertyData(pmap, data).sum_by(prop).data
 
     pd = PropertyData(pmap, y_arr)
     n_comp = y_arr if expr.denominator is None else pd.keep(expr.denominator, 0.0).data

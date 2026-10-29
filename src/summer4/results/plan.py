@@ -24,7 +24,7 @@ type Quantity = Compartments | FlowMass | ComputedValue | SaveFn | GroupedOutput
 class _OutputExprChain:
     """Record post-ops on a save spec for :class:`~summer4.results.outputset.OutputSet`.
 
-    ``Compartments().total()`` does not reduce at save time. The save is the
+    ``Compartments().sum_by()`` does not reduce at save time. The save is the
     quantity; :meth:`~summer4.results.outputset.OutputSet.evaluate` applies the
     chain. Arithmetic on the returned expression is the same idea.
     """
@@ -39,8 +39,15 @@ class _OutputExprChain:
     def select(self, sel: Selector | np.ndarray) -> OutputExpr:
         return self._as_output_expr().select(sel)
 
+    def sum_by(self, *props: Property | str, side: Side | None = None) -> OutputExpr:
+        return self._as_output_expr().sum_by(*props, side=side)
+
     def total(self) -> OutputExpr:
-        return self._as_output_expr().total()
+        """Deprecated spelling of :meth:`sum_by` with no properties."""
+        from summer4._deprecation import warn_renamed
+
+        warn_renamed("total()", "sum_by()")
+        return self._as_output_expr().sum_by()
 
     def rolling(
         self,
@@ -72,12 +79,37 @@ class _OutputExprChain:
         return self._as_output_expr().at_times(ts)
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, init=False)
 class Compartments(_OutputExprChain):
-    """Save compartment densities (optionally filtered / reduced at save time)."""
+    """Save compartment densities (optionally filtered / reduced at save time).
+
+    ``group_by=age`` saves one value per age instead of every compartment.
+    ``sum_over=`` is the deprecated spelling of ``group_by=``.
+    """
 
     where: Selector | None = None
-    sum_over: Property | None = None
+    group_by: Property | None = None
+
+    def __init__(
+        self,
+        where: Selector | None = None,
+        group_by: Property | None = None,
+        *,
+        sum_over: Property | None = None,
+    ) -> None:
+        object.__setattr__(self, "where", where)
+        object.__setattr__(self, "group_by", _renamed_group_by("Compartments", group_by, sum_over))
+
+
+def _renamed_group_by(owner: str, group_by: Any, sum_over: Any) -> Any:
+    if sum_over is None:
+        return group_by
+    if group_by is not None:
+        raise TypeError(f"{owner}: pass group_by= only (sum_over= is its deprecated spelling).")
+    from summer4._deprecation import warn_renamed
+
+    warn_renamed(f"{owner}(sum_over=...)", f"{owner}(group_by=...)", stacklevel=4)
+    return sum_over
 
 
 def flow_names(flow: str | tuple[str, ...]) -> tuple[str, ...]:
@@ -90,28 +122,38 @@ def flow_names(flow: str | tuple[str, ...]) -> tuple[str, ...]:
     return names
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, init=False)
 class FlowMass(_OutputExprChain):
     """Per-edge mass. Reduce *here* so the buffer is ``(n_saves, n_kept)``.
 
     ``flow`` is one name or several. Several flows are summed at each save
-    after the same ``where`` / ``sum_over``. They must share those selected
+    after the same ``where`` / ``group_by``. They must share those selected
     dims (the same :class:`~summer4.propertymap.PropertyMap`); otherwise
     evaluation raises and names the flows.
 
-    A 200k-edge flow over 3650 days is ~5.8 GB dense and ~470 kB when summed
-    over age. Post-hoc edge queries use ``Output.sum_over(..., side=)``,
-    ``integrate_intervals``, and ``integrate``.
+    ``group_by=(age, "source")`` saves one value per source age instead of every
+    edge; ``sum_over=`` is its deprecated spelling. A 200k-edge flow over 3650
+    days is ~5.8 GB dense and ~470 kB grouped by age. Post-hoc edge queries use
+    ``Output.sum_by(..., side=)``, ``integrate_intervals``, and ``integrate``.
     """
 
     flow: str | tuple[str, ...]
     where: Selector | NDArray[np.bool_] | None = None
-    sum_over: tuple[Property, Side] | None = None
+    group_by: tuple[Property, Side] | None = None
 
-    def __post_init__(self) -> None:
-        names = flow_names(self.flow)
+    def __init__(
+        self,
+        flow: str | tuple[str, ...],
+        where: Selector | NDArray[np.bool_] | None = None,
+        group_by: tuple[Property, Side] | None = None,
+        *,
+        sum_over: tuple[Property, Side] | None = None,
+    ) -> None:
+        names = flow_names(flow)
         stored: str | tuple[str, ...] = names[0] if len(names) == 1 else names
         object.__setattr__(self, "flow", stored)
+        object.__setattr__(self, "where", where)
+        object.__setattr__(self, "group_by", _renamed_group_by("FlowMass", group_by, sum_over))
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,11 +197,11 @@ class SaveRequest:
 
 def _quantity_bytes(what: Quantity) -> bytes:
     match what:
-        case Compartments(where=where, sum_over=sum_over):
-            return b"comp" + repr(where).encode() + repr(sum_over).encode()
-        case FlowMass(flow=flow, where=where, sum_over=sum_over):
+        case Compartments(where=where, group_by=group_by):
+            return b"comp" + repr(where).encode() + repr(group_by).encode()
+        case FlowMass(flow=flow, where=where, group_by=group_by):
             names = b"\0".join(name.encode() for name in flow_names(flow))
-            return b"flow" + names + repr(where).encode() + repr(sum_over).encode()
+            return b"flow" + names + repr(where).encode() + repr(group_by).encode()
         case ComputedValue(path=path):
             return b"cv" + repr(path).encode()
         case GroupedOutput(name=name):

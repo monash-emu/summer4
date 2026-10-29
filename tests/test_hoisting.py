@@ -52,7 +52,7 @@ def test_rate_stage_classification_table() -> None:
     assert rate_stage(FieldRef(("a",)), params_are_static=False) == "step"
     assert rate_stage(Time(), params_are_static=True) == "step"
     assert rate_stage(FlowRef("f"), params_are_static=True) == "step"
-    assert rate_stage(Reduce(sum_over="age"), params_are_static=True) == "step"
+    assert rate_stage(Reduce(group_by="age"), params_are_static=True) == "step"
     assert rate_stage(Capture("c", Const(1.0)), params_are_static=True) == "step"
 
     run_binop = BinOp("mul", Const(2.0), FieldRef(("a",)))

@@ -170,7 +170,7 @@ def test_multi_flow_mass_sums_after_the_same_reduction() -> None:
     y0 = PropertyData.wrap(pmap, np.ones(pmap.size))
     summed = SavePlan(
         requests={
-            "out": SaveRequest(FlowMass(flow=("infection", "death"), sum_over=(age, "source")))
+            "out": SaveRequest(FlowMass(flow=("infection", "death"), group_by=(age, "source")))
         }
     )
     separate = SavePlan(
@@ -181,7 +181,7 @@ def test_multi_flow_mass_sums_after_the_same_reduction() -> None:
     )
     both = cm.run({}, y0, t0=0.0, steps=2, dt=1.0, save=summed)
     parts = cm.run({}, y0, t0=0.0, steps=2, dt=1.0, save=separate)
-    manual = parts["infection"].sum_over(age, side="source") + parts["death"].sum_over(
+    manual = parts["infection"].sum_by(age, side="source") + parts["death"].sum_by(
         age, side="source"
     )
     np.testing.assert_allclose(

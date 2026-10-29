@@ -343,7 +343,7 @@ def test_field_ref_and_flow_ref_vector_field() -> None:
     model = FlowModel(pm)
     refs = derived_refs(_DeathParams)
     death = model.add_flow(ExitFlow("death", Everything(), refs.death_rate))
-    model.add_flow(EntryFlow("birth", state["S"], death.sum()))
+    model.add_flow(EntryFlow("birth", state["S"], death.sum_by()))
     vf = model.compile().vector_field
     y = np.array([900.0, 80.0, 20.0])
     dy = np.asarray(vf(0.0, y, {"death_rate": 0.01}))
@@ -357,7 +357,7 @@ def test_sum_over_location_replacement_births() -> None:
     model = FlowModel(pm)
     refs = derived_refs(_DeathParams)
     death = model.add_flow(ExitFlow("death", Everything(), refs.death_rate))
-    model.add_flow(EntryFlow("birth", state["S"], death.sum_over(loc)))
+    model.add_flow(EntryFlow("birth", state["S"], death.sum_by(loc)))
     y = np.array([100.0, 300.0, 10.0, 30.0])  # S-north, S-south, I-north, I-south
     dy = np.asarray(model.compile().vector_field(0.0, y, {"death_rate": 0.1}))
     north_deaths = 0.1 * (100.0 + 10.0)
@@ -374,8 +374,8 @@ def test_flow_ref_cycle_raises() -> None:
     state = Property("state", ("S", "I"))
     pm = PropertyMap.from_property(state)
     model = FlowModel(pm)
-    model.add_flow(ExitFlow("a", state["S"], FlowRef("b").sum()))
-    model.add_flow(ExitFlow("b", state["I"], FlowRef("a").sum()))
+    model.add_flow(ExitFlow("a", state["S"], FlowRef("b").sum_by()))
+    model.add_flow(ExitFlow("b", state["I"], FlowRef("a").sum_by()))
     with pytest.raises(ValueError, match="Cyclic"):
         model.compile()
 
@@ -630,7 +630,7 @@ def test_adjust_transform_depends_on_flow_ref() -> None:
             state["S"],
             state["I"],
             0.2,
-            adjust=[Transform(lambda prev, deaths: prev * deaths, death.sum())],
+            adjust=[Transform(lambda prev, deaths: prev * deaths, death.sum_by())],
         )
     )
     y = np.array([100.0, 50.0])

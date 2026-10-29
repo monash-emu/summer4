@@ -332,19 +332,19 @@ def _eval_rate(
             values = flow_values[name]
             if reduce == "sum":
                 return jnp.sum(jnp.asarray(values))
-            if isinstance(reduce, tuple) and reduce[0] == "sum_over":
+            if isinstance(reduce, tuple) and reduce[0] == "sum_by":
                 producer = flow_meta[name]
                 edge_idx = _gather_idx(producer)
                 prop = pmap.get_property(reduce[1])
                 data = _sum_mass_over(values, edge_idx, pmap, prop)
                 return GroupedRate(data=data, properties=(prop,))
             return values
-        case Reduce(sum_over=sum_over, where=where):
-            prop = pmap.get_property(sum_over.name if isinstance(sum_over, Property) else sum_over)
+        case Reduce(group_by=group_by, where=where):
+            prop = pmap.get_property(group_by.name if isinstance(group_by, Property) else group_by)
             pd = PropertyData(pmap, y_arr)
             if where is not None:
                 pd = pd.keep(where, 0.0)
-            reduced = pd.sum_over(prop)
+            reduced = pd.sum_by(prop)
             return GroupedRate(data=reduced.data, properties=(prop,))
         case Capture(name=name, inner=inner):
             value = child(inner)
@@ -1307,7 +1307,7 @@ class FlowModel:
         """Register a named flow and return a :class:`FlowRef` to it.
 
         Names must be unique. Use the returned ref in later rate expressions
-        (``death.sum()``, ``death.sum_over(location)``).
+        (``death.sum_by()``, ``death.sum_by(location)``).
         """
         if any(existing.name == flow.name for existing in self.flows):
             raise ValueError(f"Duplicate flow name {flow.name!r}.")

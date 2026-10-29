@@ -286,14 +286,14 @@ def test_grouped_pow_and_maximum() -> None:
 
     powered = FlowModel(pm)
     death = powered.add_flow(ExitFlow("death", Everything(), Param("death_rate")))
-    powered.add_flow(EntryFlow("birth", state["S"], death.sum_over(loc) ** Param("exp")))
+    powered.add_flow(EntryFlow("birth", state["S"], death.sum_by(loc) ** Param("exp")))
     dy = np.asarray(powered.compile().vector_field(0.0, y, params))
     np.testing.assert_allclose(dy[s_north], -0.1 * 100.0 + north**2)
     np.testing.assert_allclose(dy[s_south], -0.1 * 300.0 + south**2)
 
     floored = FlowModel(pm)
     death = floored.add_flow(ExitFlow("death", Everything(), Param("death_rate")))
-    floored.add_flow(EntryFlow("birth", state["S"], maximum(death.sum_over(loc), Param("floor"))))
+    floored.add_flow(EntryFlow("birth", state["S"], maximum(death.sum_by(loc), Param("floor"))))
     dy_floor = np.asarray(floored.compile().vector_field(0.0, y, params))
     np.testing.assert_allclose(dy_floor[s_north], -0.1 * 100.0 + max(north, 5.0))
     np.testing.assert_allclose(dy_floor[s_south], -0.1 * 300.0 + max(south, 5.0))
