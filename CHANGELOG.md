@@ -31,12 +31,12 @@ Tag: [`v0.2.0a7`](https://github.com/monash-emu/summer4/releases/tag/v0.2.0a7)
   computed over the observations rather than the run. Outputs now save on the
   run's grid and such a target is read from the evaluated output;
   `BayesianModel.save_plan` shows the plan. `posterior_runs` takes the same plan
-  (`fix/bayesian-output-targets`).
+  (`fix/bayesian-output-targets`, PR #67).
 
 ### Changed
 
 - `sum_by` is the one name for summing across strata, named for what it keeps
-  (`feat/sum-by`). `sum_by()` keeps only time (was `total()`, which kept time
+  (`feat/sum-by`, PR #68). `sum_by()` keeps only time (was `total()`, which kept time
   despite its name); `sum_by(age)` keeps one value per age (was `sum_over(age)`,
   which kept age despite its name); `sum_by(age, strain)` keeps each (age, strain)
   pair and is new. On `Output`, output expressions, save specs, `PropertyData` and

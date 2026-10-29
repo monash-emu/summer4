@@ -197,7 +197,7 @@ contains every branch above it.
 
 Every phase in the table is now on `main`, as of the merge of PR #7
 (`eceba1e`) and PR #8 (`769f9f1`). The first pinnable tag was `v0.2.0a1`; the
-current tag is `v0.2.0a7` (whole-population force of infection). The table is kept as
+current tag is `v0.2.0a7` (whole-population force of infection, output targets, `sum_by`). The table is kept as
 history of the stack order.
 
 Every phase shipped its notebook: `examples/notebooks/01-taxonomy.ipynb`
