@@ -144,6 +144,7 @@ pmap.to_dicts()    # {'state': 'I', 'age': '0-4'}
 | `finalize` | `FlowModel.compile()` | Returns a `CompiledModel` |
 | `set_initial_population` / `get_initial_population` | `FlowModel.set_initial_population` / `CompiledModel.initial_state` | Declarative `InitialPopulation` |
 | `set_population_split` / `adjust_population_split` | `Split(prop, weights, by=, where=)` | Weights normalised; even default on carriers |
+| float64 (`computegraph` turns on `jax_enable_x64` when imported) | the same: importing summer4 turns it on | `JAX_ENABLE_X64=0` for float32; {doc}`09-running-and-results` |
 
 ## What does not translate
 

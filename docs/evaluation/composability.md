@@ -39,7 +39,7 @@ pixi run composability         # statuses, evidence anchors, packages, totals
 ## Where things stand
 
 <!-- composability:totals -->
-Open findings: **7** (0 high, 2 medium, 5 low); planned: 6; deferred: 3; done: 22; rejected: 0.
+Open findings: **7** (0 high, 2 medium, 5 low); planned: 6; deferred: 4; done: 22; rejected: 0.
 <!-- /composability:totals -->
 
 The calibration workflow's MCMC stage (`CX25`), the solve (`CP1`, roadmap step
@@ -97,6 +97,7 @@ can be inspected and extended. What remains:
 | CX36 | calibration | P2, P3 | medium | done | Before step 47: `wf.sample_until` / `MCMCRun` request only `diverging` from numpyro, so `num_steps` (gradient evaluations), `accept_prob` and the adapted step size of each draw are lost; tuning or costing a sampler means rerunning it outside the stage (tbcore `docs/summer4-workarounds.md` W8). | Done in step 47: `sample_until(..., extra_fields=)`; `MCMCRun.extra[name]` is `(chain, draw)` across chunks and `extend`, and lands in `idata.sample_stats`. | `src/summer4/epi/calibration/workflow/mcmc.py::extra = ("diverging",) if self._divergences else ()` |
 | CX37 | calibration | P2 | medium | done | Before step 47: `MCMCRun` reports one R-hat and ESS per site, averaged over a plate site's elements (`np.mean(split_gelman_rubin(x))`), so one unconverged element is hidden by its converged siblings and `StopRule` cannot judge on the worst element. | Done in step 47: progress rows and `MCMCRun.diagnostics` add `rhat_element_max` / `ess_bulk_element_min`; `StopRule(per_element=True)` judges on them (the default still averages, so existing runs stop where they did). | `src/summer4/epi/calibration/workflow/mcmc.py::float(np.mean(split_gelman_rubin(x)))` |
 | CX38 | calibration | P2, P3 | medium | done | Before step 47: `wf.warmup_until` cannot start from a given inverse mass matrix, restarts every doubling round from the factory's metric (discarding the previous round's adaptation), and reports nothing until it returns, so a long dense warm-up is a black box. | Done in step 47: `warmup_until(..., inverse_mass_matrix=, carry_metric=, on_round=)` calls `make_mcmc(n, inverse_mass_matrix=M)` when it has a metric; rows record `grad_evals`. | `src/summer4/epi/calibration/workflow/warmup.py::mcmc = make_mcmc(n)` |
+| CX39 | run | P1 | low | deferred | Number width is process-wide: importing summer4 turns on `jax_enable_x64` for every JAX library in the process, and float32 means turning it off for all of them. A float32 model and a float64 model cannot run side by side, and a solve cannot be float32 while its likelihood sums in float64. | See the note. | `futureplans/per-model-dtype.md`; `src/summer4/_precision.py::jax.config).update("jax_enable_x64", True)` |
 <!-- /composability:findings -->
 
 ## Work packages

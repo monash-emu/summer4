@@ -9,6 +9,17 @@ Install from the matching git tag (see
 [Installation](docs/getting-started/installation.md)). Narrative release notes
 for the Sphinx site live under [docs/releases/](docs/releases/).
 
+## [Unreleased]
+
+### Changed
+
+- Importing summer4 turns on JAX's 64-bit mode (`jax_enable_x64`), so models, outputs
+  and likelihoods run in float64, as in summer2. Before, they ran in JAX's default
+  float32, which in a compartment of 100 million moves in steps of 8 people. The flag is
+  process-wide. For float32, set `JAX_ENABLE_X64=0` before starting Python, or call
+  `jax.config.update("jax_enable_x64", False)` after importing summer4 and before
+  compiling (`feat/float64-default`; `CX39`, deferred).
+
 ## [0.2.0a7] — 2026-10-29
 
 Tag: [`v0.2.0a7`](https://github.com/monash-emu/summer4/releases/tag/v0.2.0a7)
