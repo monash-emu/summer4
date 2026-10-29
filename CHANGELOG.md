@@ -9,7 +9,9 @@ Install from the matching git tag (see
 [Installation](docs/getting-started/installation.md)). Narrative release notes
 for the Sphinx site live under [docs/releases/](docs/releases/).
 
-## [Unreleased]
+## [0.2.0a7] — 2026-10-29
+
+Tag: [`v0.2.0a7`](https://github.com/monash-emu/summer4/releases/tag/v0.2.0a7)
 
 ### Added
 
@@ -17,8 +19,8 @@ for the Sphinx site live under [docs/releases/](docs/releases/).
   the whole population (`contact_rate * I_total / N_total` for the frequency
   kind), as in summer2. The dummy one-trait `pop` property and `[[1.0]]` matrix
   are no longer needed. The flow rate is a scalar and the saved force of
-  infection is a `("time",)` series (`feat/foi-whole-population`; `CX15`, in
-  part).
+  infection is a `("time",)` series (`feat/foi-whole-population`, PR #65; `CX15`,
+  in part).
 
 ## [0.2.0a6] — 2026-10-29
 
