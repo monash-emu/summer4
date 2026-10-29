@@ -1,5 +1,13 @@
-"""summer4 compartmental modelling."""
+"""summer4 compartmental modelling.
 
+Importing summer4 turns on JAX's 64-bit mode (``jax_enable_x64``), so models solve in float64,
+as in summer2. The flag is process-wide. To run in float32, set ``JAX_ENABLE_X64=0`` before
+starting Python, or call ``jax.config.update("jax_enable_x64", False)`` after importing summer4
+and before compiling a model.
+"""
+
+# First, so float64 is on before any summer4 module builds a JAX array.
+from summer4 import _precision  # noqa: F401  # isort: skip
 from summer4.flows import (
     REMAINDER,
     BinOp,
