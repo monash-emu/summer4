@@ -11,6 +11,7 @@ each release.
 ```{toctree}
 :maxdepth: 1
 
+v0.2.0a6
 v0.2.0a5
 v0.2.0a4
 rate-array-dispatch
@@ -21,6 +22,7 @@ v0.2.0a1
 
 | Tag | Date | One-line summary |
 | --- | --- | --- |
+| [`v0.2.0a6`](v0.2.0a6.md) | 2026-10-29 | Lazy-idiom bridges (Phase L), composable solving, any-`Posterior` calibration, NUTS tuning |
 | [`v0.2.0a5`](v0.2.0a5.md) | 2026-09-28 | Bayesian calibration and the composable calibration workflow |
 | [`v0.2.0a4`](v0.2.0a4.md) | 2026-09-22 | TB-port surface: ageing, generalised FOI, Output / OutputSet |
 | [`rate-array-dispatch`](rate-array-dispatch.md) | 2026-09-21 | NumPy ufuncs build rate nodes; `ndarray * rate` is one node (in a4) |
