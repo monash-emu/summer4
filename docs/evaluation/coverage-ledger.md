@@ -80,7 +80,7 @@ reach, and it is the denominator for every percentage on this site.
 | D1 | `request_output_for_flow` | outputs | `full` | `FlowMass` / `Output` edge queries | `sum_over(..., side=)`, `integrate_intervals`, `integrate` |
 | D2 | `request_output_for_compartments` | outputs | `full` | `Compartments(where=)` / `Output.select` |  |
 | D3 | `request_aggregate_output` | outputs | `full` | `Output.sum_over` / `total` / `partition` |  |
-| D4 | `request_cumulative_output` | outputs | `full` | `Output.cumulative()` |  |
+| D4 | `request_cumulative_output` | outputs | `full` | `Output.cumulative_integral()` on a rate; `Output.cumsum()` on amounts |  |
 | D5 | `request_function_output` | outputs | `full` | `SaveFn`; `Output` operators and `OutputSet` |  |
 | D6 | `request_computed_value_output` | outputs | `full` | `ComputedValue` | Path validated against `derived_fn` return schema |
 | D7 | `request_track_modelled_value` | outputs | `full` | `ComputedValue` | Same capture path as D6 |

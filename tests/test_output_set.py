@@ -158,7 +158,7 @@ def test_evaluate_matches_manual_output_algebra() -> None:
     outputs["population"] = Compartments().sum_by()
     outputs["incidence"] = FlowMass("infection").sum_by().midpoint()
     outputs["prevalence"] = outputs.ref("infected") / outputs.ref("population")
-    outputs["cum"] = outputs.ref("incidence").cumulative(start=2.0)
+    outputs["cum"] = outputs.ref("incidence").cumsum(start=2.0)
     outputs["scaled"] = outputs.ref("incidence") * Param("scale")
 
     plan = outputs.plan(SavePlan())

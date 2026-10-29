@@ -143,7 +143,7 @@ def _build_outputs(
         outputs[f"rec_age_{trait}"] = Compartments(where=state["recovered"] & band).sum_by()
         outputs[f"reach_age_{trait}"] = Compartments(where=reach["reachable"] & band).sum_by()
 
-    # Flow masses (midpoint), scaled, and cumulative from 2020.
+    # Flow masses (midpoint, summer2 per-interval convention), scaled, and cumsum from 2020.
     # Keep churn as midpoint-only so the named set stays near ~150.
     primary_flows = [
         name
@@ -167,7 +167,7 @@ def _build_outputs(
     ]
     for fname in primary_flows:
         outputs[f"flow_{fname}"] = FlowMass(fname).sum_by().midpoint()
-        outputs[f"cum_{fname}"] = outputs.ref(f"flow_{fname}").cumulative(start=2020.0)
+        outputs[f"cum_{fname}"] = outputs.ref(f"flow_{fname}").cumsum(start=2020.0)
         outputs[f"scaled_{fname}"] = outputs.ref(f"flow_{fname}") * Param("output_scale")
 
     for name in flow_names:
@@ -189,7 +189,7 @@ def _build_outputs(
     for ref in inf_refs[1:]:
         incidence = incidence + ref
     outputs["incidence"] = incidence
-    outputs["cum_incidence"] = outputs.ref("incidence").cumulative(start=2020.0)
+    outputs["cum_incidence"] = outputs.ref("incidence").cumsum(start=2020.0)
     outputs["incidence_per_capita"] = outputs.ref("incidence") / outputs.ref("population")
     outputs["scaled_prevalence"] = outputs.ref("prevalence") * Param("output_scale")
     outputs["deaths"] = outputs.ref("flow_death")
