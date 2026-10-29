@@ -137,5 +137,4 @@ def test_group_by_fields() -> None:
     assert Compartments(group_by=AGE).group_by == AGE
     assert FlowMass("recovery", group_by=(AGE, "source")).group_by == (AGE, "source")
     assert Reduce(AGE).group_by == AGE
-    with pytest.raises(TypeError, match="needs group_by"):
-        Reduce()
+    assert Reduce().group_by is None

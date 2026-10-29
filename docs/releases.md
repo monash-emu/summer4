@@ -7,7 +7,10 @@ leaves one way to write each thing. The documentation has been rebuilt from scra
 unified idiom: a short guide, the textbook chapters migrated to the same idiom, and a roadmap
 page. Once this release is merged, the documentation will be published to
 <https://monash-emu.github.io/summer4/>. Nothing is kept behind a deprecation warning: each
-removed spelling is gone, so update your code using the table below.
+removed spelling is gone, so update your code using the table below. One addition:
+`Reduce(where=sel)` with no `group_by` is now the scalar number of individuals in the matching
+compartments (`Reduce()` is the whole population), so mass-action rates such as
+`Param("a") * Reduce(where=species["predator"])` need no epidemiology helper.
 
 ### Migration table
 

@@ -13,6 +13,10 @@ Narrative release notes for the documentation site live in
 
 ### Added
 
+- Scalar `Reduce`: `Reduce(where=sel)` is the number of individuals in the matching
+  compartments (one scalar, so `Param("a") * Reduce(where=sel)` is mass action), and
+  `Reduce()` is the whole population. `Reduce(group_by, where=...)` is unchanged. Guide
+  page 09 uses it instead of `ForceOfInfection` (`feat/clean-surface`, step 48).
 - A GitHub Pages workflow builds the documentation on every push to `main` and
   publishes it to <https://monash-emu.github.io/summer4/>. A `docs` job on pull
   requests builds the same site as a downloadable artifact, so reviewers can read

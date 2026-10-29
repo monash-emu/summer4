@@ -39,7 +39,7 @@ pixi run composability         # statuses, evidence anchors, packages, totals
 ## Where things stand
 
 <!-- composability:totals -->
-Open findings: **7** (0 high, 2 medium, 5 low); planned: 6; deferred: 4; done: 24; rejected: 0.
+Open findings: **7** (0 high, 2 medium, 5 low); planned: 6; deferred: 4; done: 25; rejected: 0.
 <!-- /composability:totals -->
 
 The calibration workflow's MCMC stage (`CX25`), the solve (`CP1`, roadmap step
@@ -100,6 +100,7 @@ can be inspected and extended. What remains:
 | CX39 | results | P2 | medium | done | Before `feat/time-free-outputs`: an output reduced over time (`integrate()`, `at(t)`) dropped the `time` dim but kept a one-point time axis, so `rate / rate.integrate()` raised *Output time axes differ*, eagerly and in an `OutputSet`; `at` was not a lazy post-op. Dividing a series by a whole-period total needed `defer`. | Done on `feat/time-free-outputs`: an output without `time` in `dims` is time-free and broadcasts across the other side's times; `at` is in `_CALLS`; `at_times` and `Target` on a time-free output raise with the remedy (`plans/time-free-outputs.plan.md`). | `src/summer4/results/output.py::left_timed = "time" in left.dims` |
 | CX40 | results | P1, P2 | medium | done | Before `feat/time-free-outputs`: the lazy output surface had no way out to a plain array (`OutputSet.evaluate` rejected any named output that was not an `Output`) and no way back from an array to an output with times, so array-level work and a target on its result both needed `defer`. | Done on `feat/time-free-outputs`: `array()` / `scalar()` nodes evaluate to arrays that compose with numbers, `Param`, ufuncs and `defer`; array names land in `Result.arrays`; `with_values(arr)` restores an output's times, dims and map. Each is a single post-op, so it ports to `PostOp` with `CX30`. | `src/summer4/results/outputset.py::return OutputExpr(kind="array", kids=(self,))` |
 | CX41 | run | P1 | low | deferred | Number width is process-wide: importing summer4 turns on `jax_enable_x64` for every JAX library in the process, and float32 means turning it off for all of them. A float32 model and a float64 model cannot run side by side, and a solve cannot be float32 while its likelihood sums in float64. | See the note. | `futureplans/per-model-dtype.md`; `src/summer4/_precision/__init__.py::jax.config).update("jax_enable_x64", True)` |
+| CX42 | rates | P1, P2 | medium | done | Before `feat/clean-surface` (scalar `Reduce`): no core spelling for a scalar head count. `Reduce` needed `group_by`, a grouped `Reduce` used as a rate is aligned to the source compartment and silently evaluates to 0 on a prey compartment, so mass-action models (predation, crowding, bimolecular reactions) had to borrow the epidemiological `ForceOfInfection(kind=DENSITY)`. | Done: `Reduce(where=sel)` is the scalar total of the matching compartments (`Reduce()` the whole population), one gather and sum over a constant index array; the grouped form is unchanged and its docstring warns about the alignment. Guide page 09 no longer imports `summer4.epi`. | `tests/test_reduce_scalar.py::rate = Param("a") * Reduce(where=SPECIES["predator"])` |
 <!-- /composability:findings -->
 
 ## Work packages

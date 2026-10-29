@@ -69,6 +69,3 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
 - [`guide-on-ramp-sharp-edges.md`](guide-on-ramp-sharp-edges.md) — fourteen
   places a modeller trips writing the new guide (no rate-as-output, two-call outputs, `side=`,
   hidden `Data`/`timevarying`, `Poisson` mean default, …).
-- [`neutral-head-count-rate.md`](neutral-head-count-rate.md) — no core spelling for
-  "rate × head count" (mass action); `Reduce` used that way silently gives 0; page 09 borrows
-  `ForceOfInfection(kind=DENSITY)`.

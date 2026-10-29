@@ -297,15 +297,27 @@ class BinOp(RateOps):
 
 @dataclass(frozen=True, slots=True, init=False)
 class Reduce(RateOps):
-    """Sum compartment state into one value per trait of ``group_by``; ``where`` means KEEP.
+    """Number of individuals in the compartments matching ``where`` (a scalar), or per group.
 
-    ``Reduce(age, where=sel)`` sums only compartments matching ``sel``. That is
-    the opposite polarity of :meth:`PropertyData.where`, which *replaces*
-    matches — use :meth:`PropertyData.keep` for the same keep-shaped reading on
-    a :class:`PropertyData`.
+    ``Reduce(where=sel)`` is the total of all compartments matching ``sel``: one
+    scalar, like ``FlowRef.sum_by()``. Multiply it by a rate to get "rate x
+    number of individuals in matching compartments", the core of mass-action
+    models: predation (``Param("a") * Reduce(where=species["predator"])``), births
+    and crowding. ``Reduce()`` is the whole population.
+
+    ``Reduce(age, where=sel)`` instead sums into one value per trait of ``age`` (a
+    :class:`~summer4.flows.compiled.GroupedRate`). ``where`` means KEEP: only
+    compartments matching ``sel`` are summed. That is the opposite polarity of
+    :meth:`PropertyData.where`, which *replaces* matches — use
+    :meth:`PropertyData.keep` for the same keep-shaped reading on a
+    :class:`PropertyData`.
+
+    A grouped ``Reduce`` used as a rate is aligned to the source compartment's own
+    group, so ``Reduce(species, where=species["predator"])`` as a rate on prey is 0;
+    use the scalar form for "number of predators".
     """
 
-    group_by: Property | str
+    group_by: Property | str | None
     where: Selector | None = None
 
     def __init__(
@@ -313,8 +325,6 @@ class Reduce(RateOps):
         group_by: Property | str | None = None,
         where: Selector | None = None,
     ) -> None:
-        if group_by is None:
-            raise TypeError("Reduce needs group_by= (the property to keep).")
         object.__setattr__(self, "group_by", group_by)
         object.__setattr__(self, "where", where)
 
@@ -1178,8 +1188,11 @@ def _rate_bytes(expr: RateOps) -> bytes:
                 + _rate_bytes(height)
             )
         case Reduce(group_by=group_by, where=where):
-            prop_name = group_by.name if isinstance(group_by, Property) else group_by
-            body = b"reduce" + prop_name.encode()
+            if group_by is None:
+                body = b"reduce-scalar"
+            else:
+                prop_name = group_by.name if isinstance(group_by, Property) else group_by
+                body = b"reduce" + prop_name.encode()
             if where is None:
                 return body + b"nowhere"
             return body + _selector_bytes(where)
