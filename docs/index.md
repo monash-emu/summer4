@@ -38,24 +38,26 @@ on this site is executed during the build.
 
 ## A first model
 
-An SIR model with an infection flow and a recovery flow, run for 60 days:
+An SIR model with an infection flow, whose rate is the contact rate times the proportion
+of the population that is infectious, and a recovery flow, run for 60 days:
 
 ```python
 import numpy as np
 from summer4 import (
-    Compartments, FlowModel, Param, Property, PropertyData, PropertyMap,
+    Compartments, FlowModel, Param, Property, PropertyMap,
     SavePlan, SaveRequest, TransitionFlow,
 )
+from summer4.epi import ForceOfInfection
 
 state = Property("state", ("S", "I", "R"))
-pmap = PropertyMap.from_property(state)
-model = FlowModel(pmap)
-model.add_flow(TransitionFlow("infection", state["S"], state["I"], Param("beta")))
-model.add_flow(TransitionFlow("recovery", state["I"], state["R"], 0.1))
+model = FlowModel(PropertyMap.from_property(state))
+infection = ForceOfInfection("infection", infectious=state["I"], contact_rate=Param("contact_rate"))
+model.add_flow(TransitionFlow("infection", state["S"], state["I"], infection))
+model.add_flow(TransitionFlow("recovery", state["I"], state["R"], 0.2))
+model.set_initial_population({state["S"]: 990.0, state["I"]: 10.0})
 
-y0 = PropertyData.wrap(pmap, np.array([999.0, 1.0, 0.0]))
-plan = SavePlan(requests={"compartments": SaveRequest(Compartments())})
-result = model.compile().run({"beta": 0.25}, y0, t0=0.0, steps=60, dt=1.0, save=plan)
+plan = SavePlan(requests={"compartments": SaveRequest(Compartments())}, ts=np.arange(61.0))
+result = model.compile().run({"contact_rate": 0.5}, t0=0.0, t1=60.0, dt=0.1, save=plan)
 result["compartments"].to_pandas().plot()
 ```
 
