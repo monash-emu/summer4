@@ -130,6 +130,9 @@ def eval_quantity(
                 known = ", ".join(sorted(ctx.captures)) or "(none)"
                 raise KeyError(f"GroupedOutput {name!r} not captured. Known: {known}.")
             captured = ctx.captures[name]
+            if not captured.properties:
+                # A whole-population capture (e.g. ForceOfInfection(group_by=None)).
+                return captured.data
             prop = captured.properties[0]
             return PropertyData(PropertyMap.from_property(prop), captured.data)
         case SaveFn(fn=fn):
@@ -169,7 +172,7 @@ def values_for(req: Any, raw: Any, model: Any) -> Any:
         case GroupedOutput(name=name):
             meta = getattr(model, "capture_meta", {})
             props = meta.get(name)
-            if props is None:
+            if not props:
                 return raw
             return PropertyData(PropertyMap.from_property(props[0]), raw)
         case _:

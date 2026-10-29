@@ -50,7 +50,7 @@ type CompartmentWeights = tuple[tuple[Selector, RateOps], ...]
 def coerce_compartment_weights(
     weights: InfectiousnessArg,
     *,
-    group_by: Property,
+    group_by: Property | None,
     what: str = "infectiousness",
 ) -> CompartmentWeights | None:
     """Normalise trait-keyed or selector-keyed compartment weights.
@@ -62,6 +62,9 @@ def coerce_compartment_weights(
     store the same pair tuple, sorted by selector digest, so a trait map and
     the pairs it expands to compare and digest equally.
 
+    With ``group_by=None`` (a whole-population force of infection) there are no
+    traits to key on, so only the pair form is accepted.
+
     The pair list is unrolled when the weights are applied. Keep it small.
 
     Step 16's susceptibility surface should call this rather than growing a
@@ -71,13 +74,22 @@ def coerce_compartment_weights(
     if weights is None:
         return None
     if isinstance(weights, Mapping):
+        if group_by is None:
+            raise TypeError(
+                f"{what} cannot be a trait mapping when group_by is None (one "
+                "whole-population group); pass a sequence of (selector, weight) pairs."
+            )
         raw = _pairs_from_trait_map(weights, group_by=group_by, what=what)
     elif isinstance(weights, Sequence) and not isinstance(weights, (str, bytes)):
         raw = _pairs_from_sequence(weights, what=what)
     else:
+        allowed = (
+            "a sequence"
+            if group_by is None
+            else f"a mapping of {group_by.name!r} traits, or a sequence"
+        )
         raise TypeError(
-            f"{what} must be a mapping of {group_by.name!r} traits, or a sequence "
-            f"of (selector, weight) pairs, not {type(weights).__name__}."
+            f"{what} must be {allowed} of (selector, weight) pairs, not {type(weights).__name__}."
         )
     if not raw:
         return None
@@ -180,7 +192,7 @@ def scale_infectious_pool(
     population: Any,
     mode: InfectiousnessNormalize | None,
     pmap: PropertyMap,
-    group_by: Property,
+    group_by: Property | None,
 ) -> Any:
     """Rescale an already-weighted infectious pool by ``normalize_infectiousness``.
 
@@ -192,7 +204,9 @@ def scale_infectious_pool(
     of the per-group effective weights, where a group's effective weight is the
     unweighted mean of its compartment weights (an empty group counts as 1).
     When every compartment in a group shares one weight, both match the
-    historical per-trait formulas. Not for susceptibility.
+    historical per-trait formulas. With ``group_by=None`` the whole population is
+    one group, so ``mean`` divides by the unweighted mean of every compartment
+    weight. Not for susceptibility.
     """
     from summer4.flows.compiled import GroupedRate
 
@@ -208,6 +222,8 @@ def scale_infectious_pool(
         mean_w = jnp.sum(weights * population) / jnp.maximum(total, 1e-12)
         return GroupedRate(data / mean_w, infectious.properties)
     if mode is InfectiousnessNormalize.MEAN:
+        if group_by is None:
+            return GroupedRate(data / jnp.mean(weights), infectious.properties)
         count = PropertyData(pmap, jnp.ones(pmap.size, dtype=weights.dtype)).sum_over(group_by).data
         sum_w = PropertyData(pmap, weights).sum_over(group_by).data
         effective = jnp.where(count > 0, sum_w / jnp.maximum(count, 1.0), 1.0)
@@ -217,17 +233,26 @@ def scale_infectious_pool(
 
 @dataclass(frozen=True, slots=True)
 class ForceOfInfection(RateOps):
-    """Per-group force of infection, usable directly as a flow rate.
+    """Force of infection, usable directly as a flow rate.
 
-    Evaluates to a :class:`~summer4.flows.compiled.GroupedRate` over
-    ``group_by``, so no ``broadcast_over`` round trip is required.
+    With ``group_by=None`` (the default) the whole population is one group:
+    homogeneous mixing, ``contact_rate * I_total / N_total`` for the frequency
+    kind, however the map is stratified. This is summer2's default. The node
+    evaluates to a scalar, and its capture is a plain time series.
+
+    With a ``group_by`` property, the force of infection is per trait of that
+    property and evaluates to a :class:`~summer4.flows.compiled.GroupedRate`
+    over it, so no ``broadcast_over`` round trip is required. Without a
+    ``mixing`` matrix each group mixes only with itself (``I_g / N_g``), which is
+    *not* homogeneous mixing once group prevalences differ.
 
     :attr:`FOIKind.FREQUENCY` divides by the per-group denominator;
     :attr:`FOIKind.DENSITY` does not. :attr:`FOIKind.GENERALISED` evaluates
     ``infectious / denominator ** exponent`` (requires ``exponent``). Frequency
     is bit-identical to generalised with ``exponent=1``; density to
     ``exponent=0``. A callable ``kind(infectious, denominator) -> GroupedRate``
-    is the custom path — it receives no parameters; parameterised shapes use
+    is the custom path — it receives no parameters, and with ``group_by=None``
+    both arguments have ``properties=()``; parameterised shapes use
     :attr:`FOIKind.GENERALISED` or rate-tree arithmetic on ``Reduce``.
 
     ``where`` polarity on the infectious selector is KEEP (via :class:`Reduce`).
@@ -244,7 +269,7 @@ class ForceOfInfection(RateOps):
 
     name: str
     infectious: Selector
-    group_by: Property
+    group_by: Property | None = None
     mixing: MixingMatrix | None = None
     kind: FOIKind | Callable[..., Any] = FOIKind.FREQUENCY
     contact_rate: RateOps = None  # type: ignore[assignment]
@@ -258,7 +283,7 @@ class ForceOfInfection(RateOps):
         name: str,
         *,
         infectious: Selector,
-        group_by: Property,
+        group_by: Property | None = None,
         mixing: MixingMatrix | None = None,
         kind: FOIKindArg = FOIKind.FREQUENCY,
         contact_rate: object = 1.0,
@@ -305,7 +330,12 @@ class ForceOfInfection(RateOps):
         )
         object.__setattr__(self, "normalize_infectiousness", resolved_norm)
         object.__setattr__(self, "exponent", None if exponent is None else as_rate(exponent))
-        if mixing is not None and mixing.prop.name != group_by.name:
+        if mixing is not None and group_by is None:
+            raise ValueError(
+                "ForceOfInfection mixing= needs group_by=: with group_by=None the whole "
+                "population is one group, so there is nothing to mix between."
+            )
+        if mixing is not None and group_by is not None and mixing.prop.name != group_by.name:
             raise ValueError(
                 f"MixingMatrix property {mixing.prop.name!r} does not match "
                 f"ForceOfInfection group_by {group_by.name!r}."
@@ -330,7 +360,8 @@ class ForceOfInfection(RateOps):
     def __rate_bytes__(self) -> bytes:
         from summer4.flows.rates import _callable_key, _rate_bytes, _selector_bytes
 
-        body = b"foi" + self.name.encode() + self.group_by.name.encode()
+        body = b"foi" + self.name.encode()
+        body += b"\x00whole" if self.group_by is None else b"\x00by" + self.group_by.name.encode()
         body += _selector_bytes(self.infectious)
         body += _rate_bytes(self.contact_rate)
         if isinstance(self.kind, FOIKind):
@@ -354,7 +385,7 @@ class ForceOfInfection(RateOps):
         return body
 
     def __capture_meta__(self) -> tuple[str, tuple[Property, ...]]:
-        return self.name, (self.group_by,)
+        return self.name, () if self.group_by is None else (self.group_by,)
 
     @classmethod
     def per_trait(
@@ -363,7 +394,7 @@ class ForceOfInfection(RateOps):
         *,
         name_prefix: str = "infection",
         infectious: Selector,
-        group_by: Property,
+        group_by: Property | None = None,
         **kwargs: Any,
     ) -> tuple[ForceOfInfection, ...]:
         """One named FOI per strain trait, each with ``infectious & strain[s]``."""
@@ -395,20 +426,22 @@ def _eval_force_of_infection(
     y_arr: Any,
     captures: dict[str, Any],
 ) -> Any:
+    import jax.numpy as jnp
+
     from summer4.flows.compiled import GroupedRate
     from summer4.jax.propertydata import PropertyData
 
     prop = expr.group_by
-    pd = PropertyData(pmap, y_arr)
-    if expr.denominator is not None:
-        n_comp = pd.keep(expr.denominator, 0.0).data
-        n_pd = PropertyData(pmap, n_comp).sum_over(prop)
-    else:
-        n_comp = y_arr
-        n_pd = pd.sum_over(prop)
-    if expr.infectiousness is not None:
-        import jax.numpy as jnp
+    props: tuple[Any, ...] = () if prop is None else (prop,)
 
+    def group_sum(data: Any) -> Any:
+        if prop is None:
+            return jnp.sum(jnp.asarray(data), axis=-1, keepdims=True)
+        return PropertyData(pmap, data).sum_over(prop).data
+
+    pd = PropertyData(pmap, y_arr)
+    n_comp = y_arr if expr.denominator is None else pd.keep(expr.denominator, 0.0).data
+    if expr.infectiousness is not None:
         compartment_weights = apply_compartment_weights(
             jnp.ones(pmap.size, dtype=jnp.asarray(y_arr).dtype),
             pmap,
@@ -420,9 +453,10 @@ def _eval_force_of_infection(
     else:
         compartment_weights = None
         weighted_y = y_arr
-    i_pd = PropertyData(pmap, weighted_y).keep(expr.infectious, 0.0).sum_over(prop)
-    i_grp = GroupedRate(i_pd.data, (prop,))
-    n_grp = GroupedRate(n_pd.data, (prop,))
+    i_grp = GroupedRate(
+        group_sum(PropertyData(pmap, weighted_y).keep(expr.infectious, 0.0).data), props
+    )
+    n_grp = GroupedRate(group_sum(n_comp), props)
     if compartment_weights is not None and expr.normalize_infectiousness is not None:
         i_grp = scale_infectious_pool(
             i_grp,
@@ -460,8 +494,11 @@ def _eval_force_of_infection(
     contact = eval_child(expr.contact_rate)
     result = shedding * contact
     if not isinstance(result, GroupedRate):
-        import jax.numpy as jnp
-
-        result = GroupedRate(jnp.asarray(contact) * jnp.asarray(shedding.data), (prop,))
+        result = GroupedRate(jnp.asarray(contact) * jnp.asarray(shedding.data), props)
+    if prop is None:
+        # One group: a scalar rate broadcasts to every edge of the flow.
+        scalar = jnp.asarray(result.data)[..., 0]
+        captures[expr.name] = GroupedRate(scalar, ())
+        return scalar
     captures[expr.name] = result
     return result
