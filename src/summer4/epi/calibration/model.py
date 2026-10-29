@@ -16,7 +16,7 @@ from summer4.flows.compiled import CompiledModel
 from summer4.flows.initial import InitialPopulation
 from summer4.results.outputset import OutputSet
 from summer4.results.plan import SavePlan
-from summer4.results.targets import TargetSet
+from summer4.results.targets import Target, TargetSet
 
 SampleKind = Literal["nuts", "aies", "ess", "sa"]
 
@@ -106,6 +106,15 @@ class BayesianModel:
     factor (``-1e30``) — numpyro rejects non-finite ``factor`` values — so a
     diverged trajectory cannot look like a good fit.
 
+    A target may name an output of ``outputs`` instead of a saved quantity, so
+    a transformed output (a rolling sum, a cumulative count) is a target like any
+    other. Such a target adds nothing to the save plan: the outputs are saved on
+    the run's own grid, evaluated, and read at the target's times by
+    :meth:`Output.at_times` (linear interpolation; exact for times on the grid).
+    Pinning those saves to the observation times would compute a time-window
+    output over the sparse observation points instead. ``rolling(n)`` counts
+    saved points, so it is an ``n``-day window only on a daily grid.
+
     Run-start work (yearly mixing stacks, interpolator knots) goes on
     ``FlowModel.compile(prepare_fn=...)``. Passing ``preprocess=`` raises.
     """
@@ -145,12 +154,27 @@ class BayesianModel:
         self._postprocess_fn: Any | None = None
         self._init_z: Any | None = None
 
+    @property
+    def save_plan(self) -> SavePlan:
+        """The save plan every likelihood run uses, built from targets and outputs."""
+        return self._save_plan
+
     def _build_save_plan(self) -> SavePlan:
-        plan = SavePlan()
-        plan = self.targets.plan(plan)
-        if self.outputs is not None:
-            plan = self.outputs.plan(plan)
-        return plan
+        if self.outputs is None:
+            return self.targets.plan(SavePlan())
+        plan = self.outputs.plan(SavePlan())
+        output_names = set(self.outputs.keys())
+        own: list[Target] = []
+        for target in self.targets.targets:
+            if target.key in output_names:
+                continue  # Scored from the evaluated output; saving it is the OutputSet's job.
+            if target.key in plan.requests:
+                raise ValueError(
+                    f"Target key {target.key!r} is a save key the OutputSet uses for one of "
+                    "its inputs. Rename the target, or name an output instead."
+                )
+            own.append(target)
+        return TargetSet(targets=tuple(own)).plan(plan)
 
     def merge_params(self, draws: Mapping[str, Any]) -> dict[str, Any]:
         """Merge prior draws into a copy of ``fixed_params`` (as a dict)."""
