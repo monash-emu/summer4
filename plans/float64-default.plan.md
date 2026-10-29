@@ -27,7 +27,7 @@ Option (a) of two considered: turn the flag on when summer4 is imported.
   `jax.config.update("jax_enable_x64", False)` after importing summer4 and before
   compiling.
 - The flag is process-wide, so it also applies to other JAX code in the process.
-  That is a composability limit, recorded as `CX39` (deferred).
+  That is a composability limit, recorded as `CX41` (deferred).
 
 Option (b), a per-model `compile(dtype=)` with a separate likelihood width, is deferred:
 `futureplans/per-model-dtype.md`.
@@ -36,10 +36,10 @@ Option (b), a per-model `compile(dtype=)` with a separate likelihood width, is d
 
 - `src/summer4/_precision/__init__.py` (new), `src/summer4/__init__.py`
 - `tests/test_float64_default.py` (new)
-- `examples/notebooks/33-float64-default.ipynb` (acceptance)
+- `examples/notebooks/35-float64-default.ipynb` (acceptance)
 - `docs/user/09-running-and-results.ipynb` (a "Number precision" section),
   `docs/user/07-from-summer2.md` (summary-table row)
-- `docs/evaluation/composability.md` (`CX39`), `futureplans/per-model-dtype.md`
+- `docs/evaluation/composability.md` (`CX41`), `futureplans/per-model-dtype.md`
 - `CHANGELOG.md`
 
 ## Tests
@@ -56,7 +56,7 @@ Option (b), a per-model `compile(dtype=)` with a separate likelihood width, is d
 
 ## Acceptance notebook
 
-`33-float64-default.ipynb`, the same 100-million-person SIR with `tsit5`:
+`35-float64-default.ipynb`, the same 100-million-person SIR with `tsit5`:
 
 1. The flag and dtypes after `import summer4`; the spacing of representable numbers at
    1e8 for each width.

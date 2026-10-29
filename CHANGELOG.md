@@ -11,6 +11,33 @@ for the Sphinx site live under [docs/releases/](docs/releases/).
 
 ## [Unreleased]
 
+### Added
+
+- Time-free outputs broadcast over time. An output reduced over time
+  (`integrate()`, `at(t)`) has no `time` dim, and now combines with a series:
+  `rate / rate.integrate()` is the share of the whole-period total at each time,
+  `prev - prev.at(t)` the change since `t`, and
+  `by_age / by_age.integrate().sum_by()` each age's share of the all-age total.
+  It used to raise *Output time axes differ*, eagerly and in an `OutputSet`
+  (`feat/time-free-outputs`; `CX39`).
+- `at(when)` is a lazy post-op: `outputs.ref("prev").at(10.0)` and
+  `Compartments(...).sum_by().at(10.0)` work in an `OutputSet`.
+- `array()` and `scalar()` give an output's values as a plain array, eagerly
+  (`Output.array()`) and lazily (`outputs.ref(name).array()`). Array nodes combine
+  with numbers, `Param` expressions, NumPy ufuncs and `defer`; an `OutputSet` name
+  that evaluates to an array is in `Result.arrays`, and `result[name]` finds it.
+  `with_values(arr)` goes back: the output's times, dims and map with new values of
+  the same shape, so the result can be plotted or scored by a `Target` (`CX40`).
+- `Output.cumulative_integral(start=, end=)`: the running trapezoid integral of a
+  rate over time, on the same save times and 0 at `start`. On a `FlowMass` it
+  counts people whatever the save spacing. It equals
+  `integrate_intervals().cumsum()` with a leading 0
+  (`feat/cumulative-integral`).
+- `Output.cumsum(start=, end=)`: the running sum `cumulative()` always was, for
+  amounts per interval (`integrate_intervals()` output, `midpoint()` series,
+  counts). Both are also on output expressions (`outputs.ref(...)`) and save
+  specs (`FlowMass(...).sum_by().cumulative_integral()`).
+
 ### Changed
 
 - Importing summer4 turns on JAX's 64-bit mode (`jax_enable_x64`), so models, outputs
@@ -18,7 +45,20 @@ for the Sphinx site live under [docs/releases/](docs/releases/).
   float32, which in a compartment of 100 million moves in steps of 8 people. The flag is
   process-wide. For float32, set `JAX_ENABLE_X64=0` before starting Python, or call
   `jax.config.update("jax_enable_x64", False)` after importing summer4 and before
-  compiling (`feat/float64-default`; `CX39`, deferred).
+  compiling (`feat/float64-default`; `CX41`, deferred).
+- `at_times()` on a time-free output, and a `Target` on one, raise a message that
+  says the output was reduced over time and how to score a whole-period total.
+  A `Target` on an array output points at `with_values`.
+- `defer(f)(...)` with no output argument (only `array()` values, parameters and
+  numbers) returns `f`'s value as an array output instead of raising.
+
+### Deprecated
+
+- `cumulative()` (on `Output`, output expressions and save specs) still returns
+  the same running sum, with a `DeprecationWarning` naming `cumsum()` and
+  `cumulative_integral()`. On a rate it was not a cumulative count: with saves
+  two days apart it gave half the true number. It will be removed in a later
+  release.
 
 ## [0.2.0a7] — 2026-10-29
 

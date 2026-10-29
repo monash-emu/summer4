@@ -63,7 +63,7 @@ original analyses re-run on numpyro.
 | KI12 | Kiribati | Computed values (detection rates, matrix distance) | `full` | `ComputedValue` over `derived_fn` | — |
 | KI13 | Kiribati | Outputs summed over several flows and filtered by strata | `full` | `OutputSet` leaf `FlowMass(flow=(...), where=..., group_by=...)`; derived names are not saved | — |
 | KI14 | Kiribati | Output arithmetic: per-capita, percentages, × parameter | `full` | `outputs.ref(a) / outputs.ref(b)` and `outputs.ref(a) * Param(...)` inside an `OutputSet` | — |
-| KI15 | Kiribati | Cumulative output from a start year | `full` | `outputs.ref(name).cumulative(start=)` in an `OutputSet`; `start` must be a save time | — |
+| KI15 | Kiribati | Cumulative output from a start year | `full` | `outputs.ref(name).cumulative_integral(start=)` (a rate) or `.cumsum(start=)` (an amount) in an `OutputSet`; `start` must be a save time | — |
 | KI16 | Kiribati | summer2 midpoint flow-output convention (parity) | `full` | `FlowMass(...).midpoint()` as an `OutputSet` post-op (`out[0] = f[0]`, then the average with the previous sample) | — |
 | KI17 | Kiribati | Named output set to a frame / parquet | `full` | `OutputSet.evaluate` then `Result.to_frame(shape="wide" or "long")`; a polars frame writes parquet | — |
 | KI18 | Kiribati | Priors and Normal targets, including a prior-distributed sd | `full` | `Uniform` / `NormalLikelihood(sd=Prior(...))` on `Target`; `BayesianModel` | — |

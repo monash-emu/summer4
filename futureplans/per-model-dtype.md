@@ -6,7 +6,7 @@ Importing summer4 turns on JAX's process-wide `jax_enable_x64` flag unless
 `JAX_ENABLE_X64` is set (`src/summer4/_precision/__init__.py`, `plans/float64-default.plan.md`).
 Every model, output and likelihood in the process then runs in float64; float32 means
 turning the flag off for the whole process, including other JAX libraries
-(composability finding `CX39`).
+(composability finding `CX41`).
 
 That is enough for one model per process. It cannot express:
 
@@ -54,4 +54,4 @@ wrong.
 ## Done when
 
 `compile(dtype=)` exists, the no-`f64` jaxpr test passes for float32, float64 stays
-the default, and `CX39` is `done`.
+the default, and `CX41` is `done`.

@@ -61,8 +61,20 @@ class _OutputExprChain:
             window, how=how, center=center, min_periods=min_periods
         )
 
+    def cumsum(self, *, start: Any = None, end: Any = None) -> OutputExpr:
+        return self._as_output_expr().cumsum(start=start, end=end)
+
+    def cumulative_integral(
+        self, *, start: Any = None, end: Any = None, method: Literal["trapezoid"] = "trapezoid"
+    ) -> OutputExpr:
+        return self._as_output_expr().cumulative_integral(start=start, end=end, method=method)
+
     def cumulative(self, *, start: Any = None, end: Any = None) -> OutputExpr:
-        return self._as_output_expr().cumulative(start=start, end=end)
+        """Deprecated: a plain running sum; use :meth:`cumsum` or :meth:`cumulative_integral`."""
+        from summer4._deprecation import warn_cumulative
+
+        warn_cumulative("cumulative()")
+        return self._as_output_expr().cumsum(start=start, end=end)
 
     def midpoint(self) -> OutputExpr:
         return self._as_output_expr().midpoint()
@@ -75,8 +87,20 @@ class _OutputExprChain:
     def integrate(self, method: Literal["trapezoid", "simpson"] = "trapezoid") -> OutputExpr:
         return self._as_output_expr().integrate(method)
 
+    def at(self, when: Any) -> OutputExpr:
+        return self._as_output_expr().at(when)
+
     def at_times(self, ts: Any) -> OutputExpr:
         return self._as_output_expr().at_times(ts)
+
+    def array(self) -> OutputExpr:
+        return self._as_output_expr().array()
+
+    def scalar(self) -> OutputExpr:
+        return self._as_output_expr().scalar()
+
+    def with_values(self, values: object) -> OutputExpr:
+        return self._as_output_expr().with_values(values)
 
 
 @dataclass(frozen=True, slots=True, init=False)

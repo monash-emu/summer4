@@ -496,7 +496,7 @@ def _sir_with_outputs(
     state = Property("state", ("S", "I", "R"))
     outputs = OutputSet()
     outputs["I"] = Compartments(where=state["I"]).sum_by()
-    outputs["cum_I"] = outputs.ref("I").cumulative()
+    outputs["cum_I"] = outputs.ref("I").cumulative_integral()
     return cm, y0, targets, params, outputs
 
 

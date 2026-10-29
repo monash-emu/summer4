@@ -92,8 +92,8 @@ wrapper (P9).
 ### Derived outputs — 8 of 8
 
 `FlowMass` / `Output` edge queries, `Compartments(where=)`, `Output.sum_over` /
-`total` / `partition`, `Output.cumulative()`, `SaveFn` plus output arithmetic,
-and `ComputedValue` / `derived_fn` cover D1–D8.
+`total` / `partition`, `Output.cumulative_integral()` / `cumsum()`, `SaveFn` plus
+output arithmetic, and `ComputedValue` / `derived_fn` cover D1–D8.
 
 ### Solver — 2 of 2
 
