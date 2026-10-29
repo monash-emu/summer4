@@ -182,7 +182,7 @@ def _sir_fuse_models() -> tuple[Any, Any, Any, dict[str, Any]]:
     model = FlowModel(pm)
     model.add_flow(TransitionFlow("inf", state["S"], state["I"], Param("infection")))
     death = model.add_flow(ExitFlow("death", Everything(), 0.01))
-    model.add_flow(EntryFlow("birth", state["S"], death.sum()))
+    model.add_flow(EntryFlow("birth", state["S"], death.sum_by()))
     model.add_flow(TransitionFlow("rec", state["I"], state["R"], 0.05))
     fused = model.compile(fuse_compartment_updates=True)
     looped = model.compile(fuse_compartment_updates=False)

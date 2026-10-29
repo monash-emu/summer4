@@ -64,7 +64,7 @@ def test_frequency_vs_density_differ_by_denominator() -> None:
     params = {"contact_rate": 0.5, "mixing": np.eye(2)}
     freq = np.asarray(build(FOIKind.FREQUENCY).observe(0.0, y, params).captures["infection"].data)
     dens = np.asarray(build(FOIKind.DENSITY).observe(0.0, y, params).captures["infection"].data)
-    n = np.asarray(PropertyData.wrap(pmap, y).sum_over(age).data)
+    n = np.asarray(PropertyData.wrap(pmap, y).sum_by(age).data)
     np.testing.assert_allclose(freq * n, dens)
 
 
@@ -179,7 +179,7 @@ def test_reciprocal_check() -> None:
     state, age, pmap = _sir_age()
     # Equal populations so homogeneous is reciprocal.
     y = np.array([100.0, 100.0, 10.0, 10.0, 0.0, 0.0])
-    n = np.asarray(PropertyData.wrap(pmap, y).sum_over(age).data)
+    n = np.asarray(PropertyData.wrap(pmap, y).sum_by(age).data)
     # Reciprocal: K_ab N_a = K_ba N_b
     K_ok = np.array([[0.5, 0.5], [0.5, 0.5]])
     mix_ok = MixingMatrix(age, K_ok, normalize="none", check_reciprocal=True)
@@ -248,8 +248,8 @@ def test_foi_matches_hand_derived_fn() -> None:
 
     def derived_fn(params: object, *, y: object, t: object) -> _Foi:
         pd_y = PropertyData(pmap, y)
-        i_by = pd_y.keep(state["I"], 0.0).sum_over(age).data
-        n_by = pd_y.sum_over(age).data
+        i_by = pd_y.keep(state["I"], 0.0).sum_by(age).data
+        n_by = pd_y.sum_by(age).data
         shedding = i_by / n_by
         beta = params["contact_rate"]  # type: ignore[index]
         foi_v = beta * (K @ shedding)

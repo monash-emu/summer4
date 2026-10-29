@@ -48,7 +48,7 @@ def _model() -> CompiledModel:
 
 def _weekly_outputs() -> OutputSet:
     outputs = OutputSet()
-    outputs["weekly"] = FlowMass("infection").total().rolling(7, how="sum")
+    outputs["weekly"] = FlowMass("infection").sum_by().rolling(7, how="sum")
     return outputs
 
 
@@ -123,7 +123,7 @@ def test_plain_leaf_output_target_matches_quantity_target() -> None:
     observed = np.round(comps[OBS_TIMES.astype(int)][:, cm.pmap.select(STATE["I"])].sum(axis=1))
 
     outputs = OutputSet()
-    outputs["I"] = infectious.total()
+    outputs["I"] = infectious.sum_by()
     by_output = BayesianModel(
         cm,
         {},
@@ -161,7 +161,7 @@ def test_plain_leaf_output_target_matches_quantity_target() -> None:
 def test_target_key_colliding_with_an_output_leaf_raises() -> None:
     outputs = OutputSet()
     # Two leaves in one output: the second is saved under "both__2".
-    outputs["both"] = FlowMass("infection").total() + FlowMass("recovery").total()
+    outputs["both"] = FlowMass("infection").sum_by() + FlowMass("recovery").sum_by()
     assert "both__2" in outputs.plan().requests
     target = Target(
         key="both__2",

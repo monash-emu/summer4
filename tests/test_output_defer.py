@@ -151,7 +151,7 @@ def test_output_passed_as_keyword_is_saved_by_plan_and_evaluates() -> None:
     model.add_flow(TransitionFlow("recovery", state["I"], state["S"], Param("gamma")))
     compiled = model.compile()
     y0 = PropertyData.wrap(pmap, np.array([9.0, 1.0]))
-    infected = Compartments(where=state["I"]).total()
+    infected = Compartments(where=state["I"]).sum_by()
 
     def scaled_by(x: Any, factor: Any) -> Any:
         return _raw(x) * factor
@@ -165,7 +165,7 @@ def test_output_passed_as_keyword_is_saved_by_plan_and_evaluates() -> None:
     params = {"gamma": 0.3, "factor": 2.5}
     solved = compiled.run(params, y0, t0=0.0, steps=4, dt=1.0, save=plan)
     named = outputs.evaluate(solved, params)
-    raw_total = np.asarray(solved["scaled"].total().values)
+    raw_total = np.asarray(solved["scaled"].sum_by().values)
     np.testing.assert_allclose(np.asarray(named["scaled"].values), 2.5 * raw_total, rtol=1e-5)
 
 

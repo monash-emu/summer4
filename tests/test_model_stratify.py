@@ -205,7 +205,7 @@ def test_flowref_sum_over_survives_stratify() -> None:
     age = Property("age", ("young", "old"))
     model = FlowModel(pmap)
     death = model.add_flow(ExitFlow("death", Everything(), 0.1))
-    model.add_flow(EntryFlow("birth", state["S"], death.sum()))
+    model.add_flow(EntryFlow("birth", state["S"], death.sum_by()))
     model.stratify(age)
     cm = model.compile()
     y = np.ones(cm.pmap.size)

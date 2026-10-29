@@ -327,14 +327,14 @@ def _sum_over_property_name(expr: RateOps) -> str | None:
     from summer4.flows.rates import BinOp, Capture, Reduce
 
     match expr:
-        case FlowRef(reduce=("sum_over", name)):
+        case FlowRef(reduce=("sum_by", name)):
             return name
-        case Reduce(sum_over=sum_over):
-            return sum_over.name if isinstance(sum_over, Property) else sum_over
+        case Reduce(group_by=group_by):
+            return group_by.name if isinstance(group_by, Property) else group_by
         case Capture(inner=inner):
             return _sum_over_property_name(inner)
         case BinOp(left=left, right=right):
-            # Prefer a Reduce / sum_over on either side of a product.
+            # Prefer a Reduce / sum_by on either side of a product.
             return _sum_over_property_name(left) or _sum_over_property_name(right)
         case _:
             custom = getattr(expr, "group_by", None)
@@ -394,7 +394,7 @@ def _entry_indices(
         prop = pmap.get_property(group_by)
         col = np.asarray(pmap.column(prop)[dest_idx], dtype=np.int32)
         if np.any(col == _NA):
-            raise ValueError(f"Cannot sum_over({prop.name!r}): some dest rows lack that property.")
+            raise ValueError(f"Cannot sum_by({prop.name!r}): some dest rows lack that property.")
         weights = np.empty(n, dtype=np.float64)
         unique, inverse = np.unique(col, return_inverse=True)
         for group_i in range(int(unique.size)):
