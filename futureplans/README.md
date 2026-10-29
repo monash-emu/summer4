@@ -61,3 +61,5 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
   fused compartment scatters: src-gather fusion tried and reverted (AD
   slice→pad); remaining rate-alignment / FOI gathers; mul bucket is not a
   missing matmul.
+- [`nuts-gate-test-flaky.md`](nuts-gate-test-flaky.md) — the step-47 gate test
+  `test_gate_recommended_run_converges_on_every_element` flakes across CI runners.
