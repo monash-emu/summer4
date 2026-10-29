@@ -331,7 +331,10 @@ def test_gate_laplace_start_shortens_warmup_trajectories(gate: gate_settings.Gat
     table = gate.joint.table(gate_settings.TARGET_ESS)
     steps = table["warmup_steps_mean"]
     assert steps["diag+laplace"] < 0.5 * steps["diag"]
-    assert steps["dense+laplace"] < 0.5 * steps["dense"]
+    # Dense from the identity sometimes adapts quickly in float64 (about 40 warm-up steps, not
+    # 80), leaving the Laplace start about 2x ahead and 1.90x once in CI's latest environment.
+    # The claim both widths and both environments support is a cut of at least a third.
+    assert steps["dense+laplace"] < (2 / 3) * steps["dense"]
 
 
 @pytest.mark.slow

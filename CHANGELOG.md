@@ -46,6 +46,10 @@ for the Sphinx site live under [docs/releases/](docs/releases/).
   process-wide. For float32, set `JAX_ENABLE_X64=0` before starting Python, or call
   `jax.config.update("jax_enable_x64", False)` after importing summer4 and before
   compiling (`feat/float64-default`; `CX41`, deferred).
+- The NUTS tuning gate (notebook 29) claims the Laplace start cuts dense warm-up
+  trajectories by at least a third, not by half. In float64 the dense warm-up from the
+  identity sometimes adapts quickly, leaving the Laplace start about 2x ahead; the
+  diagonal claim (more than half) is unchanged.
 - `at_times()` on a time-free output, and a `Target` on one, raise a message that
   says the output was reduced over time and how to score a whole-period total.
   A `Target` on an array output points at `with_values`.
