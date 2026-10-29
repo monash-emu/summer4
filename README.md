@@ -1,6 +1,6 @@
 # summer4
 
-JAX-native compartmental modelling. Current tag: **`v0.2.0a6`**. See
+JAX-native compartmental modelling. Current tag: **`v0.2.0a7`**. See
 [CHANGELOG.md](CHANGELOG.md) and [docs/releases/](docs/releases/) for what each
 release does.
 
