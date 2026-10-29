@@ -36,6 +36,17 @@ Infectious compartments are named when you build a force of infection in
 `state["I"]`, not a constructor list. summer2's `add_infection_*_flow`
 becomes a `TransitionFlow` whose rate is a `ForceOfInfection`.
 
+```python
+from summer4.epi import ForceOfInfection
+
+foi = ForceOfInfection("infection", infectious=state["I"], contact_rate=Param("contact_rate"))
+```
+
+Leaving out `group_by` gives summer2's default, homogeneous mixing over the
+whole population (`contact_rate * I_total / N_total`), however the model is
+stratified. `group_by=age` without a `mixing=` matrix is *not* the same: each age
+group then catches infection only from itself.
+
 ### Stratifying
 
 ```python

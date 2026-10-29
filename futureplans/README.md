@@ -29,7 +29,9 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
 - [`trace-plot-backend-coupling.md`](trace-plot-backend-coupling.md) —
   `Output.plot` hardcodes matplotlib and forwards backend-specific kwargs.
 - [`foi-unstratified-dummy-pop.md`](foi-unstratified-dummy-pop.md) —
-  unstratified FOI still needs a singleton `pop` property + `[[1.0]]` matrix.
+  **resolved**: `ForceOfInfection(group_by=None)` is the whole population.
+- [`foi-dummy-pop-docs-migration.md`](foi-dummy-pop-docs-migration.md) —
+  published pages still teach the dummy `pop` property.
 - [`foi-multi-property-mixing.md`](foi-multi-property-mixing.md) —
   `ForceOfInfection.group_by` is one property; multi-axis mixing is homogeneous
   after further `stratify`.

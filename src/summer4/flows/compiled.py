@@ -1263,8 +1263,8 @@ class CompiledModel:
         for key, req in plan.requests.items():
             dims: tuple[str, ...]
             if isinstance(req.what, GroupedOutput) and req.what.name in self.capture_meta:
-                prop = self.capture_meta[req.what.name][0]
-                dims = ("time", prop.name)
+                props = self.capture_meta[req.what.name]
+                dims = ("time", props[0].name) if props else ("time",)
             else:
                 dims = dims_for_quantity(req.what)
             group = key_to_group[key]
