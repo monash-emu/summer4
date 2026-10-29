@@ -81,3 +81,22 @@ def test_deferred_whole_table_weights() -> None:
     np.testing.assert_allclose(float(y[old_yes]), 15.0)
     grad = jax.grad(lambda vy: _y(pop, pmap, {**params, "vy": vy})[young_yes])(0.8)
     np.testing.assert_allclose(float(grad), 50.0)
+
+
+def test_callable_base_value_is_rejected_with_defer_hint() -> None:
+    _, _, pmap = _pmap()
+    pop = InitialPopulation({Everything(): lambda n: n})  # type: ignore[dict-item]
+    with pytest.raises(TypeError, match="defer\\(") as info:
+        pop.compile(pmap)
+    assert "callable" in str(info.value)
+
+
+def test_callable_split_weights_are_rejected_with_defer_hint() -> None:
+    _, imm, pmap = _pmap()
+    pop = InitialPopulation(
+        {Everything(): 100.0},
+        splits=(Split(imm, lambda v: v, normalize=True),),  # type: ignore[arg-type]
+    )
+    with pytest.raises(TypeError, match="defer\\(") as info:
+        pop.compile(pmap)
+    assert "callable" in str(info.value)

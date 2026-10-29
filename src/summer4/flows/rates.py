@@ -763,6 +763,9 @@ def derived_refs[T: NamedTuple](schema: type[T]) -> T:
     like ``D.migration.baseline`` is one path. The return is annotated as
     ``schema`` so IDEs complete only those fields. Runtime values are
     ``FieldRef`` paths (or nested schemas of them), not the declared types.
+
+    Legacy: removed in roadmap step 41, replaced by ``field_refs`` (step 39).
+    Not used in the documentation.
     """
     if not _is_namedtuple_class(schema):
         raise TypeError(f"derived_refs expects a NamedTuple class, got {schema!r}.")

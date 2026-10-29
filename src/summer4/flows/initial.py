@@ -284,6 +284,12 @@ class InitPlan:
         return PropertyData.wrap(self.pmap, y)
 
 
+_CALLABLE_MSG = (
+    "{where} was a callable; callables are no longer accepted here. Use a number, "
+    '``Param(...)``, or ``defer(f)(Param("a"), ...)`` instead.'
+)
+
+
 def _validate_base_value(value: BaseValue) -> BaseValue:
     if isinstance(value, (int, float, np.integer, np.floating)):
         return float(value)
@@ -293,6 +299,8 @@ def _validate_base_value(value: BaseValue) -> BaseValue:
                 f"Base value rate expression must be run-stage, got step-stage {value!r}."
             )
         return value
+    if callable(value):
+        raise TypeError(_CALLABLE_MSG.format(where="base value"))
     raise TypeError(f"Unsupported base value type {type(value).__name__}.")
 
 
@@ -360,6 +368,8 @@ def _validate_weights(split: Split, prop: Property) -> tuple[tuple[str, ...] | N
         if rate_stage(weights, params_are_static=True) != "run":
             raise ValueError(f"Split on {prop.name!r}: weights RateOps must be run-stage.")
         return None, weights
+    if callable(weights):
+        raise TypeError(_CALLABLE_MSG.format(where="Split.weights"))
     raise TypeError(f"Unsupported Split.weights type {type(weights).__name__}.")
 
 

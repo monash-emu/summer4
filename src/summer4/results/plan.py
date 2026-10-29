@@ -152,7 +152,11 @@ class FlowMass(_OutputExprChain):
 
 @dataclass(frozen=True, slots=True)
 class ComputedValue(_OutputExprChain):
-    """Capture a path from the derived-param struct produced by ``derived_fn``."""
+    """Capture a path from the derived-param struct produced by ``derived_fn``.
+
+    Legacy: removed in roadmap step 40, replaced by assigning an expression to an
+    ``OutputSet`` entry. Not used in the documentation.
+    """
 
     path: tuple[str, ...]
 
@@ -175,6 +179,9 @@ class SaveFn(_OutputExprChain):
 
     ``fn`` hashes by identity, so a lambda defined inside a loop retraces every
     call (same trap as ``derived_fn`` / ``Transform.fn``).
+
+    Legacy: removed in roadmap step 40, replaced by assigning an expression to an
+    ``OutputSet`` entry. Not used in the documentation.
     """
 
     fn: Callable[[Any], Any]
