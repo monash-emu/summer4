@@ -45,10 +45,23 @@ _CALLS = frozenset(
         "midpoint",
         "integrate_intervals",
         "integrate",
+        "at",
         "at_times",
     }
 )
-type _Kind = Literal["leaf", "ref", "const", "param", "unary", "binary", "call", "defer"]
+type _Kind = Literal[
+    "leaf",
+    "ref",
+    "const",
+    "param",
+    "unary",
+    "binary",
+    "call",
+    "defer",
+    "array",
+    "scalar",
+    "with_values",
+]
 
 
 def _is_numeric(value: object) -> bool:
@@ -159,8 +172,29 @@ class OutputExpr:
     def integrate(self, method: Literal["trapezoid", "simpson"] = "trapezoid") -> OutputExpr:
         return self._call("integrate", method)
 
+    def at(self, when: Any) -> OutputExpr:
+        """Value at the save time nearest ``when``; drops ``time``. See :meth:`Output.at`."""
+        return self._call("at", when)
+
     def at_times(self, ts: Any) -> OutputExpr:
         return self._call("at_times", ts)
+
+    def array(self) -> OutputExpr:
+        """The evaluated values as a plain array; see :meth:`Output.array`.
+
+        The node evaluates to an array, not an ``Output``. It combines with
+        numbers, other arrays, ``Param`` expressions, NumPy ufuncs and
+        ``defer``; :meth:`with_values` gives it an output's axes again.
+        """
+        return OutputExpr(kind="array", kids=(self,))
+
+    def scalar(self) -> OutputExpr:
+        """Like :meth:`array`, for a 0-d output; checks the shape is ``()``."""
+        return OutputExpr(kind="scalar", kids=(self,))
+
+    def with_values(self, values: object) -> OutputExpr:
+        """This output's times, dims and map with ``values``; see :meth:`Output.with_values`."""
+        return OutputExpr(kind="with_values", kids=(self, _coerce(values)))
 
     def __neg__(self) -> OutputExpr:
         return OutputExpr(kind="unary", op="neg", kids=(self,))
@@ -272,7 +306,8 @@ def _apply_deferred(fn: Callable[..., Any], args: list[Any], kwargs: dict[str, A
 
     An :class:`Output` is returned as is. Any other value must be an array shaped
     like the first :class:`Output` argument; it is wrapped with that argument's
-    times and dims.
+    times and dims. With no :class:`Output` argument (only arrays from
+    :meth:`OutputExpr.array`, numbers and parameters) the value is returned as is.
     """
     import jax.numpy as jnp
 
@@ -282,10 +317,7 @@ def _apply_deferred(fn: Callable[..., Any], args: list[Any], kwargs: dict[str, A
     label = getattr(fn, "__name__", repr(fn))
     first = next((value for value in (*args, *kwargs.values()) if isinstance(value, Output)), None)
     if first is None:
-        raise TypeError(
-            f"defer({label}) returned {type(result).__name__} with no Output argument to "
-            "take a shape from. Return an Output, or pass an Output argument."
-        )
+        return result
     if isinstance(first.values, PropertyData):
         want = tuple(jnp.shape(first.values.data))
     else:
@@ -299,6 +331,17 @@ def _apply_deferred(fn: Callable[..., Any], args: list[Any], kwargs: dict[str, A
     if isinstance(first.values, PropertyData):
         return first._with(values=PropertyData(first.values.pmap, result))
     return first._with(values=result)
+
+
+def _as_named_array(name: str, value: Any) -> Any:
+    """An array-valued named output, as a JAX array (a pytree leaf of the Result)."""
+    import jax.numpy as jnp
+
+    if not _is_numeric(value):
+        raise TypeError(
+            f"Output {name!r} evaluated to {type(value).__name__}, not an Output or an array."
+        )
+    return jnp.asarray(value)
 
 
 class OutputSet:
@@ -449,7 +492,10 @@ class OutputSet:
         the object :func:`~summer4.flows.compiled.eval_closed` reads for a
         ``Param`` or other parameter-only rate expression. The returned
         :class:`~summer4.results.result.Result` is keyed by output name, in
-        assignment order, and is safe to build under ``jit``.
+        assignment order, and is safe to build under ``jit``. A name whose
+        expression evaluates to a plain array (built with
+        :meth:`OutputExpr.array` or :meth:`OutputExpr.scalar`) is in
+        ``Result.arrays``; ``named[name]`` finds either kind.
         """
         order = self._topo()
         bindings = self._bindings()
@@ -460,7 +506,7 @@ class OutputSet:
                     return key
             raise KeyError(f"No save key for leaf {qty!r}.")
 
-        computed: dict[str, Output] = {}
+        computed: dict[str, Any] = {}
 
         def eval_node(expr: OutputExpr) -> Any:
             if expr.kind == "leaf":
@@ -517,6 +563,20 @@ class OutputSet:
                     raise AttributeError(expr.method)
                 fn: Callable[..., Output] = getattr(child, expr.method)
                 return fn(*expr.args, **dict(expr.kwargs))
+            if expr.kind in ("array", "scalar"):
+                child = eval_node(expr.kids[0])
+                if not isinstance(child, Output):
+                    raise TypeError(
+                        f"{expr.kind}() applies to an Output, got {type(child).__name__}."
+                    )
+                return child.array() if expr.kind == "array" else child.scalar()
+            if expr.kind == "with_values":
+                template = eval_node(expr.kids[0])
+                if not isinstance(template, Output):
+                    raise TypeError(
+                        "with_values() applies to an Output, got " f"{type(template).__name__}."
+                    )
+                return template.with_values(eval_node(expr.kids[1]))
             if expr.kind == "defer":
                 values = [eval_node(kid) for kid in expr.kids]
                 n_kwargs = len(expr.kwargs)
@@ -529,14 +589,18 @@ class OutputSet:
         for name in order:
             value = eval_node(self._exprs[name])
             if not isinstance(value, Output):
-                raise TypeError(
-                    f"Output {name!r} evaluated to {type(value).__name__}, not an Output."
-                )
+                value = _as_named_array(name, value)
             computed[name] = value
-        ordered = {name: computed[name] for name in self._order}
+        ordered = {
+            name: computed[name] for name in self._order if isinstance(computed[name], Output)
+        }
+        arrays = {
+            name: computed[name] for name in self._order if not isinstance(computed[name], Output)
+        }
         return Result(
             times=result.times,
             outputs=ordered,
+            arrays=arrays,
             solver=result.solver,
             _state_pmap=result._state_pmap,
             final_state=result.final_state,

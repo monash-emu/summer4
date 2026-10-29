@@ -226,18 +226,18 @@ def test_mixed_time_and_output_arguments_raise_value_error_at_evaluate() -> None
         outputs.evaluate(_series_result("inc", _incidence(5)), {"delay": 2.0})
 
 
-def test_array_return_without_an_output_argument_raises_type_error() -> None:
-    # No public spelling reaches this branch: a leaf, a ref, or any expression built on one
-    # evaluates to an Output. A parameter-only OutputExpr, built directly, does.
+def test_array_return_without_an_output_argument_is_an_array_output() -> None:
+    # With no Output argument there is no shape to wrap with: the value is an array node,
+    # and the named output lands in Result.arrays (plans/time-free-outputs.plan.md).
     def constant_array(value: Any) -> Any:
         return jnp.ones(3) * value
 
     outputs = OutputSet()
     outputs["inc"] = Compartments()
     outputs["flat"] = defer(constant_array)(OutputExpr(kind="param", param=Param("scale")))
-    with pytest.raises(TypeError, match="constant_array") as info:
-        outputs.evaluate(_series_result("inc", _incidence(5)), {"scale": 2.0})
-    assert "no Output argument" in str(info.value)
+    named = outputs.evaluate(_series_result("inc", _incidence(5)), {"scale": 2.0})
+    assert "flat" in named.arrays
+    np.testing.assert_allclose(np.asarray(named["flat"]), [2.0, 2.0, 2.0])
 
 
 def test_all_parameter_defer_still_builds_a_rate_node() -> None:

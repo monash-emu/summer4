@@ -66,6 +66,23 @@ def _output_array(output: Output) -> Any:
     return values.data if hasattr(values, "data") else values
 
 
+def _target_output(result: Result, key: str) -> Output:
+    """The output a target scores, or a clear error when it has no series."""
+    output = result[key]
+    if not isinstance(output, Output):
+        raise TypeError(
+            f"Target {key!r} names a plain array output, which has no times to score "
+            "against. Give it an output's axes with outputs.ref(...).with_values(...)."
+        )
+    if "time" not in output.dims:
+        raise ValueError(
+            f"Target {key!r} names a time-free output (dims {output.dims}), reduced over "
+            "time. Score a series instead: a whole-period total is cumulative() read at "
+            "the last time, with Target(times=[t_end])."
+        )
+    return output
+
+
 def _coerce_reduce(value: object) -> ReduceHow | Callable[..., Any] | None:
     """Accept ``sum`` / ``mean``, or a traceable callable from array to array."""
     if value is None:
@@ -213,7 +230,7 @@ class TargetSet:
 
     def gather(self, result: Result) -> dict[str, Output]:
         """Interpolate each target's key onto its observation times."""
-        return {t.key: result[t.key].at_times(t.times) for t in self.targets}
+        return {t.key: _target_output(result, t.key).at_times(t.times) for t in self.targets}
 
     def residuals(self, result: Result) -> dict[str, Any]:
         """Return ``prediction - observation`` arrays keyed by target key.
@@ -255,7 +272,7 @@ class TargetSet:
 
     def _aligned_prediction(self, result: Result, target: Target) -> Any:
         """Gather, optional reduce, and reshape prediction to ``target.values``."""
-        pred = _output_array(result[target.key].at_times(target.times))
+        pred = _output_array(_target_output(result, target.key).at_times(target.times))
         how = target.reduce
         if isinstance(how, str):
             how = coerce_strenum(ReduceHow, how, what="Target.reduce")

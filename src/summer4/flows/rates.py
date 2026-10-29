@@ -535,7 +535,10 @@ def defer(fn: Callable[..., Any], *, name: str | None = None) -> Callable[..., A
     - an array with the data shape of the first :class:`~summer4.results.output.Output`
       argument, wrapped with that argument's times and dims.
 
-    Any other shape raises :class:`TypeError`, naming ``fn`` and both shapes.
+    Any other shape raises :class:`TypeError`, naming ``fn`` and both shapes. When no
+    argument evaluates to an ``Output`` (only plain arrays from
+    :meth:`~summer4.results.outputset.OutputExpr.array`, parameters and constants),
+    the value of ``fn`` is returned as is: an array-valued node.
 
     ``Defer(f, outputs.ref(...))`` called directly still raises: a :class:`Defer` is
     a rate node and cannot hold an output. Use ``defer(f)(...)``.
