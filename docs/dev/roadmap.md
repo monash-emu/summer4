@@ -191,11 +191,11 @@ Each step that touches `src/` also has its worker write a short step plan,
 <!-- roadmap:current -->
 | Field | Value |
 | --- | --- |
-| Step | 28 |
-| Status | next |
-| Branch | `feat/calib-outputs` |
+| Step | 49 |
+| Status | in-progress |
+| Branch | `feat/runtime-defaults` |
 | Cut from | `main` |
-| Last landed | `feat/clean-surface` (PR #72, step 48: clean surface, docs rebuilt and published) |
+| Last landed | `feat/clean-surface` (PR #72, step 48; released as `v0.3.0a1`) |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -234,7 +234,7 @@ orchestrates and checks.
 The order is fixed as:
 
 ```text
-14 → 15 → 24 → 25 → 26 → 27 → 29 → 30 → 46 → 47 → 31 → 32 → 33 → 34 → 35 → 48 → 28 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 16 → 17 → 18 → 19
+14 → 15 → 24 → 25 → 26 → 27 → 29 → 30 → 46 → 47 → 31 → 32 → 33 → 34 → 35 → 48 → 49 → 28 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 16 → 17 → 18 → 19
 ```
 
 Phase J comes **directly after step 15** and before Track G resumes at step 16.
@@ -251,6 +251,10 @@ Step 47 is placed the same way, after step 46.
 have working replacements, rebuilds the published documentation in the unified idiom only, and
 publishes it to GitHub Pages. From then on Phase M deletes each old door in the step that lands
 its replacement, so step 45 has nothing left to do and is marked `done` (absorbed).
+Step 49 (`feat/runtime-defaults`, `plans/runtime-defaults.plan.md`) was inserted on 2026-11-11,
+after step 48 and before step 28. It makes the defaults accurate and fast with nothing to
+configure: Tsit5 with an adaptive controller as the default solver, one JAX host device per CPU
+core on import, and parallel MCMC chains when the devices allow.
 
 <!-- roadmap:steps -->
 | Step | Phase | WP | Branch | Plan | Section | Status | Closes |
@@ -282,7 +286,7 @@ its replacement, so step 45 has nothing left to do and is marked `done` (absorbe
 | 25 | J | WP19 | `feat/calib-multistart` | `plans/calibration-toolkit.plan.md` | Step 25 | done | CW5 CW6 |
 | 26 | J | WP19 | `feat/calib-gradient-free` | `plans/calibration-toolkit.plan.md` | Step 26 | done | CW7 |
 | 27 | J | WP19 | `feat/calib-seeded-mcmc` | `plans/calibration-toolkit.plan.md` | Step 27 | done | CW8 CW9 |
-| 28 | J | WP19 | `feat/calib-outputs` | `plans/calibration-toolkit.plan.md` | Step 28 | next | CW10 CW11 |
+| 28 | J | WP19 | `feat/calib-outputs` | `plans/calibration-toolkit.plan.md` | Step 28 | planned | CW10 CW11 |
 | 29 | K | CP1 | `feat/solve-composable` | `plans/solve-composable.plan.md` | Whole | done | CX1 CX2 CX3 CX4 CX5 |
 | 30 | K | CP2 | `feat/calib-composable` | `plans/calib-composable.plan.md` | Whole | done | CX16 CX17 CX18 CX19 CX24 |
 | 31 | L | CP5 | `fix/likelihood-scale-expr` | `plans/unified-lazy-idiom.plan.md` | Step 31 | done | CX26 |
@@ -303,6 +307,7 @@ its replacement, so step 45 has nothing left to do and is marked `done` (absorbe
 | 46 | K | CP3 | `feat/calib-posterior-protocol` | `plans/tb-nh-joint-calibration.plan.md` | §4, §5 NH2 | done | CX21 CX22 CX35 |
 | 47 | K | CP7 | `feat/nuts-tuning` | `plans/nuts-tuning.plan.md` | all | done | CX36 CX37 CX38 |
 | 48 | N | — | `feat/clean-surface` | `plans/clean-surface.plan.md` | Steps C0–C9 | done | — |
+| 49 | N | — | `feat/runtime-defaults` | `plans/runtime-defaults.plan.md` | Steps R0–R5 | in-progress | — |
 <!-- /roadmap:steps -->
 
 `Closes` lists row IDs of {doc}`../evaluation/tb-ports` (and, where a step moves
@@ -3639,7 +3644,7 @@ CI artifact and read page by page (approved deviation: no new example notebook).
 
 ### Handoff
 
-Set step 48 `done`, step 28 `next`. Record which removals C2 made, and the worker-tier tally.
+Set step 48 `done`, step 49 `next`. Record which removals C2 made, and the worker-tier tally.
 
 **Done (2026-10-30).**
 
@@ -3662,6 +3667,60 @@ Set step 48 `done`, step 28 `next`. Record which removals C2 made, and the worke
   `nbclient`.
 - **On the mini.** `pixi` is at `/opt/homebrew/bin/pixi` and is not on the PATH that
   `mini build` uses. Call it by its full path.
+
+---
+
+## Step 49 — `feat/runtime-defaults`
+
+### Summary
+
+summer4 sets up an accurate solver and every CPU core on import, with nothing for the user to
+configure:
+
+- `run()` defaults to Tsit5 with an adaptive `PIDController` (rtol `1e-6`, atol `1e-9`)
+  instead of fixed-step Euler.
+- On import, JAX gets one host device per CPU core.
+- MCMC chains run in parallel when the devices allow.
+
+Each default can be changed or turned off, through an environment variable or a public function,
+and `summer4.runtime_info()` reports what was set. A benchmark gate (R0) runs before any default
+changes. It lands on `feat/runtime-defaults` and is released as `0.3.0a2` straight after merge.
+
+### What the previous worker left you
+
+- **Euler:** the guide's predator–prey page needs `solver="dopri5"` with tight tolerances to
+  keep its orbit closed under the old default.
+- **Backend:** importing summer4, `summer4.epi` and `summer4.epi.calibration` does not
+  initialise JAX's backend (checked 2026-11-11), so an XLA flag set on import takes effect.
+- **On the mini:** `pixi` is `/opt/homebrew/bin/pixi`.
+
+### Worker
+
+Per step in the plan: haiku for R1, sonnet for R0, R2, R3 and R4, with a checker one tier up.
+
+### Read first
+
+1. `AGENTS.md`
+2. `plans/runtime-defaults.plan.md`, all of it
+3. `src/summer4/_precision/__init__.py`, `src/summer4/solvers/resolve.py`,
+   `src/summer4/flows/compiled.py` (`run`)
+
+### Do
+
+Follow `plans/runtime-defaults.plan.md`, steps R0–R5, one commit each. Stop at R0's gate if it
+trips, and ask the user.
+
+Cut from: `main`. Merges into: `main`.
+
+### Exit checks
+
+The [standard checks](#exit-checks-every-step), plus `pixi run composability`. **User gate:**
+`examples/notebooks/36-runtime-defaults.ipynb` and `docs/guide/10-runtime.md`.
+
+### Handoff
+
+Set step 49 `done`, step 28 `next`. Record the R0 numbers, which tests were pinned to Euler, and
+the worker-tier tally. Then tag `v0.3.0a2`.
 
 ---
 
