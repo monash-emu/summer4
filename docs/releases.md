@@ -1,5 +1,31 @@
 # Release notes
 
+## 0.3.0a2: runtime defaults
+
+This release changes three defaults so that models are more accurate and use your whole computer
+without any set-up. Guide page 10, {doc}`What summer4 sets up for you <guide/10-runtime>`, says
+what each one is, how to check it with `summer4.runtime_info()`, and how to change it.
+
+- **`run()` is more accurate.** With no `solver=`, it uses an adaptive Tsit5 solver, not fixed-step
+  Euler. It adjusts its step to the model, so a repeating cycle stays closed, and it is also much
+  faster than Euler at a step size that is accurate enough. Because the answers are closer to the
+  exact ones, numbers from an existing model will change a little (or, if Euler was inaccurate,
+  a lot). To get the old numbers, pass `solver="euler"` to `run()`, call
+  `summer4.solvers.set_default_solver("euler")`, or start Python with `SUMMER4_SOLVER=euler`.
+  `dt` is still needed: it is the first step and sets the save times.
+- **Your CPU cores are visible to JAX.** Importing summer4 makes JAX report one CPU device per core.
+  Switch it off with `SUMMER4_HOST_DEVICES=0`. Import summer4 before you use JAX.
+- **MCMC chains run in parallel** when you have at least as many cores as chains. Pass
+  `chain_method="vectorized"` to get the old behaviour. The draws for a given seed can differ, but
+  they come from the same posterior.
+
+New functions: `summer4.runtime_info()`, `summer4.solvers.default_solver()`,
+`summer4.solvers.set_default_solver()` and `summer4.epi.calibration.resolve_chain_method()`.
+
+One thing to watch: an older `derived_fn` that turns parameters into Python numbers (for example
+`float(params["beta"])`) fails under the adaptive default. Keep the values as JAX arrays, or pass
+`solver="euler"`.
+
 ## 0.3.0a1: the clean surface (step 48)
 
 This release removes the renamed spellings that were kept only for compatibility, and

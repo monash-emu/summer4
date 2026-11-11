@@ -11,6 +11,44 @@ Narrative release notes for the documentation site live in
 
 ## [Unreleased]
 
+## [0.3.0a2] — 2026-11-11
+
+Tag: [`v0.3.0a2`](https://github.com/monash-emu/summer4/releases/tag/v0.3.0a2)
+
+Runtime defaults (roadmap step 49, `feat/runtime-defaults`, composability findings `CX43` and
+`CX44`): an accurate solver and every CPU core, with nothing to configure. Guide page 10,
+"What summer4 sets up for you", explains each default and how to change it.
+
+### Changed
+
+- **The default solver is now adaptive Tsit5 with a `PIDController`** (rtol `1e-6`, atol `1e-9`),
+  not fixed-step Euler. Results move towards the exact solution, so numbers change for any model
+  run without `solver=`. Migration: pass `solver="euler"` for the old numbers, or set
+  `SUMMER4_SOLVER=euler` (or call `set_default_solver("euler")`) for a whole process. `dt` is still
+  required: with the default it is the first step and sets the save grid.
+- Importing summer4 now exposes **one CPU device per core** to JAX (it sets
+  `--xla_force_host_platform_device_count`). `SUMMER4_HOST_DEVICES=0` turns it off; an `XLA_FLAGS`
+  setting of your own is kept. Import summer4 before using JAX, or the setting comes too late
+  (summer4 warns).
+- MCMC `chain_method` defaults to `"auto"` in `BayesianModel.sample` and `wf.run_mcmc`: chains run
+  in parallel when there are at least as many devices as chains, otherwise vectorized. Draws for a
+  given seed can differ from the old `"vectorized"` default. Ensemble kernels stay vectorized.
+
+### Added
+
+- `summer4.runtime_info()`: whether 64-bit numbers are on, the host devices requested and why, and
+  the default solver.
+- `summer4.solvers.default_solver(rtol=, atol=)` and `summer4.solvers.set_default_solver(...)`.
+- `summer4.epi.calibration.resolve_chain_method`.
+- Environment variables `SUMMER4_HOST_DEVICES` and `SUMMER4_SOLVER`.
+- Guide page 10 and acceptance notebook `examples/notebooks/36-runtime-defaults.ipynb`.
+
+### Note
+
+- A legacy `derived_fn` that turns parameters into Python floats (for example
+  `float(params["beta"])`) fails under the adaptive default, because the values are traced by JAX.
+  Keep them as JAX arrays, or pass `solver="euler"`.
+
 ## [0.3.0a1] — 2026-10-30
 
 Tag: [`v0.3.0a1`](https://github.com/monash-emu/summer4/releases/tag/v0.3.0a1)

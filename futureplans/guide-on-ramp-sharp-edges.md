@@ -48,6 +48,13 @@ someone who is not a programmer?
 13. **`Multiply(where=...)` applies by source stratum.** On an infection flow it therefore
     changes susceptibility. This is correct, but the guide has to say so.
 
+## Solver and devices
+
+15. **The default solver was fixed-step Euler.** Guide page 09 needed `solver="dopri5", rtol=1e-8,
+    atol=1e-8` to keep a cycle closed. **Done** on `feat/runtime-defaults` (step 49, `CX43`):
+    `run()` now defaults to adaptive Tsit5 with a `PIDController`, and page 09 no longer has the
+    workaround. Unrelated to the numbered items above: they are still open.
+
 ## Tooling
 
 14. **No `nbconvert` in the docs environment.** `jupyter nbconvert --execute` fails there, so

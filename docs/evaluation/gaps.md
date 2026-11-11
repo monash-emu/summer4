@@ -28,8 +28,8 @@ warranted yet.
 ### 1.3 A solver seam
 
 **State:** **done** (WP2 + WP7). `CompiledModel.run` returns a `Result`
-trajectory; Euler is the reference stepper; `solver=` selects adaptive
-diffrax backends (Heun, Tsit5, Dopri5, or a diffrax instance). Textbook
+trajectory; the default solver is adaptive Tsit5 and Euler is the fixed-step
+reference stepper; `solver=` selects other backends (Heun, Tsit5, Dopri5, or a diffrax instance). Textbook
 chapter 7 is ported at `docs/textbook/07-numerical-solutions.ipynb`.
 
 ### 1.4 Initial population
