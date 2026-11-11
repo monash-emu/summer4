@@ -26,6 +26,7 @@ from summer4.epi.calibration.priors import (
     priors_from_frame,
 )
 from summer4.epi.calibration.priors import Normal as NormalPrior
+from summer4.epi.calibration.workflow.mcmc import resolve_chain_method
 
 __all__ = [
     "AggregateHow",
@@ -49,6 +50,7 @@ __all__ = [
     "prior_sites",
     "priors",
     "priors_from_frame",
+    "resolve_chain_method",
     "resolve_scale",
     "workflow",
 ]

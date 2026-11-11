@@ -446,6 +446,7 @@ def test_run_mcmc_with_warmup_equals_its_documented_expansion() -> None:
         stop=stop,
         warmup=rule,
         seed=5,
+        chain_method="vectorized",
     )
     warm = wf.warmup_until(
         lambda n: _nuts_mcmc(bm, warmup=n, chunk=15),
@@ -464,7 +465,14 @@ def test_run_mcmc_equals_its_documented_expansion() -> None:
     starts = _starts(bm, 2, seed=4)
     stop = wf.StopRule(rhat=None, ess=None)
     short = wf.run_mcmc(
-        bm, starts, num_chains=2, num_warmup=15, chunk_samples=15, stop=stop, seed=4
+        bm,
+        starts,
+        num_chains=2,
+        num_warmup=15,
+        chunk_samples=15,
+        stop=stop,
+        seed=4,
+        chain_method="vectorized",
     )
     long = wf.sample_until(
         _nuts_mcmc(bm, warmup=15, chunk=15),

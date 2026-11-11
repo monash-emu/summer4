@@ -375,7 +375,7 @@ class BayesianModel:
         num_samples: int = 500,
         num_chains: int = 1,
         seed: int = 0,
-        chain_method: str = "vectorized",
+        chain_method: str = "auto",
         progress_bar: bool = False,
         **kernel_kwargs: Any,
     ) -> Any:
@@ -398,7 +398,9 @@ class BayesianModel:
                                progress_bar=progress_bar)
 
         where ``kernel_object`` is ``kernel`` or the named kernel class applied to
-        ``model.numpyro_model()``.
+        ``model.numpyro_model()``. ``chain_method="auto"`` runs
+        the chains in parallel (one per device) when there are enough devices, else
+        vectorized; see :func:`summer4.epi.calibration.resolve_chain_method`.
         """
         from numpyro.infer import AIES, ESS, NUTS, SA  # type: ignore[import-untyped]
 
