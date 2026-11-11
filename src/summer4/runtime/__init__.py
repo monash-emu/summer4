@@ -3,8 +3,6 @@
 from dataclasses import dataclass
 from typing import Any, cast
 
-import jax
-
 from summer4 import _devices
 
 
@@ -22,16 +20,22 @@ class RuntimeInfo:
     host_devices_source: str
     default_solver: str
 
-    def devices(self) -> list[jax.Device]:
+    def devices(self) -> list[Any]:
         """The devices JAX can use. Calling this initialises JAX's backend."""
+        import jax
+
         return list(jax.devices())
 
 
 def runtime_info() -> RuntimeInfo:
     """Describe the current process's runtime. Does not initialise JAX's backend."""
+    import jax
+
+    from summer4.solvers.resolve import describe_default_solver
+
     return RuntimeInfo(
         x64=bool(cast(Any, jax.config).jax_enable_x64),
         host_devices_requested=_devices.CHOICE.requested,
         host_devices_source=_devices.CHOICE.source,
-        default_solver="euler",
+        default_solver=describe_default_solver(),
     )

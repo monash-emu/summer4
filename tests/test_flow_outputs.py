@@ -219,7 +219,7 @@ def test_computed_value_validates_before_solve() -> None:
     def derived_fn(params: object, *, y: object, t: object) -> _BetaDerived:
         del y, t
         assert isinstance(params, dict)
-        return _BetaDerived(beta=float(params["beta"]))
+        return _BetaDerived(beta=params["beta"])  # traceable: the default solver jits derived_fn
 
     model = FlowModel(pmap)
     model.add_flow(TransitionFlow("infection", state["S"], state["I"], 0.3))

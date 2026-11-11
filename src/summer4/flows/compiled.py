@@ -1180,7 +1180,7 @@ class CompiledModel:
         dt: float,
         steps: int | None = None,
         save: Any = None,
-        solver: str | Any = "euler",
+        solver: str | Any | None = None,
         epoch: Any = None,
         rtol: float | None = None,
         atol: float | None = None,
@@ -1189,7 +1189,23 @@ class CompiledModel:
     ) -> Any:
         """Integrate and return a :class:`~summer4.results.Result`.
 
-        Exactly one of ``t1`` / ``steps``. ``solver`` is a backend —
+        Exactly one of ``t1`` / ``steps``. With no ``solver`` the default is used:
+        ``summer4.solvers.default_solver()``, which is one line::
+
+            Diffrax(
+                diffrax.Tsit5(),
+                stepsize_controller=diffrax.PIDController(rtol=1e-6, atol=1e-9),
+            )
+
+        ``rtol`` / ``atol`` override those two tolerances. ``set_default_solver(...)`` and
+        the ``SUMMER4_SOLVER`` environment variable change the default for the process; an
+        explicit ``solver`` always wins. ``dt`` is required: with an adaptive solver it is
+        the first step size (``dt0``), and it also sets the default save grid
+        (``t0, t0 + dt, ...``) when the ``SavePlan`` has no ``ts``. The solver takes
+        whatever steps accuracy needs between saves (up to ``max_steps``). Pass
+        ``solver="euler"`` for fixed steps of exactly ``dt``.
+
+        ``solver`` is a backend —
         :class:`~summer4.solvers.Diffrax` holding your own diffrax solver,
         stepsize controller, adjoint and event; :class:`~summer4.solvers.Euler`;
         or any :class:`~summer4.solvers.SolverBackend` — or sugar for one: a
