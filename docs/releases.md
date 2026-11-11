@@ -15,9 +15,9 @@ what each one is, how to check it with `summer4.runtime_info()`, and how to chan
   `dt` is still needed: it is the first step and sets the save times.
 - **Your CPU cores are visible to JAX.** Importing summer4 makes JAX report one CPU device per core.
   Switch it off with `SUMMER4_HOST_DEVICES=0`. Import summer4 before you use JAX.
-- **MCMC chains run in parallel** when you have at least as many cores as chains. Pass
-  `chain_method="vectorized"` to get the old behaviour. The draws for a given seed can differ, but
-  they come from the same posterior.
+- **`chain_method` accepts `"auto"`** (currently `"vectorized"`), and `resolve_chain_method` is
+  public. Parallel chains are opt-in (`chain_method="parallel"`) and are not yet compatible with
+  gradients through the adaptive solver on recent JAX; they work with `solver="euler"`.
 
 New functions: `summer4.runtime_info()`, `summer4.solvers.default_solver()`,
 `summer4.solvers.set_default_solver()` and `summer4.epi.calibration.resolve_chain_method()`.

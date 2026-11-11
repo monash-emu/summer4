@@ -1,4 +1,4 @@
-"""``chain_method="auto"`` runs chains in parallel when there are enough devices."""
+"""``chain_method="auto"`` is currently vectorized; ``"parallel"`` is opt-in."""
 
 from __future__ import annotations
 
@@ -18,13 +18,13 @@ from summer4.epi.calibration import resolve_chain_method
     ("devices", "chains", "expected"),
     [
         (1, 4, "vectorized"),
-        (4, 4, "parallel"),
-        (12, 4, "parallel"),
+        (4, 4, "vectorized"),
+        (12, 4, "vectorized"),
         (4, 1, "vectorized"),
         (2, 4, "vectorized"),
     ],
 )
-def test_auto_follows_device_count(
+def test_auto_is_vectorized_for_every_device_count(
     monkeypatch: pytest.MonkeyPatch, devices: int, chains: int, expected: str
 ) -> None:
     monkeypatch.setattr(jax, "local_device_count", lambda: devices)
@@ -39,6 +39,7 @@ def test_explicit_method_passes_through(monkeypatch: pytest.MonkeyPatch, method:
 
 _CHILD = textwrap.dedent("""
     import json
+    import sys
     import numpy as np
     import jax
     from summer4 import (FlowMass, FlowModel, OutputSet, Param, Property, PropertyMap,
@@ -53,6 +54,9 @@ _CHILD = textwrap.dedent("""
     model.set_initial_population({state["S"]: 9990.0, state["I"]: 10.0})
     cm = model.compile()
     run_kwargs = dict(t0=0.0, t1=60.0, dt=1.0)
+    sample_kwargs = json.loads(sys.argv[1])
+    if sample_kwargs.pop("euler", False):
+        run_kwargs["solver"] = "euler"
     outputs = OutputSet()
     outputs["new_infections"] = FlowMass("infection").sum_by()
     true = {"contact_rate": 0.5}
@@ -66,28 +70,40 @@ _CHILD = textwrap.dedent("""
     bm = BayesianModel(cm, {}, [Uniform("contact_rate", 0.1, 1.5)], TargetSet((target,)),
                        outputs=outputs, run_kwargs=run_kwargs)
     out = {"devices": jax.local_device_count()}
-    for label, kwargs in (("auto", {}), ("vectorized", {"chain_method": "vectorized"})):
-        run = bm.sample(num_warmup=200, num_samples=200, num_chains=4, seed=3, **kwargs)
-        draws = np.asarray(run.samples["contact_rate"]).reshape(-1)
-        out[label] = {"method": run.mcmc.chain_method, "median": float(np.median(draws))}
+    run = bm.sample(num_warmup=200, num_samples=200, num_chains=4, seed=3, **sample_kwargs)
+    draws = np.asarray(run.samples["contact_rate"]).reshape(-1)
+    out.update(method=run.mcmc.chain_method, median=float(np.median(draws)))
     print("RESULT" + json.dumps(out))
     """)
 
 
-def test_auto_runs_parallel_and_recovers_parameter() -> None:
+def _run_child(**sample_kwargs: object) -> dict[str, object]:
     env = dict(os.environ, SUMMER4_HOST_DEVICES="4", JAX_PLATFORMS="cpu")
     env.pop("XLA_FLAGS", None)
     proc = subprocess.run(
-        [sys.executable, "-c", _CHILD], env=env, capture_output=True, text=True, timeout=900
+        [sys.executable, "-c", _CHILD, json.dumps(sample_kwargs)],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=900,
     )
     assert proc.returncode == 0, proc.stderr[-3000:]
     line = next(x for x in proc.stdout.splitlines() if x.startswith("RESULT"))
-    out = json.loads(line[len("RESULT") :])
+    return json.loads(line[len("RESULT") :])
+
+
+def test_default_run_is_vectorized_and_recovers_parameter() -> None:
+    out = _run_child()
     assert out["devices"] == 4
-    assert out["auto"]["method"] == "parallel"
-    assert out["vectorized"]["method"] == "vectorized"
-    for label in ("auto", "vectorized"):
-        assert abs(out[label]["median"] - 0.5) < 0.05, out
+    assert out["method"] == "vectorized"
+    assert abs(out["median"] - 0.5) < 0.05, out
+
+
+def test_explicit_parallel_with_euler_recovers_parameter() -> None:
+    """Parallel chains stay covered with the Euler solver (see CX45)."""
+    out = _run_child(chain_method="parallel", euler=True)
+    assert out["method"] == "parallel"
+    assert abs(out["median"] - 0.5) < 0.05, out
 
 
 def test_auto_keeps_ensemble_kernels_vectorized(monkeypatch: pytest.MonkeyPatch) -> None:

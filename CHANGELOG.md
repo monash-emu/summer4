@@ -30,9 +30,10 @@ Runtime defaults (roadmap step 49, `feat/runtime-defaults`, composability findin
   `--xla_force_host_platform_device_count`). `SUMMER4_HOST_DEVICES=0` turns it off; an `XLA_FLAGS`
   setting of your own is kept. Import summer4 before using JAX, or the setting comes too late
   (summer4 warns).
-- MCMC `chain_method` defaults to `"auto"` in `BayesianModel.sample` and `wf.run_mcmc`: chains run
-  in parallel when there are at least as many devices as chains, otherwise vectorized. Draws for a
-  given seed can differ from the old `"vectorized"` default. Ensemble kernels stay vectorized.
+- MCMC `chain_method` accepts `"auto"` (the default) in `BayesianModel.sample` and `wf.run_mcmc`;
+  `"auto"` is currently `"vectorized"` and `resolve_chain_method` is public. Parallel chains are
+  opt-in and not yet compatible with gradients through the adaptive solver on recent JAX (they
+  work with `solver="euler"`); see `futureplans/parallel-chains-diffrax-grad.md`.
 
 ### Added
 

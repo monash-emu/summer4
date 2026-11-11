@@ -72,3 +72,5 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
 - [`euler-backend-slow.md`](euler-backend-slow.md) — on the mini, Euler at the documented `dt` is
   20–30x slower per run than adaptive Tsit5; profile `euler_backend.py`. Also: should the tuning
   pilots keep `chain_method="vectorized"`?
+- [`parallel-chains-diffrax-grad.md`](parallel-chains-diffrax-grad.md) — `chain_method="parallel"`
+  fails with gradients through adaptive diffrax on JAX >= 0.11, so `"auto"` stays vectorized (`CX45`).
