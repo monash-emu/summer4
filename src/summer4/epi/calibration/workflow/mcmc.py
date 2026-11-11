@@ -196,10 +196,14 @@ def _check_ensemble_init(mcmc: Any, init_params: Mapping[str, Any] | None) -> No
 def resolve_chain_method(chain_method: str, num_chains: int) -> str:
     """Turn ``"auto"`` into a numpyro ``chain_method``; pass any other value through.
 
-    ``"auto"`` gives ``"parallel"`` when ``jax.local_device_count() >= num_chains > 1``
-    (one chain per device; summer4 exposes one host device per CPU core), else
-    ``"vectorized"``. Any other value is returned unchanged and numpyro validates it.
-    The device count is read when called, never at import.
+    ``"auto"`` currently means ``"vectorized"`` (all chains together on one device).
+    ``"parallel"`` (one chain per device; summer4 exposes one host device per CPU core)
+    is available by asking for it, but on recent JAX (0.11 observed) it fails when
+    gradients go through an adaptive diffrax solve, which is the default solver; see
+    ``futureplans/parallel-chains-diffrax-grad.md``. With ``solver="euler"`` it works.
+    Once that is fixed, ``"auto"`` will return to ``"parallel"`` when
+    ``jax.local_device_count() >= num_chains > 1``. Any other value is returned
+    unchanged and numpyro validates it.
 
     If you build your own ``MCMC``, this is the one line to call::
 
@@ -207,9 +211,7 @@ def resolve_chain_method(chain_method: str, num_chains: int) -> str:
     """
     if chain_method != "auto":
         return chain_method
-    import jax
-
-    return "parallel" if jax.local_device_count() >= int(num_chains) > 1 else "vectorized"
+    return "vectorized"
 
 
 class MCMCRun:
@@ -448,10 +450,11 @@ def run_mcmc(
             init_params = None
         return sample_until(mcmc, stop or StopRule(), init_params=init_params, seed=seed)
 
-    ``chain_method="auto"`` runs the chains in parallel, one per device, when there are
-    enough devices (summer4 makes one per CPU core), else vectorized (ensemble kernels
-    AIES and ESS always run vectorized under ``"auto"``); see
-    :func:`resolve_chain_method`. An explicit method is used as given.
+    ``chain_method="auto"`` currently runs the chains vectorized on one device (see
+    :func:`resolve_chain_method`). ``"parallel"``, one chain per device, is opt-in: it
+    works with ``solver="euler"`` but fails on recent JAX when gradients go through the
+    adaptive default solver (``futureplans/parallel-chains-diffrax-grad.md``). An
+    explicit method is used as given.
 
     Write those lines yourself to use another kernel's options, inspect the
     ``MCMC`` object, or retry with a new kernel (for example

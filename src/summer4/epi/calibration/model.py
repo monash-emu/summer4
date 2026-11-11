@@ -398,9 +398,10 @@ class BayesianModel:
                                progress_bar=progress_bar)
 
         where ``kernel_object`` is ``kernel`` or the named kernel class applied to
-        ``model.numpyro_model()``. ``chain_method="auto"`` runs
-        the chains in parallel (one per device) when there are enough devices, else
-        vectorized; see :func:`summer4.epi.calibration.resolve_chain_method`.
+        ``model.numpyro_model()``. ``chain_method="auto"`` currently
+        means vectorized; ``"parallel"`` (one chain per device) is opt-in and fails on
+        recent JAX with the adaptive default solver (works with ``solver="euler"``); see
+        :func:`summer4.epi.calibration.resolve_chain_method`.
         """
         from numpyro.infer import AIES, ESS, NUTS, SA  # type: ignore[import-untyped]
 

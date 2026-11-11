@@ -97,21 +97,23 @@ solver then chooses its own steps in between.
 - Before Python starts: `SUMMER4_SOLVER=euler` (any of `euler`, `heun`, `tsit5`, `dopri5`).
   `set_default_solver` overrides it.
 
-## 4. MCMC chains run in parallel
+## 4. MCMC chains run vectorized (parallel is opt-in)
 
 **What happens.** A Bayesian fit runs several chains (independent random walks over the
-parameters) so that you can check that they agree. With `chain_method="auto"`, the default, the chains
-run in parallel, one per CPU device, when there are at least as many devices as chains.
-Otherwise they run together on one device ("vectorized"). With 4 chains on a 12-core machine,
-the benchmark ran about 1.6 times faster in parallel (0.86 s against 1.36 s per call),
-with identical convergence statistics.
+parameters) so that you can check that they agree. With `chain_method="auto"`, the default,
+the chains run vectorized: all together on one device. This is the default for now because
+numpyro's `"parallel"` method (one chain per CPU device) fails on recent JAX (0.11 observed)
+when gradients go through the adaptive default solver.
 
-**Check.** `summer4.epi.calibration.resolve_chain_method("auto", 4)` returns `"parallel"` or
-`"vectorized"`, the method the next 4-chain run would use.
+**Check.** `summer4.epi.calibration.resolve_chain_method("auto", 4)` returns `"vectorized"`,
+the method the next 4-chain run would use.
 
-**Change.** Pass `chain_method="vectorized"` (or `"parallel"`, or `"sequential"`) to
-`bm.sample(...)` or `wf.run_mcmc(...)`. If you build your own numpyro `MCMC`, one line makes
-it follow the same rule:
+**Change.** Pass `chain_method="parallel"` (or `"vectorized"`, or `"sequential"`) to
+`bm.sample(...)` or `wf.run_mcmc(...)`. Parallel works with `solver="euler"` but not yet with
+the adaptive default on recent JAX. With 4 chains on a 12-core machine it ran about 1.6 times
+faster than vectorized when it worked (0.86 s against 1.36 s per call), with identical
+convergence statistics. If you build your own numpyro `MCMC`, one line makes it follow the
+same rule:
 
 ```python
 MCMC(kernel, num_warmup=500, num_samples=500, num_chains=4,
