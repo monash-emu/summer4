@@ -191,11 +191,11 @@ Each step that touches `src/` also has its worker write a short step plan,
 <!-- roadmap:current -->
 | Field | Value |
 | --- | --- |
-| Step | 49 |
-| Status | in-progress |
-| Branch | `feat/runtime-defaults` |
+| Step | 28 |
+| Status | next |
+| Branch | `feat/calib-outputs` |
 | Cut from | `main` |
-| Last landed | `feat/clean-surface` (PR #72, step 48; released as `v0.3.0a1`) |
+| Last landed | `feat/runtime-defaults` (PR #75, step 49; released as `v0.3.0a2`) |
 <!-- /roadmap:current -->
 
 ## Steps
@@ -286,7 +286,7 @@ core on import, and parallel MCMC chains when the devices allow.
 | 25 | J | WP19 | `feat/calib-multistart` | `plans/calibration-toolkit.plan.md` | Step 25 | done | CW5 CW6 |
 | 26 | J | WP19 | `feat/calib-gradient-free` | `plans/calibration-toolkit.plan.md` | Step 26 | done | CW7 |
 | 27 | J | WP19 | `feat/calib-seeded-mcmc` | `plans/calibration-toolkit.plan.md` | Step 27 | done | CW8 CW9 |
-| 28 | J | WP19 | `feat/calib-outputs` | `plans/calibration-toolkit.plan.md` | Step 28 | planned | CW10 CW11 |
+| 28 | J | WP19 | `feat/calib-outputs` | `plans/calibration-toolkit.plan.md` | Step 28 | next | CW10 CW11 |
 | 29 | K | CP1 | `feat/solve-composable` | `plans/solve-composable.plan.md` | Whole | done | CX1 CX2 CX3 CX4 CX5 |
 | 30 | K | CP2 | `feat/calib-composable` | `plans/calib-composable.plan.md` | Whole | done | CX16 CX17 CX18 CX19 CX24 |
 | 31 | L | CP5 | `fix/likelihood-scale-expr` | `plans/unified-lazy-idiom.plan.md` | Step 31 | done | CX26 |
@@ -307,7 +307,7 @@ core on import, and parallel MCMC chains when the devices allow.
 | 46 | K | CP3 | `feat/calib-posterior-protocol` | `plans/tb-nh-joint-calibration.plan.md` | §4, §5 NH2 | done | CX21 CX22 CX35 |
 | 47 | K | CP7 | `feat/nuts-tuning` | `plans/nuts-tuning.plan.md` | all | done | CX36 CX37 CX38 |
 | 48 | N | — | `feat/clean-surface` | `plans/clean-surface.plan.md` | Steps C0–C9 | done | — |
-| 49 | N | — | `feat/runtime-defaults` | `plans/runtime-defaults.plan.md` | Steps R0–R5 | in-progress | — |
+| 49 | N | — | `feat/runtime-defaults` | `plans/runtime-defaults.plan.md` | Steps R0–R5 | done | — |
 <!-- /roadmap:steps -->
 
 `Closes` lists row IDs of {doc}`../evaluation/tb-ports` (and, where a step moves
@@ -3672,6 +3672,10 @@ Set step 48 `done`, step 49 `next`. Record which removals C2 made, and the worke
 
 ## Step 49 — `feat/runtime-defaults`
 
+**Landed:** feat/runtime-defaults, PR #75, 2026-11-11.
+
+**Worker:** Claude orchestrator (opus); implementers sonnet (R0, R2, R3, R4) and haiku (R1); attempts 1 each. The orchestrator moved `summer4/runtime.py` into a subpackage after R2 found it broke the taxonomy jax-free test. Checks by the orchestrator, not separate checker agents.
+
 ### Summary
 
 summer4 sets up an accurate solver and every CPU core on import, with nothing for the user to
@@ -3721,6 +3725,25 @@ The [standard checks](#exit-checks-every-step), plus `pixi run composability`. *
 
 Set step 49 `done`, step 28 `next`. Record the R0 numbers, which tests were pinned to Euler, and
 the worker-tier tally. Then tag `v0.3.0a2`.
+
+**Done (2026-11-11).**
+
+- **R0 on the mini (12 cores).** The gate passed on every criterion.
+  - Time per run, default ÷ Euler: 0.030 (SIR), 0.032 (Lotka–Volterra) and 0.051 (TB-scale).
+  - Gradients cost 1.09× Euler's.
+  - Forcing 12 devices changed single runs by 0.98–1.02×.
+  - Parallel chains took 0.63× the time of vectorized ones.
+  - The numbers are in `benchmarks/results/runtime_defaults.json`.
+- **Tests and notebooks pinned to `solver="euler"`:**
+  - `test_float64_default`'s large-compartment test;
+  - `test_results::test_euler_fast_path_matches_final_euler`;
+  - notebook 04's step-count cell.
+- **One user-visible break.** A legacy `derived_fn` that concretises parameters with `float(...)`
+  fails under the adaptive default. It is recorded in the CHANGELOG and the release notes.
+- **NUTS-tuning pilots.** `workflow/tune.py` keeps `chain_method="vectorized"` on purpose, because
+  its pilots compare per-gradient cost. See `futureplans/euler-backend-slow.md`.
+- **For step 28.** Calibration runs now use Tsit5 and parallel chains by default. Its notebook
+  should not pin `solver="euler"` unless it needs fixed-step numbers.
 
 ---
 
