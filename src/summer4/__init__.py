@@ -8,6 +8,7 @@ and before compiling a model.
 
 # First, so float64 is on before any summer4 module builds a JAX array.
 from summer4 import _precision  # noqa: F401  # isort: skip
+from summer4 import _devices  # noqa: F401  # isort: skip
 from summer4.flows import (
     REMAINDER,
     BinOp,
@@ -78,6 +79,7 @@ from summer4.results import (
     Target,
     TargetSet,
 )
+from summer4.runtime import RuntimeInfo, runtime_info
 from summer4.selectors import (
     Absent,
     And,
@@ -146,6 +148,7 @@ __all__ = [
     "ReduceHow",
     "Result",
     "RollingSpec",
+    "RuntimeInfo",
     "SaveContext",
     "SaveFn",
     "SavePlan",
@@ -184,6 +187,7 @@ __all__ = [
     "maximum",
     "minimum",
     "named",
+    "runtime_info",
     "selector_properties",
     "selector_values",
     "sqrt",

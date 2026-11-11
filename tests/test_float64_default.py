@@ -61,7 +61,8 @@ def _compartments(x64: bool) -> np.ndarray:
     previous = bool(jax.config.jax_enable_x64)
     jax.config.update("jax_enable_x64", x64)
     try:
-        result = _model().run(PARAMS, Y0, **RUN)
+        # Euler: the 9.97 below is hand-derived from its fixed-step arithmetic.
+        result = _model().run(PARAMS, Y0, solver="euler", **RUN)
         return np.asarray(result["compartments"].values.data)
     finally:
         jax.config.update("jax_enable_x64", previous)

@@ -15,6 +15,7 @@ from summer4.epi.calibration.workflow.mcmc import (
     Stop,
     StopRule,
     replay,
+    resolve_chain_method,
     run_mcmc,
     sample_until,
 )
@@ -80,6 +81,7 @@ __all__ = [
     "pilot",
     "prior_draws",
     "replay",
+    "resolve_chain_method",
     "run_mcmc",
     "sample_until",
     "time_gradient",

@@ -1,0 +1,326 @@
+{
+  "smoke": false,
+  "environment": {
+    "jax": "0.6.2",
+    "jaxlib": "0.6.2",
+    "diffrax": "0.7.2",
+    "numpyro": "0.16.1",
+    "equinox": "0.13.8",
+    "arviz": "1.3.0",
+    "numpy": "2.5.3",
+    "cpu_count": 12,
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "python": "3.13.15",
+    "backend": "cpu",
+    "device_count_parent": 12
+  },
+  "solver": {
+    "models": {
+      "sir": {
+        "euler": {
+          "first_call_s": 0.11686770804226398,
+          "median_s": 0.03193112486042082,
+          "min_s": 0.03026425000280142,
+          "max_s": 0.032282625092193484,
+          "repeats": 7.0,
+          "max_abs_error": 6.806934132604624,
+          "max_rel_error": 0.10898886586414168,
+          "ok": true,
+          "num_steps": 1000,
+          "num_accepted_steps": null,
+          "num_rejected_steps": null
+        },
+        "default": {
+          "first_call_s": 0.22361229197122157,
+          "median_s": 0.0009518330916762352,
+          "min_s": 0.0009114579297602177,
+          "max_s": 0.0012907080817967653,
+          "repeats": 7.0,
+          "max_abs_error": 0.0004957192587653481,
+          "max_rel_error": 1.5725888195439379e-06,
+          "ok": true,
+          "num_steps": 56,
+          "num_accepted_steps": 54,
+          "num_rejected_steps": 2
+        },
+        "tsit5_loose": {
+          "first_call_s": 0.22017200011759996,
+          "median_s": 0.0010104170069098473,
+          "min_s": 0.0008684580679982901,
+          "max_s": 0.0013515418395400047,
+          "repeats": 7.0,
+          "max_abs_error": 0.06482052391237403,
+          "max_rel_error": 0.0004207314763769866,
+          "ok": true,
+          "num_steps": 25,
+          "num_accepted_steps": 23,
+          "num_rejected_steps": 2
+        }
+      },
+      "lotka_volterra": {
+        "euler": {
+          "first_call_s": 0.2543142919894308,
+          "median_s": 0.03848049999214709,
+          "min_s": 0.03795845899730921,
+          "max_s": 0.039069083984941244,
+          "repeats": 7.0,
+          "max_abs_error": 67.78559316585387,
+          "max_rel_error": 4.504461554785799,
+          "ok": true,
+          "num_steps": 1000,
+          "num_accepted_steps": null,
+          "num_rejected_steps": null
+        },
+        "default": {
+          "first_call_s": 0.2306658341549337,
+          "median_s": 0.0012227499391883612,
+          "min_s": 0.0010987080167979002,
+          "max_s": 0.0015416250098496675,
+          "repeats": 7.0,
+          "max_abs_error": 0.0001706823691378645,
+          "max_rel_error": 5.291456009573768e-06,
+          "ok": true,
+          "num_steps": 156,
+          "num_accepted_steps": 125,
+          "num_rejected_steps": 31
+        },
+        "tsit5_loose": {
+          "first_call_s": 0.32060825009830296,
+          "median_s": 0.0011350000277161598,
+          "min_s": 0.0009904999751597643,
+          "max_s": 0.0015730420127511024,
+          "repeats": 7.0,
+          "max_abs_error": 0.03176252207328645,
+          "max_rel_error": 0.0010781584881248078,
+          "ok": true,
+          "num_steps": 65,
+          "num_accepted_steps": 52,
+          "num_rejected_steps": 13
+        }
+      },
+      "tb_scale": {
+        "euler": {
+          "first_call_s": 0.7135670830029994,
+          "median_s": 0.3044665411580354,
+          "min_s": 0.2963184998370707,
+          "max_s": 0.41032537491992116,
+          "repeats": 7.0,
+          "max_abs_error": 785.8494156217257,
+          "max_rel_error": 1.4684725971180288,
+          "ok": true,
+          "num_steps": 185,
+          "num_accepted_steps": null,
+          "num_rejected_steps": null
+        },
+        "default": {
+          "first_call_s": 0.6568662079516798,
+          "median_s": 0.015550208976492286,
+          "min_s": 0.015387332998216152,
+          "max_s": 0.0191917079500854,
+          "repeats": 7.0,
+          "max_abs_error": 0.07016932083956817,
+          "max_rel_error": 0.00046515405147532396,
+          "ok": true,
+          "num_steps": 400,
+          "num_accepted_steps": 242,
+          "num_rejected_steps": 158
+        },
+        "tsit5_loose": {
+          "first_call_s": 0.7857940001413226,
+          "median_s": 0.006123374914750457,
+          "min_s": 0.005946040851995349,
+          "max_s": 0.0073835840448737144,
+          "repeats": 7.0,
+          "max_abs_error": 0.24312038185439633,
+          "max_rel_error": 0.0022451856453166476,
+          "ok": true,
+          "num_steps": 105,
+          "num_accepted_steps": 79,
+          "num_rejected_steps": 26
+        }
+      }
+    },
+    "grad": {
+      "euler": {
+        "first_call_s": 0.1129674999974668,
+        "median_s": 0.0005038750823587179,
+        "min_s": 0.00047924998216331005,
+        "max_s": 0.0005514579825103283,
+        "repeats": 7.0
+      },
+      "default": {
+        "first_call_s": 0.9802112081088126,
+        "median_s": 0.0005469999741762877,
+        "min_s": 0.0005192500539124012,
+        "max_s": 0.0006587079260498285,
+        "repeats": 7.0
+      }
+    }
+  },
+  "devices": {
+    "single": {
+      "device_count": 1,
+      "models": {
+        "sir": {
+          "euler": {
+            "first_call_s": 0.20257549989037216,
+            "median_s": 0.030798957915976644,
+            "min_s": 0.03010216704569757,
+            "max_s": 0.032189583173021674,
+            "repeats": 7.0
+          },
+          "default": {
+            "first_call_s": 0.2919114998076111,
+            "median_s": 0.0009527918882668018,
+            "min_s": 0.0008990000933408737,
+            "max_s": 0.0013461250346153975,
+            "repeats": 7.0
+          }
+        },
+        "tb_scale": {
+          "euler": {
+            "first_call_s": 0.9628376250620931,
+            "median_s": 0.29504870786331594,
+            "min_s": 0.2903887089341879,
+            "max_s": 0.31448295805603266,
+            "repeats": 7.0
+          },
+          "default": {
+            "first_call_s": 0.7054274999536574,
+            "median_s": 0.016142332926392555,
+            "min_s": 0.015040041878819466,
+            "max_s": 0.019311957992613316,
+            "repeats": 7.0
+          }
+        }
+      }
+    },
+    "forced": {
+      "device_count": 12,
+      "models": {
+        "sir": {
+          "euler": {
+            "first_call_s": 0.20119483303278685,
+            "median_s": 0.031170082977041602,
+            "min_s": 0.029908000025898218,
+            "max_s": 0.032070582965388894,
+            "repeats": 7.0
+          },
+          "default": {
+            "first_call_s": 0.29325408302247524,
+            "median_s": 0.0009369580075144768,
+            "min_s": 0.0009023330640047789,
+            "max_s": 0.0014123329892754555,
+            "repeats": 7.0
+          }
+        },
+        "tb_scale": {
+          "euler": {
+            "first_call_s": 0.9675355001818389,
+            "median_s": 0.3001173341181129,
+            "min_s": 0.286350125214085,
+            "max_s": 0.3169584581628442,
+            "repeats": 7.0
+          },
+          "default": {
+            "first_call_s": 0.6996229588985443,
+            "median_s": 0.016098166117444634,
+            "min_s": 0.015713959001004696,
+            "max_s": 0.019437832990661263,
+            "repeats": 7.0
+          }
+        }
+      }
+    },
+    "ratio_forced_over_single": {
+      "sir": {
+        "euler": 1.0120499226654822,
+        "default": 0.9833815957636582
+      },
+      "tb_scale": {
+        "euler": 1.0171789474744797,
+        "default": 0.9972639141350066
+      }
+    }
+  },
+  "chains": {
+    "device_count": 12,
+    "num_chains": 4,
+    "num_warmup": 500,
+    "num_samples": 500,
+    "methods": {
+      "vectorized": {
+        "first_call_s": 2.896439541131258,
+        "second_call_s": 1.3626762500498444,
+        "max_r_hat": 1.0043645145721127,
+        "min_ess_bulk": 631.7475832748271
+      },
+      "parallel": {
+        "first_call_s": 0.8701572078280151,
+        "second_call_s": 0.8588427500799298,
+        "max_r_hat": 1.0043645145721127,
+        "min_ess_bulk": 631.7475832748271
+      }
+    }
+  },
+  "gate": {
+    "criteria": [
+      {
+        "name": "solver_default_over_euler[sir]",
+        "value": 0.029808943337791667,
+        "limit": 3.0,
+        "pass": true
+      },
+      {
+        "name": "solver_default_over_euler[lotka_volterra]",
+        "value": 0.03177583293974595,
+        "limit": 3.0,
+        "pass": true
+      },
+      {
+        "name": "solver_default_over_euler[tb_scale]",
+        "value": 0.05107362180864677,
+        "limit": 3.0,
+        "pass": true
+      },
+      {
+        "name": "grad_default_over_euler[sir]",
+        "value": 1.085586474361255,
+        "limit": 3.0,
+        "pass": true
+      },
+      {
+        "name": "forced_over_single[sir/euler]",
+        "value": 1.0120499226654822,
+        "limit": 1.1,
+        "pass": true
+      },
+      {
+        "name": "forced_over_single[sir/default]",
+        "value": 0.9833815957636582,
+        "limit": 1.1,
+        "pass": true
+      },
+      {
+        "name": "forced_over_single[tb_scale/euler]",
+        "value": 1.0171789474744797,
+        "limit": 1.1,
+        "pass": true
+      },
+      {
+        "name": "forced_over_single[tb_scale/default]",
+        "value": 0.9972639141350066,
+        "limit": 1.1,
+        "pass": true
+      },
+      {
+        "name": "parallel_over_vectorized_wall",
+        "value": 0.6302617735126116,
+        "limit": 1.0,
+        "pass": true
+      }
+    ],
+    "all_pass": true
+  }
+}

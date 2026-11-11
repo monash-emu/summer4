@@ -108,7 +108,7 @@ def test_euler_fast_path_matches_final_euler() -> None:
 
     _state, _age, _pmap, cm, y0 = _compiled_sir()
     plan = SavePlan(requests={"compartments": SaveRequest(Compartments())})
-    res = cm.run({}, y0, t0=0.0, steps=10, dt=1.0, save=plan)
+    res = cm.run({}, y0, t0=0.0, steps=10, dt=1.0, save=plan, solver="euler")
     final_run = np.asarray(res["compartments"].values.data)[-1]
     final_euler = np.asarray(euler(cm.vector_field, 0.0, y0, {}, dt=1.0, steps=10).data)
     np.testing.assert_allclose(final_run, final_euler, rtol=1e-5)

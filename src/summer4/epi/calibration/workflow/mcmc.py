@@ -193,6 +193,25 @@ def _check_ensemble_init(mcmc: Any, init_params: Mapping[str, Any] | None) -> No
         )
 
 
+def resolve_chain_method(chain_method: str, num_chains: int) -> str:
+    """Turn ``"auto"`` into a numpyro ``chain_method``; pass any other value through.
+
+    ``"auto"`` gives ``"parallel"`` when ``jax.local_device_count() >= num_chains > 1``
+    (one chain per device; summer4 exposes one host device per CPU core), else
+    ``"vectorized"``. Any other value is returned unchanged and numpyro validates it.
+    The device count is read when called, never at import.
+
+    If you build your own ``MCMC``, this is the one line to call::
+
+        MCMC(kernel, ..., num_chains=n, chain_method=resolve_chain_method("auto", n))
+    """
+    if chain_method != "auto":
+        return chain_method
+    import jax
+
+    return "parallel" if jax.local_device_count() >= int(num_chains) > 1 else "vectorized"
+
+
 class MCMCRun:
     """A resumable chunked MCMC run: the numpyro ``MCMC`` plus its per-chunk record.
 
@@ -403,7 +422,7 @@ def run_mcmc(
     warmup: Any = None,
     jitter: float = 0.05,
     seed: int = 0,
-    chain_method: str = "vectorized",
+    chain_method: str = "auto",
     progress_bar: bool = False,
     warn: bool = True,
 ) -> MCMCRun:
@@ -413,7 +432,9 @@ def run_mcmc(
             return MCMC(
                 make_kernel() if make_kernel else NUTS(post.numpyro_model()),
                 num_warmup=n, num_samples=chunk_samples,
-                num_chains=num_chains, chain_method=chain_method, progress_bar=progress_bar,
+                num_chains=num_chains,
+                chain_method=resolve_chain_method(chain_method, num_chains),
+                progress_bar=progress_bar,
             )
 
         init_params = None if init is None else init.init_params(
@@ -427,6 +448,11 @@ def run_mcmc(
             init_params = None
         return sample_until(mcmc, stop or StopRule(), init_params=init_params, seed=seed)
 
+    ``chain_method="auto"`` runs the chains in parallel, one per device, when there are
+    enough devices (summer4 makes one per CPU core), else vectorized (ensemble kernels
+    AIES and ESS always run vectorized under ``"auto"``); see
+    :func:`resolve_chain_method`. An explicit method is used as given.
+
     Write those lines yourself to use another kernel's options, inspect the
     ``MCMC`` object, or retry with a new kernel (for example
     ``NUTS(post.numpyro_model(), target_accept_prob=0.95)`` after a
@@ -434,14 +460,19 @@ def run_mcmc(
     """
     _require_numpyro()
     from numpyro.infer import MCMC, NUTS
+    from numpyro.infer.ensemble import EnsembleSampler
 
     def make_mcmc(n: int) -> Any:
+        kernel = make_kernel() if make_kernel is not None else NUTS(post.numpyro_model())
+        method = resolve_chain_method(chain_method, int(num_chains))
+        if chain_method == "auto" and isinstance(kernel, EnsembleSampler):
+            method = "vectorized"  # ensemble kernels (AIES, ESS) only run vectorized
         return MCMC(
-            make_kernel() if make_kernel is not None else NUTS(post.numpyro_model()),
+            kernel,
             num_warmup=int(n),
             num_samples=int(chunk_samples),
             num_chains=int(num_chains),
-            chain_method=chain_method,
+            chain_method=method,
             progress_bar=progress_bar,
         )
 
@@ -467,6 +498,7 @@ def run_mcmc(
 
 
 __all__ = [
+    "resolve_chain_method",
     "Decision",
     "MCMCRun",
     "SiteDiagnostics",
