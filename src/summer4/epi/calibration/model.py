@@ -359,6 +359,9 @@ class BayesianModel:
         returned. Order: prior sites in :meth:`site_priors` order, then fixed names
         in ``fixed_params`` order. Other keys (other models' sites, hyperparameters,
         plate offsets) are ignored. Works on any leaf shape, batched draws included.
+        With ``prefix=""`` any key equal to a fixed name is taken as an override,
+        including another model's bare site or a hyperparameter of that name; use a
+        prefix when several models share the draws.
 
         Raises:
             ValueError: if a prior site is absent from ``draws``.
@@ -607,8 +610,8 @@ class BayesianModel:
         ``scenarios`` maps names to ``None`` (baseline) or :class:`Scenario`.
 
         ``params_fn`` replays a joint posterior through this model. Sites are
-        flattened to a leading draw axis (plate sites allowed), subsampled with
-        ``n`` and ``seed``, and handed once, batched, to ``params_fn``, which must
+        flattened to a leading draw axis (plate sites allowed), cast to float,
+        subsampled with ``n`` and ``seed``, and handed once, batched, to ``params_fn``, which must
         return this model's local parameter arrays with the same leading axis.
         The result goes through :meth:`check_params` (so a mis-mapped replay
         fails) and each value must be one scalar per draw. Typical call::

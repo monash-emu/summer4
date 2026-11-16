@@ -145,7 +145,7 @@ def test_check_params_names() -> None:
     assert dotted.endswith(
         ". Prefixed joint-model site names? Map them with local_params(draws, prefix)."
     )
-    # A dot in a name that is not unknown does not trigger the hint.
+    # An unknown name without a dot does not trigger the hint.
     assert "local_params" not in _raises_text(bm, {"x": 1.0})
 
 
@@ -296,7 +296,7 @@ def test_local_params_round_trip_and_errors() -> None:
     # Other models' sites, hyperparameters and plate offsets are ignored.
     other = bms["b"].local_params(shaped, "b.")
     np.testing.assert_array_equal(other["infection"], shaped["b.infection"])
-    assert "a.infection" not in other
+    assert list(other) == ["infection", "recovery"]  # local names only, no prefixed sites
 
     broken = {k: v for k, v in shaped.items() if k != "a.infection"}
     with pytest.raises(ValueError) as info:
@@ -314,7 +314,7 @@ def test_local_params_round_trip_and_errors() -> None:
 
 
 def _idata(flat: Mapping[str, np.ndarray]) -> Any:
-    import arviz as az  # type: ignore[import-untyped]
+    import arviz as az
 
     n = next(iter(flat.values())).shape[0]
     posterior = {k: v.reshape(2, n // 2, *v.shape[1:]) for k, v in flat.items()}

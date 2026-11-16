@@ -224,6 +224,8 @@ def _apply_params_fn(
     """Map subsampled site arrays to local parameters: one scalar per draw each."""
     n_draws = next(iter(sub.values())).shape[0]
     local = dict(params_fn(sub))
+    if not local:
+        raise ValueError("params_fn returned no parameters.")
     out: dict[str, np.ndarray] = {}
     for name, value in local.items():
         arr = np.asarray(value, dtype=float)

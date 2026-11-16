@@ -294,10 +294,12 @@ gate tests use the shared settings module.
 - **T8, T9** build their joint draws with `Predictive` (prior draws, reshaped to
   `(chain, draw, ...)`), which the spec allowed for T8; the factor sites `Predictive` returns
   (empty arrays) are dropped, as MCMC samples do not carry them. T9 adds a hand-made plate site.
-- **T12**: the joint site order is `mu, tau, z_a, z_b, z_cohort, a.infection, b.infection`
-  (the `z_m` are sampled before the models), and the gate test also checks the notebook copies the
-  settings module verbatim. The joint NUTS warmup in the gate run reports a
-  `max_warmup` RuntimeWarning (divergences) yet the gate assertions pass.
+- **T12**: the joint site order is
+  `mu, tau, z_a, z_b, log_recovery_cohort, a.infection, b.infection` (the hierarchy is sampled
+  before the models; the cohort member is centred, see the last entry). The gate test also checks
+  that the notebook copies the settings module verbatim, and asserts `warm.converged` for both
+  fits. (The worker's first version had `z_cohort` and a warmup that failed on divergences; see
+  the two orchestrator entries below.)
 - `params_fn` outputs are validated for names (`check_params`) before shapes, via a wrapper in
   `run_posterior`, matching spec order 4 then 5.
 - **Gate solver and MCMC start (orchestrator fix).** The worker's gate ran the models with
@@ -318,4 +320,10 @@ gate tests use the shared settings module.
   (`log_recovery_cohort ~ Normal(mu, tau)`) and keeps the cities non-centred. Warmup then passed
   after 120 steps (37 s, against failing at 3840 steps in 380 s), with 1/400 sampling
   divergences. The plan's §Models wording "non-centred" for all three is superseded.
+- **Checker minors (opus check, PASS).** `params_fn=None` is unchanged on valid input, but
+  `_draws_from_idata` now runs every site's axis and `burn_in` checks before any scalar check, so
+  malformed input with both faults reports the axis error first. On the `params_fn` path every
+  site is cast to float before `params_fn` sees it (documented). `local_params(prefix="")` takes
+  any bare key equal to a fixed name as an override (documented). A `params_fn` returning `{}`
+  now raises `ValueError` instead of `StopIteration`.
 
