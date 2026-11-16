@@ -11,7 +11,7 @@ Features are dependency groups; environments are combinations of features.
 | Environment | Features | Python | JAX | Purpose |
 |---|---|---|---|---|
 | `default` | `jax06`, `dev` | 3.13 | 0.6.x | Primary development and the notebook kernel |
-| `latest` | `jaxlatest`, `dev` | 3.13 | current | Forward-compatibility checks |
+| `latest` | `jaxlatest`, `dev` | 3.13 | current | Forward-compatibility checks (CI: nightly, not on pull requests) |
 | `nb` | `jax06`, `notebooks`, `dev` | 3.13 | 0.6.x | JupyterLab |
 | `docs` | `docs` | 3.13 | 0.6.x | Sphinx build (includes JAX for flow notebooks) |
 

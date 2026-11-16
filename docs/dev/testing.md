@@ -5,6 +5,12 @@ pixi run test        # everything
 pixi run test-all    # everything, in default and latest
 ```
 
+CI runs `test` in the `default` environment on every pull request. The `latest`
+environment (current JAX) runs nightly on `main` instead
+(`.github/workflows/nightly.yml`; start it by hand from the Actions tab with
+*Run workflow*). Run `pixi run test-all` locally before a change that touches
+JAX-version-sensitive code.
+
 `pytest` is configured in `pyproject.toml` with `testpaths = ["tests"]` and
 `pythonpath = ["src", "."]`, so tests import `summer4` from the source tree.
 
