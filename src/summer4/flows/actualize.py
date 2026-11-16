@@ -10,8 +10,12 @@ from numpy.typing import NDArray
 
 from summer4.flows.edges import EdgeMap, EdgeRoles
 from summer4.flows.join import (
+    DynamicSplit,
+    NormalizedSplit,
+    _build_dynamic_split,
     _group_weights,
     _property_present,
+    _static_split,
     _validate_split,
     join_with_pairing,
     selector_properties,
@@ -71,6 +75,7 @@ class TransitionEdges:
     pair_src_codes: NDArray[np.int32] | None = None
     pair_dest_codes: NDArray[np.int32] | None = None
     pair_n_traits: int | None = None
+    dynamic_split: DynamicSplit | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "src_idx", _freeze_int32(self.src_idx))
@@ -124,6 +129,7 @@ class EntryEdges:
     adjust: tuple[Adjustment, ...]
     adjust_masks: tuple[NDArray[np.bool_] | None, ...]
     edge_map: EdgeMap
+    dynamic_split: DynamicSplit | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "dest_idx", _freeze_int32(self.dest_idx))
@@ -377,9 +383,9 @@ def _side_roles(
 def _entry_indices(
     pmap: PropertyMap,
     dest: Selector,
-    split: dict[str, dict[str, float]] | None,
+    split: NormalizedSplit | None,
     group_by: str | None,
-) -> tuple[NDArray[np.int32], NDArray[np.float64], tuple[Property, ...]]:
+) -> tuple[NDArray[np.int32], NDArray[np.float64], DynamicSplit | None]:
     dest_idx = pmap.select(dest)
     if dest_idx.size == 0:
         raise ValueError("Destination selector matched no compartments.")
@@ -389,9 +395,11 @@ def _entry_indices(
         if prop.name != group_by and _property_present(pmap, dest_idx, col)
     )
     split_n = _validate_split(pmap, dest_idx, dest_only, split)
+    static = _static_split(split_n)
     n = int(dest_idx.size)
+    group = np.zeros(n, dtype=np.int32)
     if group_by is None:
-        weights = _group_weights(pmap, dest_idx, dest_only, split_n)
+        weights = _group_weights(pmap, dest_idx, dest_only, static)
     else:
         prop = pmap.get_property(group_by)
         col = np.asarray(pmap.column(prop)[dest_idx], dtype=np.int32)
@@ -399,11 +407,12 @@ def _entry_indices(
             raise ValueError(f"Cannot sum_by({prop.name!r}): some dest rows lack that property.")
         weights = np.empty(n, dtype=np.float64)
         unique, inverse = np.unique(col, return_inverse=True)
+        group = inverse.astype(np.int32, copy=False)
         for group_i in range(int(unique.size)):
             mask = inverse == group_i
             members = dest_idx[mask]
-            weights[mask] = _group_weights(pmap, members, dest_only, split_n)
-    return dest_idx, weights, dest_only
+            weights[mask] = _group_weights(pmap, members, dest_only, static)
+    return dest_idx, weights, _build_dynamic_split(pmap, split_n, dest_idx, group)
 
 
 def actualize(flow: FlowLike, pmap: PropertyMap, *, strict_pairing: bool = True) -> FlowEdges:
@@ -443,6 +452,7 @@ def actualize(flow: FlowLike, pmap: PropertyMap, *, strict_pairing: bool = True)
             pair_src_codes=src_codes,
             pair_dest_codes=dest_codes,
             pair_n_traits=n_traits,
+            dynamic_split=edges.dynamic_split,
         )
     if isinstance(flow, ExitFlow):
         src_idx = pmap.select(flow.source)
@@ -465,7 +475,7 @@ def actualize(flow: FlowLike, pmap: PropertyMap, *, strict_pairing: bool = True)
             adjust_masks=masks,
             edge_map=edge_map,
         )
-    dest_idx, weights, _dest_only = _entry_indices(
+    dest_idx, weights, dynamic_split = _entry_indices(
         pmap, flow.dest, flow.split, group_by=_sum_over_property_name(flow.rate)
     )
     roles = _side_roles(pmap, dest_idx, selector_values(flow.dest), source=False)
@@ -483,13 +493,28 @@ def actualize(flow: FlowLike, pmap: PropertyMap, *, strict_pairing: bool = True)
         adjust=adjust,
         adjust_masks=masks,
         edge_map=edge_map,
+        dynamic_split=dynamic_split,
     )
+
+
+def split_roots(flow: FlowEdges) -> tuple[RateOps, ...]:
+    """Rate-valued split proportions of ``flow`` (empty for a static or no split)."""
+    dyn = getattr(flow, "dynamic_split", None)
+    return dyn.roots() if dyn is not None else ()
+
+
+def flow_rate_refs(flow: FlowEdges) -> set[str]:
+    """Flow names ``flow`` reads via ``FlowRef``: rate, adjustments and split proportions."""
+    names = _flow_rate_refs(flow.rate, flow.adjust)
+    for root in split_roots(flow):
+        names |= _flow_rate_refs(root, ())
+    return names
 
 
 def topo_sort(flows: Sequence[FlowEdges]) -> list[FlowEdges]:
     """Return flows in an order that satisfies :class:`FlowRef` dependencies."""
     by_name = {flow.name: flow for flow in flows}
-    pending = {flow.name: _flow_rate_refs(flow.rate, flow.adjust) for flow in flows}
+    pending = {flow.name: flow_rate_refs(flow) for flow in flows}
     for name, deps in pending.items():
         unknown = deps - by_name.keys()
         if unknown:

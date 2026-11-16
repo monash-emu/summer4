@@ -11,6 +11,24 @@ Narrative release notes for the documentation site live in
 
 ## [Unreleased]
 
+## [0.3.0a3] — 2026-11-16
+
+Tag: [`v0.3.0a3`](https://github.com/monash-emu/summer4/releases/tag/v0.3.0a3)
+
+Parameterised split proportions (`feat/param-split`, plan `plans/param-split.plan.md`).
+
+### Added
+
+- **`split=` proportions can be rate expressions** on `TransitionFlow` and `EntryFlow`: a `Param`,
+  arithmetic such as `1 - Param("p")`, or a function of `Time()`. One flow now replaces the
+  one-flow-per-destination workaround with complementary rates. Numeric proportions behave as
+  before (they must be `>= 0` and sum to 1). Expression proportions are evaluated at run time and
+  renormalised within each source compartment's destinations, so they act as relative weights;
+  changing the parameter needs no recompile, and gradients flow through it.
+- Guide page *Stratification* gains "Splitting a flow by a parameter" and "What an adjustment can
+  be" (the `Multiply` / `Overwrite` / `Transform` list, `where=` with `Dest(...)` / `Source(...)`,
+  and ordering). Acceptance notebook `examples/notebooks/37-param-split.ipynb`.
+
 ## [0.3.0a2] — 2026-11-11
 
 Tag: [`v0.3.0a2`](https://github.com/monash-emu/summer4/releases/tag/v0.3.0a2)
