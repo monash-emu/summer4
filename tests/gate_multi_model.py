@@ -112,7 +112,7 @@ def build_gate() -> GateBundle:
     true_recovery = {m: float(np.exp(TRUE_MU + TRUE_TAU * z_true[m])) for m in MODELS}
 
     city_cm, city_state, city_pmap = build_city_model()
-    run_kwargs = {"t0": 0.0, "t1": 20.0, "dt": 0.25, "solver": "euler"}
+    run_kwargs = {"t0": 0.0, "t1": 20.0, "dt": 0.25}  # default adaptive solver
     models: dict[str, BayesianModel] = {}
     observed: dict[str, np.ndarray] = {}
     for m in ("a", "b"):
@@ -155,7 +155,7 @@ def build_gate() -> GateBundle:
     c_y0_values[cohort_pmap.select(cohort_state["I"])] = COHORT_START
     c_y0 = PropertyData.wrap(cohort_pmap, c_y0_values)
     c_infectious = Compartments(where=cohort_state["I"])
-    c_kwargs = {"t0": 0.0, "t1": 14.0, "dt": 0.25, "solver": "euler"}
+    c_kwargs = {"t0": 0.0, "t1": 14.0, "dt": 0.25}
     c_clean = cohort_cm.run(
         {"recovery": true_recovery["cohort"]},
         c_y0,
@@ -186,10 +186,17 @@ def build_gate() -> GateBundle:
     def joint_model() -> None:
         mu = numpyro.sample("mu", dist.Normal(MU_PRIOR_LOC, MU_PRIOR_SCALE))
         tau = numpyro.sample("tau", dist.HalfNormal(TAU_PRIOR_SCALE))
-        z = {m: numpyro.sample(f"z_{m}", dist.Normal(0.0, 1.0)) for m in MODELS}
+        # The cities' short series barely inform their own recovery, so they are non-centred.
+        # The cohort's 300 people pin its recovery, so it is centred: non-centred, it funnels
+        # at small tau and warmup fails its divergence check.
+        log_recovery = {
+            "a": mu + tau * numpyro.sample("z_a", dist.Normal(0.0, 1.0)),
+            "b": mu + tau * numpyro.sample("z_b", dist.Normal(0.0, 1.0)),
+            "cohort": numpyro.sample("log_recovery_cohort", dist.Normal(mu, tau)),
+        }
         for m in MODELS:
-            recovery = jnp.exp(mu + tau * z[m])  # non-centred
-            params = models[m].sample_params(f"{m}.", given={"recovery": recovery})
+            given = {"recovery": jnp.exp(log_recovery[m])}
+            params = models[m].sample_params(f"{m}.", given=given)
             models[m].factor(m, params)
 
     truth = {f"{m}.recovery": true_recovery[m] for m in MODELS}

@@ -296,6 +296,12 @@ class BayesianModel:
         names that are not prior sites (``fixed_params`` overrides), in ``given``
         order.
 
+        A given value replaces the prior entirely: neither its density nor its
+        support applies. A hierarchical value such as ``exp(mu + tau * z)`` is
+        unbounded, so the model must run sensibly across the whole range the
+        hierarchy can reach (a fixed-step Euler solve that goes unstable at large
+        rates puts cliffs in the likelihood there).
+
         With ``prefix=""`` and ``record=True``, a given value whose name is already
         a site in the joint model gives numpyro's duplicate-site error; pass
         ``record=False`` or use a prefix. Plate members and centred hierarchical

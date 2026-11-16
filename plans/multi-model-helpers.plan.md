@@ -300,3 +300,22 @@ gate tests use the shared settings module.
   `max_warmup` RuntimeWarning (divergences) yet the gate assertions pass.
 - `params_fn` outputs are validated for names (`check_params`) before shapes, via a wrapper in
   `run_posterior`, matching spec order 4 then 5.
+- **Gate solver and MCMC start (orchestrator fix).** The worker's gate ran the models with
+  fixed-step Euler (`dt=0.25`) and started NUTS from the LHS design, discarding the optimiser's
+  ends. Euler empties the cohort in one step at recovery 4 (failure penalty `-1e30`) and goes
+  unstable beyond 8. A given hierarchical value bypasses the model's `Uniform(0.02, 1)` prior,
+  so chains started near `exp(2)` stayed behind that cliff: the cohort recovery posterior had
+  median 2.0 (truth 0.41), and warmup hit `max_warmup=4000` on divergences while the interval
+  assertions still passed. The gate now uses the default adaptive solver, starts NUTS from
+  `opt.candidates`, and asserts `warm.converged`. `sample_params`' docstring says a given value
+  replaces the prior, support included. Centring was checked and was not the cause (1-8
+  divergences in 800 draws under all non-centred, cohort-centred or all-centred forms).
+- **Gate hierarchy centring (orchestrator fix).** With the adaptive solver the joint posterior was
+  right (cohort recovery median 0.396, truth 0.407; R-hat 1.004), but 1.2-2% of warmup
+  transitions still diverged, so warmup failed at `max_warmup`. The cohort's data pin its
+  recovery (its log-sd is about 0.4 x mean tau, against about 1 for the cities), the inverted
+  funnel case for a non-centred member. The gate centres the cohort member
+  (`log_recovery_cohort ~ Normal(mu, tau)`) and keeps the cities non-centred. Warmup then passed
+  after 120 steps (37 s, against failing at 3840 steps in 380 s), with 1/400 sampling
+  divergences. The plan's §Models wording "non-centred" for all three is superseded.
+

@@ -414,7 +414,7 @@ def test_gate_joint_pools_recovery() -> None:
         "tau",
         "z_a",
         "z_b",
-        "z_cohort",
+        "log_recovery_cohort",
         "a.infection",
         "b.infection",
     )
@@ -434,7 +434,7 @@ def test_gate_joint_pools_recovery() -> None:
     def fit(post: Any) -> Any:
         design = wf.evaluate(post, wf.lhs(post, LHS_M, seed=LHS_SEED), batch_size=16)
         starts = design.best(N_OPT_STARTS)
-        wf.optimize(
+        opt = wf.optimize(
             post,
             starts,
             method=method,
@@ -455,9 +455,10 @@ def test_gate_joint_pools_recovery() -> None:
             make_mcmc,
             MCMC_WARMUP_START,
             warm_rule,
-            init_params=design.init_params(MCMC_CHAINS, seed=MCMC_SEED),
+            init_params=opt.candidates.init_params(MCMC_CHAINS, seed=MCMC_SEED),
             seed=MCMC_SEED,
         )
+        assert warm.converged, warm.progress
         return wf.sample_until(warm.mcmc, stop, seed=MCMC_SEED)
 
     run_joint = fit(joint)
