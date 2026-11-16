@@ -20,6 +20,8 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
 
 ## Notes
 
+- [`hierarchical-centring-diagnostics.md`](hierarchical-centring-diagnostics.md) —
+  centred vs non-centred hierarchies (the funnel) and automated checks for it.
 - [`mcmc-chunk-recompile.md`](mcmc-chunk-recompile.md) — every `sample_until`
   chunk pays a full XLA compile inside numpyro's `MCMC.run`.
 
