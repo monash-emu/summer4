@@ -3,8 +3,11 @@
 Items marked *Legacy* are on their way out; see the {doc}`../roadmap`.
 
 The complete public API of summer4. Every name below is exported from
-`summer4.__all__`, except the solver backends, which live in `summer4.solvers`;
-anything not listed here is internal and may change without notice.
+`summer4.__all__`, except the solver backends, which live in `summer4.solvers`,
+and the epidemiology and calibration layers, which live in `summer4.epi`,
+`summer4.epi.calibration` and `summer4.epi.calibration.workflow` (see the
+reference page for each). Anything not listed here is internal and may change
+without notice.
 
 ```{toctree}
 :maxdepth: 2

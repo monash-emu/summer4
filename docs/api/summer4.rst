@@ -77,3 +77,36 @@ JAX arrays
    :show-inheritance:
    :member-order: bysource
    :no-index:
+
+Epidemiology
+------------
+
+.. automodule:: summer4.epi
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :member-order: bysource
+   :no-index:
+   :exclude-members: AggregateHow, BayesianModel, Beta, Gamma, LogNormal, NegativeBinomial, NormalLikelihood, NormalPrior, Poisson, PosteriorRuns, SampleKind, Scenario, TruncatedNormal, Uniform, priors_from_frame
+
+Calibration
+-----------
+
+.. automodule:: summer4.epi.calibration
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :member-order: bysource
+   :no-index:
+   :exclude-members: resolve_chain_method, likelihoods, priors, workflow
+
+Calibration workflow
+--------------------
+
+.. automodule:: summer4.epi.calibration.workflow
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :member-order: bysource
+   :no-index:
+   :exclude-members: NumpyroPosterior, Posterior
