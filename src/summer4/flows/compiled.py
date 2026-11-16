@@ -16,11 +16,14 @@ from summer4.flows.actualize import (
     FlowEdges,
     TransitionEdges,
     actualize,
+    flow_rate_refs,
+    split_roots,
     topo_sort,
 )
 from summer4.flows.algebra import apply_binary, apply_unary
 from summer4.flows.edges import EdgeMap
 from summer4.flows.initial import InitialPopulation, InitPlan
+from summer4.flows.join import DynamicSplit
 from summer4.flows.rates import (
     BinOp,
     Const,
@@ -40,7 +43,6 @@ from summer4.flows.rates import (
     _adjust_field_paths,
     _callable_key,
     _field_paths,
-    _flow_rate_refs,
     _lookup_path,
     _rate_bytes,
     derived_return_schema,
@@ -664,6 +666,52 @@ def _apply_adjustments(
     return prev
 
 
+def _dynamic_split_weight(
+    static: Any,
+    dyn: DynamicSplit,
+    eval_value: Callable[[RateOps], Any],
+    *,
+    batch_shape: tuple[int, ...],
+    name: str,
+) -> Any:
+    """Edge weights for a split whose proportions are rate expressions.
+
+    Each edge's static weight is multiplied by its destination trait's proportion
+    for every rate-valued split property, then renormalised within its group, so
+    proportions act as relative weights. A group whose proportions are all zero
+    carries no flow. Edges alone in their group keep their static weight.
+    """
+    import jax.numpy as jnp
+
+    factor: Any = None
+    for row, (prop, values) in enumerate(zip(dyn.names, dyn.values, strict=True)):
+        evaluated = []
+        for trait, expr in zip(dyn.traits[row], values, strict=True):
+            value = jnp.asarray(eval_value(expr))
+            try:
+                value = jnp.broadcast_to(value, batch_shape)
+            except ValueError as exc:
+                raise ValueError(
+                    f"Flow {name!r}: split[{prop!r}][{trait!r}] must evaluate to a scalar "
+                    f"(per batch), got shape {value.shape}."
+                ) from exc
+            evaluated.append(value)
+        table = jnp.stack(evaluated, axis=-1)
+        codes = dyn.codes[row]
+        gathered = table[..., np.maximum(codes, 0)]
+        term = jnp.where(jnp.asarray(codes >= 0), gathered, 1.0)
+        factor = term if factor is None else factor * term
+    raw = static * factor
+    totals = jnp.zeros((*raw.shape[:-1], dyn.n_groups), dtype=raw.dtype)
+    totals = totals.at[..., dyn.group].add(raw)
+    total = totals[..., dyn.group]
+    positive = total > 0.0
+    # Double-where keeps gradients finite where a group's total is zero.
+    safe_total = jnp.where(positive, total, 1.0)
+    weight = jnp.where(positive, raw / safe_total, 0.0)
+    return jnp.where(jnp.asarray(dyn.singleton), static, weight)
+
+
 def _scatter_add(target: Any, indices: NDArray[np.int32], values: Any) -> Any:
     return target.at[..., indices].add(values)
 
@@ -708,6 +756,8 @@ def _flow_paths(flow: FlowEdges) -> set[tuple[str, ...]]:
     paths = _field_paths(flow.rate)
     for adj in flow.adjust:
         paths |= _adjust_field_paths(adj)
+    for root in split_roots(flow):
+        paths |= _field_paths(root)
     return paths
 
 
@@ -715,7 +765,7 @@ def _rate_flow_deps(flows: Mapping[str, FlowEdges]) -> frozenset[str]:
     """Flow names referenced by any rate / adjustment via ``FlowRef``."""
     names: set[str] = set()
     for flow in flows.values():
-        names |= _flow_rate_refs(flow.rate, flow.adjust)
+        names |= flow_rate_refs(flow)
     return frozenset(names)
 
 
@@ -745,6 +795,9 @@ def _flow_digest(flow: FlowEdges, edge_map: EdgeMap) -> bytes:
     for adj, mask in zip(flow.adjust, flow.adjust_masks, strict=True):
         hasher.update(_adjust_bytes(adj))
         hasher.update(b"nomask" if mask is None else np.ascontiguousarray(mask).tobytes())
+    dyn = getattr(flow, "dynamic_split", None)
+    if dyn is not None:
+        hasher.update(dyn.digest_bytes())
     return hasher.digest()
 
 
@@ -997,7 +1050,27 @@ class CompiledModel:
                 hoisted=prepared,
                 table=table,
             )
-            weight = jnp.asarray(flow.weight)
+            weight: Any = jnp.asarray(flow.weight)
+            dyn = getattr(flow, "dynamic_split", None)
+            if dyn is not None:
+                weight = _dynamic_split_weight(
+                    weight,
+                    dyn,
+                    lambda expr: _eval_rate(
+                        expr,
+                        derived=derived,
+                        flow_values=flow_values,
+                        flow_meta=self.flows,
+                        pmap=pmap,
+                        t=t,
+                        y_arr=y_arr,
+                        captures=captures,
+                        hoisted=prepared,
+                        table=table,
+                    ),
+                    batch_shape=tuple(y_arr.shape[:-1]),
+                    name=name,
+                )
             match flow:
                 case EntryEdges(dest_idx=dest_idx):
                     mass = rate * weight
@@ -1452,6 +1525,8 @@ class FlowModel:
                 elif hasattr(adj, "args"):
                     for arg in adj.args:
                         capture_meta.update(_collect_capture_meta(arg))
+            for root in split_roots(flow):
+                capture_meta.update(_collect_capture_meta(root))
         computed_paths = tuple(sorted(paths))
         if hoist:
             hoist_table = build_hoist_table(

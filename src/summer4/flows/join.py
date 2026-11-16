@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from typing import cast
 
 import numpy as np
 from numpy.typing import NDArray
 
 from summer4.flows.edges import EdgeMap, EdgeRoles
+from summer4.flows.rates import RateOps, _rate_bytes, as_rate
 from summer4.properties import Property, Trait
 from summer4.propertymap import PropertyMap
 from summer4.selectors import (
@@ -28,8 +30,113 @@ from summer4.selectors import (
 _NA: int = -1
 _SPLIT_TOL: float = 1e-9
 
-type SplitSpec = Mapping[Property | str, Mapping[str, float]]
-type NormalizedSplit = dict[str, dict[str, float]]
+type SplitValue = float | RateOps
+type SplitSpec = Mapping[Property | str, Mapping[str, object]]
+type NormalizedSplit = dict[str, dict[str, SplitValue]]
+
+
+@dataclass(frozen=True, slots=True)
+class DynamicSplit:
+    """Run-time destination weights for split proportions given as rate expressions.
+
+    A property whose ``split`` proportions include a rate expression (``Param``,
+    ``1 - Param(...)``, a time-varying function) is left out of the static edge
+    weights, which then share that property's traits equally. At run time each
+    edge's static weight is multiplied by the proportion of its destination trait
+    and renormalised within its group: the edges of one source compartment within
+    one join (one pairing part), or, for an entry flow, one destination group.
+
+    ``values[p]`` holds property ``names[p]``'s proportions in ``traits[p]`` order.
+    ``codes[p, e]`` indexes ``traits[p]`` for edge ``e``, or is ``-1`` where the
+    property is absent on that edge's destination (factor 1). Edges alone in their
+    group (``singleton``) keep their static weight, as a static split would.
+    """
+
+    names: tuple[str, ...]
+    traits: tuple[tuple[str, ...], ...]
+    values: tuple[tuple[RateOps, ...], ...]
+    codes: NDArray[np.int32]
+    group: NDArray[np.int32]
+    n_groups: int
+    singleton: NDArray[np.bool_]
+
+    def __post_init__(self) -> None:
+        codes = np.ascontiguousarray(self.codes, dtype=np.int32)
+        codes.flags.writeable = False
+        object.__setattr__(self, "codes", codes)
+        object.__setattr__(self, "group", _freeze_int32(self.group))
+        singleton = np.ascontiguousarray(self.singleton, dtype=np.bool_)
+        singleton.flags.writeable = False
+        object.__setattr__(self, "singleton", singleton)
+
+    def roots(self) -> tuple[RateOps, ...]:
+        """Every proportion expression, in property then trait order."""
+        return tuple(value for values in self.values for value in values)
+
+    def digest_bytes(self) -> bytes:
+        """Stable bytes for model digests: names, traits, expressions and edge arrays."""
+        parts: list[bytes] = [b"dynsplit"]
+        for name, traits, values in zip(self.names, self.traits, self.values, strict=True):
+            parts.append(name.encode())
+            for trait, value in zip(traits, values, strict=True):
+                parts.append(trait.encode())
+                parts.append(_rate_bytes(value))
+        parts.append(self.codes.tobytes())
+        parts.append(self.group.tobytes())
+        parts.append(self.singleton.tobytes())
+        return b"\x00".join(parts)
+
+
+def _is_dynamic(proportions: Mapping[str, SplitValue]) -> bool:
+    return any(isinstance(value, RateOps) for value in proportions.values())
+
+
+def _static_split(split: NormalizedSplit) -> dict[str, dict[str, float]]:
+    """The properties whose proportions are all plain numbers."""
+    return {
+        name: {trait: float(cast(float, value)) for trait, value in proportions.items()}
+        for name, proportions in split.items()
+        if not _is_dynamic(proportions)
+    }
+
+
+def _build_dynamic_split(
+    pmap: PropertyMap,
+    split: NormalizedSplit,
+    dest_idx: NDArray[np.int32],
+    group: NDArray[np.int32],
+) -> DynamicSplit | None:
+    """Bind the rate-valued split properties to per-edge trait codes, or ``None``."""
+    dynamic = {name: props for name, props in split.items() if _is_dynamic(props)}
+    if not dynamic:
+        return None
+    names: list[str] = []
+    traits: list[tuple[str, ...]] = []
+    values: list[tuple[RateOps, ...]] = []
+    codes = np.full((len(dynamic), int(dest_idx.size)), -1, dtype=np.int32)
+    for row, (name, proportions) in enumerate(dynamic.items()):
+        prop = pmap.get_property(name)
+        local = tuple(proportions)
+        names.append(name)
+        traits.append(local)
+        values.append(tuple(as_rate(proportions[trait]) for trait in local))
+        lookup = np.full(len(prop.traits), -1, dtype=np.int32)
+        for position, trait in enumerate(local):
+            lookup[prop._index[trait]] = position
+        col = np.asarray(pmap.column(prop)[dest_idx], dtype=np.int32)
+        codes[row] = np.where(col != _NA, lookup[np.where(col != _NA, col, 0)], -1)
+    group = np.asarray(group, dtype=np.int32)
+    n_groups = int(group.max()) + 1 if group.size else 0
+    counts = np.bincount(group, minlength=n_groups)
+    return DynamicSplit(
+        names=tuple(names),
+        traits=tuple(traits),
+        values=tuple(values),
+        codes=codes,
+        group=group,
+        n_groups=n_groups,
+        singleton=counts[group] == 1,
+    )
 
 
 def _freeze_int32(values: NDArray[np.int32]) -> NDArray[np.int32]:
@@ -96,7 +203,10 @@ def _normalize_split(split: SplitSpec | NormalizedSplit | None) -> NormalizedSpl
     out: NormalizedSplit = {}
     for key, proportions in split.items():
         name = key.name if isinstance(key, Property) else str(key)
-        out[name] = {str(trait): float(value) for trait, value in proportions.items()}
+        out[name] = {
+            str(trait): value if isinstance(value, RateOps) else float(cast(float, value))
+            for trait, value in proportions.items()
+        }
     return out
 
 
@@ -125,12 +235,18 @@ def _validate_split(
                 f"split[{name!r}] must name every trait that appears on dest "
                 f"{sorted(appearing)}; got {sorted(named)}."
             )
-        if any(value < 0.0 for value in proportions.values()):
+        if _is_dynamic(proportions):
+            # Rate-valued proportions are only known at run time, where they are
+            # renormalised within each group (see DynamicSplit).
+            resolved[name] = dict(proportions)
+            continue
+        numbers = {trait: float(cast(float, value)) for trait, value in proportions.items()}
+        if any(value < 0.0 for value in numbers.values()):
             raise ValueError(f"split[{name!r}] proportions must be >= 0.")
-        total = sum(proportions.values())
+        total = sum(numbers.values())
         if abs(total - 1.0) > _SPLIT_TOL:
             raise ValueError(f"split[{name!r}] proportions must sum to 1, got {total}.")
-        resolved[name] = dict(proportions)
+        resolved[name] = dict(numbers)
     return resolved
 
 
@@ -138,9 +254,9 @@ def _group_weights(
     pmap: PropertyMap,
     dest_members: NDArray[np.int32],
     dest_only: tuple[Property, ...],
-    split: NormalizedSplit,
+    split: Mapping[str, Mapping[str, float]],
 ) -> NDArray[np.float64]:
-    """Return dest weights that sum to 1 for one free-key group."""
+    """Return dest weights that sum to 1 for one free-key group (static proportions only)."""
     n = int(dest_members.size)
     if n == 0:
         return np.zeros(0, dtype=np.float64)
@@ -170,7 +286,7 @@ def _dest_weights_by_group(
     dest_inv: NDArray[np.int32],
     dest_counts: NDArray[np.intp],
     dest_only: tuple[Property, ...],
-    split: NormalizedSplit,
+    split: Mapping[str, Mapping[str, float]],
 ) -> NDArray[np.float64]:
     """Per-destination weights, equal-split or ``split``, renormalised within each group."""
     n = int(dest_idx.size)
@@ -220,6 +336,7 @@ class EdgeArrays:
     scale: NDArray[np.float64]
     roles: EdgeRoles
     edge_map: EdgeMap
+    dynamic_split: DynamicSplit | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "src_idx", _freeze_int32(self.src_idx))
@@ -238,7 +355,7 @@ def _expand_groups(
     dest_idx: NDArray[np.int32],
     free_cols: tuple[int, ...],
     dest_only: tuple[Property, ...],
-    split: NormalizedSplit,
+    split: Mapping[str, Mapping[str, float]],
 ) -> tuple[NDArray[np.int32], NDArray[np.int32], NDArray[np.float64]]:
     n_src = int(src_idx.size)
     n_dest = int(dest_idx.size)
@@ -337,8 +454,11 @@ def identity_join(
     dest_only_t = tuple(dest_only)
     split_n = _validate_split(pmap, dest_idx, dest_only_t, _normalize_split(split))
     out_src, out_dest, out_weight = _expand_groups(
-        pmap, src_idx, dest_idx, tuple(free_cols), dest_only_t, split_n
+        pmap, src_idx, dest_idx, tuple(free_cols), dest_only_t, _static_split(split_n)
     )
+    # Each source compartment's edges form one renormalisation group.
+    _src_unique, src_group = np.unique(out_src, return_inverse=True)
+    dynamic_split = _build_dynamic_split(pmap, split_n, out_dest, src_group.astype(np.int32))
     n = int(out_src.size)
     roles = EdgeRoles(
         bound=value_bound,
@@ -357,6 +477,7 @@ def identity_join(
         scale=np.full(n, float(scale), dtype=np.float64),
         roles=roles,
         edge_map=edge_map,
+        dynamic_split=dynamic_split,
     )
 
 
@@ -399,6 +520,53 @@ def _concat_edges(
         scale=scale,
         roles=roles,
         edge_map=edge_map,
+        dynamic_split=_concat_dynamic_splits(parts),
+    )
+
+
+def _concat_dynamic_splits(parts: Sequence[EdgeArrays]) -> DynamicSplit | None:
+    """Join per-part dynamic splits; groups stay per part (one pairing part, one source)."""
+    dyns = [part.dynamic_split for part in parts]
+    if all(dyn is None for dyn in dyns):
+        return None
+    first = next(dyn for dyn in dyns if dyn is not None)
+    if any(dyn is None or dyn.names != first.names for dyn in dyns):
+        raise ValueError("Pairing parts disagree on rate-valued split properties.")
+    present = [cast(DynamicSplit, dyn) for dyn in dyns]
+    # Parts may name different trait subsets; re-index each part's codes onto
+    # the union of traits per property, keeping the shared expressions.
+    traits: list[tuple[str, ...]] = []
+    values: list[tuple[RateOps, ...]] = []
+    remaps: list[list[NDArray[np.int32]]] = [[] for _ in present]
+    for row in range(len(first.names)):
+        union: dict[str, RateOps] = {}
+        for dyn in present:
+            for trait, value in zip(dyn.traits[row], dyn.values[row], strict=True):
+                union.setdefault(trait, value)
+        order = tuple(union)
+        traits.append(order)
+        values.append(tuple(union[trait] for trait in order))
+        for i, dyn in enumerate(present):
+            remaps[i].append(np.array([order.index(t) for t in dyn.traits[row]], dtype=np.int32))
+    code_parts: list[NDArray[np.int32]] = []
+    group_parts: list[NDArray[np.int32]] = []
+    offset = 0
+    for i, dyn in enumerate(present):
+        codes = np.empty_like(dyn.codes)
+        for row in range(len(first.names)):
+            local = dyn.codes[row]
+            codes[row] = np.where(local >= 0, remaps[i][row][np.maximum(local, 0)], -1)
+        code_parts.append(codes)
+        group_parts.append(dyn.group + offset)
+        offset += dyn.n_groups
+    return DynamicSplit(
+        names=first.names,
+        traits=tuple(traits),
+        values=tuple(values),
+        codes=np.concatenate(code_parts, axis=1),
+        group=np.concatenate(group_parts),
+        n_groups=offset,
+        singleton=np.concatenate([dyn.singleton for dyn in present]),
     )
 
 

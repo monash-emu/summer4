@@ -1,5 +1,29 @@
 # Release notes
 
+## 0.3.0a3: parameterised split proportions
+
+A flow's `split=` proportions can now be parameters. A flow that sends people into strata
+that exist only at its destination used to need numbers here, so a split set by a parameter
+had to be written as one flow per destination with complementary rates. Now one flow says it:
+
+```python
+p = Param("progression_prop_infectious")
+TransitionFlow("progression", stage["incipient"], stage["active"], Param("progression_rate"),
+               split={focus: {"low": 1 - p, "mid": 0.0, "high": p}})
+```
+
+- A proportion can be a number or any rate expression: a `Param`, arithmetic on parameters, or a
+  function of `Time()`. This works on `TransitionFlow` and `EntryFlow`.
+- Numbers behave as before: they must be at least 0 and add up to 1. Expressions are only known
+  when the model runs, so they are used as relative weights, each divided by the total for its
+  source compartment's destinations.
+- Changing the parameter needs no recompile, and gradients pass through it, so the split can be
+  calibrated.
+
+The guide page {doc}`Stratification <guide/05-stratification>` has two new sections: one on
+splitting a flow by a parameter, and one on what an adjustment (`adjust=` / `adjust_flow`) can be,
+including `where=Dest(...)` and the order adjustments are applied in.
+
 ## 0.3.0a2: runtime defaults
 
 This release changes three defaults so that models are more accurate and use your whole computer

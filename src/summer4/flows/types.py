@@ -23,7 +23,15 @@ def _as_selector(sel: Selector) -> Selector:
 
 @dataclass(frozen=True, slots=True)
 class TransitionFlow:
-    """Population moving from source compartments to destination compartments."""
+    """Population moving from source compartments to destination compartments.
+
+    ``split`` maps each destination-only property to one proportion per trait that
+    appears on the destination. Numbers must be ``>= 0`` and sum to 1. A property
+    whose proportions include a rate expression (``Param``, ``1 - Param("p")``, a
+    function of ``Time()``) is weighted at run time instead: each proportion is
+    divided by the total over its group's destinations, so they act as relative
+    weights. Without ``split``, destinations share equally.
+    """
 
     name: str
     source: Selector
@@ -84,7 +92,15 @@ class ExitFlow:
 
 @dataclass(frozen=True, slots=True)
 class EntryFlow:
-    """Population entering destination compartments from outside the system."""
+    """Population entering destination compartments from outside the system.
+
+    ``split`` maps each destination-only property to one proportion per trait that
+    appears on the destination. Numbers must be ``>= 0`` and sum to 1. A property
+    whose proportions include a rate expression (``Param``, ``1 - Param("p")``, a
+    function of ``Time()``) is weighted at run time instead: each proportion is
+    divided by the total over its group's destinations, so they act as relative
+    weights. Without ``split``, destinations share equally.
+    """
 
     name: str
     dest: Selector

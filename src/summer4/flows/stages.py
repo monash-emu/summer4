@@ -9,7 +9,7 @@ from typing import Any, Literal, cast
 
 from jax.tree_util import register_pytree_node_class
 
-from summer4.flows.actualize import FlowEdges
+from summer4.flows.actualize import FlowEdges, split_roots
 from summer4.flows.rates import (
     ArrayConst,
     BinOp,
@@ -198,7 +198,7 @@ def build_hoist_table(roots: Sequence[RateOps], *, params_are_static: bool) -> H
 
 
 def roots_of(flows: Mapping[str, FlowEdges], order: tuple[str, ...]) -> list[RateOps]:
-    """Collect rate roots from every flow's rate and adjustments, in compile order."""
+    """Collect rate roots from every flow's rate, adjustments and split proportions, in order."""
     roots: list[RateOps] = []
     for name in order:
         flow = flows[name]
@@ -208,4 +208,5 @@ def roots_of(flows: Mapping[str, FlowEdges], order: tuple[str, ...]) -> list[Rat
                 roots.append(adj.value)
             elif isinstance(adj, Transform):
                 roots.extend(adj.args)
+        roots.extend(split_roots(flow))
     return roots
