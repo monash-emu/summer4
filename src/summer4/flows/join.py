@@ -203,6 +203,11 @@ def _normalize_split(split: SplitSpec | NormalizedSplit | None) -> NormalizedSpl
     out: NormalizedSplit = {}
     for key, proportions in split.items():
         name = key.name if isinstance(key, Property) else str(key)
+        if name in out:
+            raise ValueError(
+                f"split= names property {name!r} more than once "
+                f"(a Property and its name, or two properties with the same name)."
+            )
         out[name] = {
             str(trait): value if isinstance(value, RateOps) else float(cast(float, value))
             for trait, value in proportions.items()

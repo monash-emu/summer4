@@ -8,6 +8,16 @@ from dataclasses import dataclass, field
 from summer4.selectors import Absent, IsIn, Present, Selector, SelectorOps
 
 
+def _as_traits(name: str, traits: Iterable[str]) -> tuple[str, ...]:
+    # A bare string is iterable, so tuple("abc") would silently make traits "a", "b", "c".
+    if isinstance(traits, str):
+        raise TypeError(
+            f"Property {name!r}: traits must be a sequence of trait names, not a string "
+            f"(got {traits!r}; write ({traits!r},) for a single trait)."
+        )
+    return tuple(traits)
+
+
 def _validate_property(name: str, traits: tuple[str, ...], *, require_identifier: bool) -> None:
     if not name:
         raise ValueError("Property name must be a non-empty string.")
@@ -44,6 +54,10 @@ class Property:
 
     Properties are identified by ``name``, not object identity. Trait codes
     are the integers ``0 .. len(traits) - 1`` in declaration order.
+
+    ``traits`` may be given as any sequence of names (a list or a tuple) and
+    is stored as a tuple, so a property is hashable and equal properties hash
+    alike; it can be used as a dict key, for example in ``split=``.
     """
 
     name: str
@@ -51,6 +65,7 @@ class Property:
     _index: dict[str, int] = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "traits", _as_traits(self.name, self.traits))
         _validate_property(self.name, self.traits, require_identifier=True)
         object.__setattr__(self, "_index", {trait: i for i, trait in enumerate(self.traits)})
 
@@ -60,7 +75,7 @@ class Property:
 
         Public :class:`Property` construction still requires ``isidentifier()``.
         """
-        traits_t = tuple(traits)
+        traits_t = _as_traits(name, traits)
         _validate_property(name, traits_t, require_identifier=False)
         obj = object.__new__(cls)
         object.__setattr__(obj, "name", name)

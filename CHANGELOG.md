@@ -11,6 +11,15 @@ Narrative release notes for the documentation site live in
 
 ## [Unreleased]
 
+### Fixed
+
+- **`Property` is hashable when built from a list** (`fix/property-hashable`, plan
+  `plans/property-hashable.plan.md`): `traits` is stored as a tuple whatever sequence is
+  passed, so `Property("focus", ["low", "high"])` works as a `split=` key (it raised
+  `unhashable type: 'list'`). A bare string for `traits` now raises instead of becoming one
+  trait per character, and a `split=` that names one property twice (a `Property` and its
+  name) now raises instead of keeping the last entry.
+
 ## [0.3.0a3] — 2026-11-16
 
 Tag: [`v0.3.0a3`](https://github.com/monash-emu/summer4/releases/tag/v0.3.0a3)
