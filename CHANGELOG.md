@@ -11,6 +11,16 @@ Narrative release notes for the documentation site live in
 
 ## [Unreleased]
 
+### Added
+
+- **Multi-model calibration helpers** on `BayesianModel` (`feat/multi-model`, plan
+  `plans/multi-model-helpers.plan.md`, package `CP9`, closes `CX46`, `CX47`, `CX48`):
+  `check_params` and `log_likelihood(strict=True)` (no silent fallback to `fixed_params`),
+  `sample_params(prefix, given=, record=)` and `factor(name, params)` (prefixed sites, given
+  hierarchical or shared values), and `local_params(draws, prefix)` with
+  `posterior_runs(params_fn=)` to replay any member model from a joint posterior. Acceptance
+  notebook `examples/notebooks/38-calibration-multi-model.ipynb`.
+
 ## [0.3.0a3] — 2026-11-16
 
 Tag: [`v0.3.0a3`](https://github.com/monash-emu/summer4/releases/tag/v0.3.0a3)

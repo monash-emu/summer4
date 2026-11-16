@@ -8,7 +8,7 @@ returns a :class:`PosteriorRuns` that keeps per-draw series for spaghetti plots
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -152,8 +152,19 @@ def _series_1d(output: Any) -> Any:
     )
 
 
-def _as_draw_dict(draws: Any, *, n: int | None, burn_in: int, seed: int) -> dict[str, np.ndarray]:
-    """Normalise InferenceData / Candidates-like / Mapping → constrained site arrays."""
+def _as_draw_dict(
+    draws: Any,
+    *,
+    n: int | None,
+    burn_in: int,
+    seed: int,
+    params_fn: Callable[[Mapping[str, np.ndarray]], Mapping[str, Any]] | None = None,
+) -> dict[str, np.ndarray]:
+    """Normalise InferenceData / Candidates-like / Mapping → constrained site arrays.
+
+    With ``params_fn`` the sites are flattened (no scalar check), subsampled, then
+    mapped once to local scalar parameters; see :meth:`BayesianModel.posterior_runs`.
+    """
     if draws is None:
         raise TypeError(
             "posterior_runs requires draws (InferenceData, MCMCRun, OptimizeRun, Mapping, "
@@ -174,14 +185,17 @@ def _as_draw_dict(draws: Any, *, n: int | None, burn_in: int, seed: int) -> dict
         and isinstance(params_attr, Mapping)
         and not hasattr(draws, "posterior")
     ):
-        return _subsample_mapping(dict(params_attr), n=n, seed=seed)
+        return _finish(dict(params_attr), n=n, seed=seed, params_fn=params_fn)
 
     posterior = getattr(draws, "posterior", None)
     if posterior is not None:
+        if params_fn is not None:
+            flat = _flatten_idata(posterior, burn_in=burn_in)
+            return _finish(flat, n=n, seed=seed, params_fn=params_fn)
         return _draws_from_idata(posterior, n=n, burn_in=burn_in, seed=seed)
 
     if isinstance(draws, Mapping):
-        return _subsample_mapping(dict(draws), n=n, seed=seed)
+        return _finish(dict(draws), n=n, seed=seed, params_fn=params_fn)
 
     raise TypeError(
         "posterior_runs draws must be an arviz.InferenceData, a Mapping of "
@@ -189,21 +203,46 @@ def _as_draw_dict(draws: Any, *, n: int | None, burn_in: int, seed: int) -> dict
     )
 
 
-def _draws_from_idata(
-    posterior: Any,
+def _finish(
+    raw: Mapping[str, Any],
     *,
     n: int | None,
-    burn_in: int,
     seed: int,
+    params_fn: Callable[[Mapping[str, np.ndarray]], Mapping[str, Any]] | None,
 ) -> dict[str, np.ndarray]:
+    """Subsample ``raw``; with ``params_fn``, map it to local scalar parameters."""
+    sub = _subsample_mapping(raw, n=n, seed=seed)
+    if params_fn is None:
+        return sub
+    return _apply_params_fn(sub, params_fn)
+
+
+def _apply_params_fn(
+    sub: Mapping[str, np.ndarray],
+    params_fn: Callable[[Mapping[str, np.ndarray]], Mapping[str, Any]],
+) -> dict[str, np.ndarray]:
+    """Map subsampled site arrays to local parameters: one scalar per draw each."""
+    n_draws = next(iter(sub.values())).shape[0]
+    local = dict(params_fn(sub))
+    out: dict[str, np.ndarray] = {}
+    for name, value in local.items():
+        arr = np.asarray(value, dtype=float)
+        if arr.shape != (n_draws,):
+            raise ValueError(
+                f"params_fn must return one scalar per draw; {name!r} has shape {arr.shape}."
+            )
+        out[name] = arr
+    return out
+
+
+def _flatten_idata(posterior: Any, *, burn_in: int) -> dict[str, np.ndarray]:
+    """Flatten every site to a leading draw axis: ``(chain, draw, ...)`` → ``(n_all, ...)``."""
     sites = list(posterior.data_vars)
     if not sites:
         raise ValueError("InferenceData.posterior has no data variables.")
     out: dict[str, np.ndarray] = {}
-    length: int | None = None
     for name in sites:
         arr = np.asarray(posterior[name].values)
-        # (chain, draw, ...) → drop burn_in along draw, then flatten leading two.
         if arr.ndim < 2:
             raise ValueError(f"Posterior site {name!r} must have chain and draw axes.")
         if burn_in < 0:
@@ -214,13 +253,28 @@ def _draws_from_idata(
                 f"(draw axis length {arr.shape[1]})."
             )
         trimmed = arr[:, burn_in:, ...]
-        flat = trimmed.reshape(-1, *trimmed.shape[2:])
+        out[name] = trimmed.reshape(-1, *trimmed.shape[2:])
+    return out
+
+
+def _draws_from_idata(
+    posterior: Any,
+    *,
+    n: int | None,
+    burn_in: int,
+    seed: int,
+) -> dict[str, np.ndarray]:
+    flat_sites = _flatten_idata(posterior, burn_in=burn_in)
+    out: dict[str, np.ndarray] = {}
+    length: int | None = None
+    for name, flat in flat_sites.items():
         if flat.ndim > 1 and flat.shape[1:] != ():
             # Scalar sites only for merge_params today.
+            shape = np.asarray(posterior[name].values).shape
             flat = flat.reshape(flat.shape[0], -1)
             if flat.shape[1] != 1:
                 raise ValueError(
-                    f"Posterior site {name!r} is not scalar (shape {arr.shape}); "
+                    f"Posterior site {name!r} is not scalar (shape {shape}); "
                     "posterior_runs expects scalar parameter sites."
                 )
             flat = flat[:, 0]
@@ -339,9 +393,25 @@ def run_posterior(
     seed: int = 0,
     scenarios: Mapping[str, Scenario | None] | None = None,
     batch_size: int = 64,
+    params_fn: Callable[[Mapping[str, np.ndarray]], Mapping[str, Any]] | None = None,
 ) -> PosteriorRuns:
-    """Evaluate constrained draws under named scenarios; return :class:`PosteriorRuns`."""
-    draw_dict = _as_draw_dict(draws, n=n, burn_in=int(burn_in), seed=int(seed))
+    """Evaluate constrained draws under named scenarios; return :class:`PosteriorRuns`.
+
+    ``params_fn`` maps flattened joint-posterior sites to this model's local
+    scalar parameters; see :meth:`BayesianModel.posterior_runs`.
+    """
+    checked_fn: Callable[[Mapping[str, np.ndarray]], Mapping[str, Any]] | None = None
+    if params_fn is not None:
+        user_fn = params_fn
+
+        def checked_fn(flat: Mapping[str, np.ndarray]) -> Mapping[str, Any]:
+            local = dict(user_fn(flat))
+            bm.check_params(local)  # strict: a mis-mapped replay fails
+            return local
+
+    draw_dict = _as_draw_dict(
+        draws, n=n, burn_in=int(burn_in), seed=int(seed), params_fn=checked_fn
+    )
     scen_map: dict[str, Scenario | None]
     if scenarios is None:
         scen_map = {"baseline": None}

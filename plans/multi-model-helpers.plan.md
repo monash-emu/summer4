@@ -289,4 +289,14 @@ gate tests use the shared settings module.
 
 ## Deviations
 
-(none yet)
+- **T6** matches numpyro's actual duplicate-site message, `unique names` (`all sites must have
+  unique names but got ... duplicated`), not the placeholder `already`.
+- **T8, T9** build their joint draws with `Predictive` (prior draws, reshaped to
+  `(chain, draw, ...)`), which the spec allowed for T8; the factor sites `Predictive` returns
+  (empty arrays) are dropped, as MCMC samples do not carry them. T9 adds a hand-made plate site.
+- **T12**: the joint site order is `mu, tau, z_a, z_b, z_cohort, a.infection, b.infection`
+  (the `z_m` are sampled before the models), and the gate test also checks the notebook copies the
+  settings module verbatim. The joint NUTS warmup in the gate run reports a
+  `max_warmup` RuntimeWarning (divergences) yet the gate assertions pass.
+- `params_fn` outputs are validated for names (`check_params`) before shapes, via a wrapper in
+  `run_posterior`, matching spec order 4 then 5.
