@@ -11,6 +11,27 @@ Narrative release notes for the documentation site live in
 
 ## [Unreleased]
 
+## [0.3.0a5] — 2026-11-17
+
+Tag: [`v0.3.0a5`](https://github.com/monash-emu/summer4/releases/tag/v0.3.0a5)
+
+Native Windows support (`fix/windows-support`, PR #81).
+
+### Added
+
+- **Windows (x86_64, CPU) is a supported pixi platform.** `pixi.toml` lists `win-64`, and every
+  environment in `pixi.lock` solves for it (jaxlib publishes a `cp313` `win_amd64` wheel). Before,
+  `pixi install` refused to run on Windows. JAX labels its Windows wheels experimental, and native
+  Windows GPU is unsupported (WSL2 is the route).
+- **CI:** a `Test (Windows)` job runs the quick suite on `windows-latest` on every push.
+
+### Fixed
+
+- Tests read docs and notebooks as UTF-8 rather than the locale default (cp1252 on Windows, which
+  fails on non-ASCII text). Ruff now requires an explicit encoding on text IO (`PLW1514`).
+- `.gitattributes` keeps LF line endings on git hooks and shell scripts, which `sh` cannot run
+  with CRLF from a Windows checkout.
+
 ## [0.3.0a4] — 2026-11-17
 
 Tag: [`v0.3.0a4`](https://github.com/monash-emu/summer4/releases/tag/v0.3.0a4)
