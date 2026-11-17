@@ -48,9 +48,9 @@ def _doc_files() -> list[Path]:
 def _lines(path: Path) -> list[tuple[str, int, str]]:
     """Return ``(location, number, text)`` for each source line in the file."""
     if path.suffix == ".md":
-        return [("", i, t) for i, t in enumerate(path.read_text().splitlines(), 1)]
+        return [("", i, t) for i, t in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)]
     out: list[tuple[str, int, str]] = []
-    nb = json.loads(path.read_text())
+    nb = json.loads(path.read_text(encoding="utf-8"))
     for c, cell in enumerate(nb.get("cells", [])):
         src = "".join(cell.get("source", []))
         for i, t in enumerate(src.splitlines(), 1):
