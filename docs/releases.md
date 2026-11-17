@@ -1,5 +1,14 @@
 # Release notes
 
+## 0.3.0a5: Windows support
+
+summer4 now installs and runs on Windows (x86_64, CPU). Until now `pixi install` stopped at once
+on Windows, because the project only listed macOS and Linux as platforms. JAX publishes Windows
+wheels, so nothing else was missing. CI now runs the test suite on Windows on every change.
+
+JAX labels its Windows support experimental, and it has no native Windows GPU support; use WSL2
+if you need a GPU. Nothing changes on macOS or Linux.
+
 ## 0.3.0a4: calibrating several models together
 
 A joint calibration of several models, whether several cities with the same structure or a
