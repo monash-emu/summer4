@@ -11,6 +11,13 @@ Narrative release notes for the documentation site live in
 
 ## [Unreleased]
 
+## [0.3.0a4] — 2026-11-17
+
+Tag: [`v0.3.0a4`](https://github.com/monash-emu/summer4/releases/tag/v0.3.0a4)
+
+Multi-model calibration helpers (`feat/multi-model`, PR #79, roadmap step 50) and a `Property`
+fix (PR #78).
+
 ### Added
 
 - **Multi-model calibration helpers** on `BayesianModel` (`feat/multi-model`, plan
@@ -20,6 +27,14 @@ Narrative release notes for the documentation site live in
   hierarchical or shared values), and `local_params(draws, prefix)` with
   `posterior_runs(params_fn=)` to replay any member model from a joint posterior. Acceptance
   notebook `examples/notebooks/38-calibration-multi-model.ipynb`.
+- **Guide page `docs/guide/11-several-models.ipynb`**, "Calibrating several models together":
+  shared parameter names, strict name checks, a joint model with `sample_params` / `given=` /
+  `factor`, choosing centred or non-centred per member, and replaying each model.
+
+### Changed
+
+- **CI:** the `latest` (current JAX) test environment no longer runs on pull requests. It runs
+  nightly on `main` (`.github/workflows/nightly.yml`) and on demand.
 
 ### Fixed
 

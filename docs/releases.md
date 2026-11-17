@@ -1,5 +1,42 @@
 # Release notes
 
+## 0.3.0a4: calibrating several models together
+
+A joint calibration of several models, whether several cities with the same structure or a
+transmission model alongside natural-history cohorts, is a numpyro function that scores each
+`BayesianModel`. The models often use the same local name for parameters whose values must differ,
+such as a `recovery` in each, tied together by a hierarchy. New `BayesianModel` methods handle the
+naming:
+
+```python
+def joint():
+    mu = numpyro.sample("mu", dist.Normal(np.log(0.25), 1.0))
+    tau = numpyro.sample("tau", dist.HalfNormal(0.3))
+    log_r_city = mu + tau * numpyro.sample("z_city", dist.Normal(0.0, 1.0))
+    log_r_cohort = numpyro.sample("log_r_cohort", dist.Normal(mu, tau))
+    city.factor("city", city.sample_params("city.", given={"recovery": jnp.exp(log_r_city)}))
+    cohort.factor("cohort", cohort.sample_params("cohort.", given={"recovery": jnp.exp(log_r_cohort)}))
+```
+
+- `sample_params(prefix, given=...)` samples a model's priors under a prefix, takes the given
+  values instead of sampling them, records those values in the posterior, and returns a dict in
+  the model's own names. `factor(name, params)` adds the model's log-likelihood.
+- `check_params` and `log_likelihood(..., strict=True)` raise on a missing or misspelled name.
+  Before, the value silently came from `fixed_params`. `factor` always checks.
+- `local_params(draws, prefix)` and `posterior_runs(..., params_fn=...)` replay any one model from
+  the joint posterior.
+
+The new guide page {doc}`Calibrating several models together <guide/11-several-models>` walks
+through a two-model example, including when to write a hierarchy centred or non-centred. A value
+passed through `given=` replaces the model's prior, support included, so the model must run
+sensibly anywhere the hierarchy can reach.
+
+Also in this release:
+
+- `Property` accepts a list of traits and is then hashable, so it can be a `split=` key. A bare
+  string for traits now raises.
+- The tests against the newest JAX run nightly instead of on every pull request.
+
 ## 0.3.0a3: parameterised split proportions
 
 A flow's `split=` proportions can now be parameters. A flow that sends people into strata
