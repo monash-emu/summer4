@@ -88,7 +88,7 @@ def test_post_merge_hook_copies_plans_without_bare_python(tmp_path: Path) -> Non
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     trap = fake_bin / "python"
-    trap.write_text("#!/bin/sh\necho 'bare python was called' >&2\nexit 127\n")
+    trap.write_text("#!/bin/sh\necho 'bare python was called' >&2\nexit 127\n", encoding="utf-8")
     trap.chmod(0o755)
     (fake_bin / "python3").symlink_to(sys.executable)
 

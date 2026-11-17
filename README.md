@@ -57,6 +57,11 @@ follow the Google Python Style Guide (function definitions are always
 type-annotated; Black line length 100), copy the plan into `plans/`, and land
 tests plus a runnable example notebook.
 
+The pixi workspace supports macOS (Apple silicon), Linux and Windows (x86_64, CPU
+only; JAX's Windows wheels are labelled experimental, and WSL2 is the Windows GPU
+route). CI runs the quick suite on Windows. The git hooks that `pixi run setup` installs
+are POSIX `sh` scripts, so on Windows they need Git for Windows' bundled shell.
+
 ```bash
 pixi install
 pixi run setup

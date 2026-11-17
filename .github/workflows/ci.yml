@@ -73,6 +73,23 @@ jobs:
           locked: true
       - run: pixi run --environment default test
 
+  # Native Windows (x86_64, CPU). Runs on every push so a branch can be checked on
+  # Windows without a Windows machine. Quick suite only: slow notebook and
+  # TB-scale benches stay on Linux.
+  windows:
+    name: Test (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: prefix-dev/setup-pixi@v0.10.1
+        with:
+          pixi-version: v0.80.0
+          environments: default
+          cache: true
+          cache-write: ${{ github.ref_name == 'main' }}
+          locked: true
+      - run: pixi run --environment default test-quick
+
   # Not the repo's pixi.toml. That install is editable
   # (`summer4 = { path = ".", editable = true }`) and will not notice a
   # dependency missing from the wheel. This job builds a scratch project that
