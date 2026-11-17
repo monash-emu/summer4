@@ -1,6 +1,6 @@
 # summer4
 
-JAX-native compartmental modelling. Current tag: **`v0.3.0a3`**. See
+JAX-native compartmental modelling. Current tag: **`v0.3.0a4`**. See
 [CHANGELOG.md](CHANGELOG.md) for what each release does. Documentation:
 <https://monash-emu.github.io/summer4/>.
 
