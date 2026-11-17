@@ -24,6 +24,7 @@ from tests.gate_multi_model import (
     MCMC_CHAINS,
     MCMC_SAMPLES_PER_CHAIN,
     MCMC_SEED,
+    MCMC_TARGET_ACCEPT,
     MCMC_WARMUP_MIN,
     MCMC_WARMUP_START,
     MODELS,
@@ -445,7 +446,7 @@ def test_gate_joint_pools_recovery() -> None:
 
         def make_mcmc(num_warmup: int) -> MCMC:
             return MCMC(
-                NUTS(post.numpyro_model(), target_accept_prob=0.9),
+                NUTS(post.numpyro_model(), target_accept_prob=MCMC_TARGET_ACCEPT),
                 num_warmup=num_warmup,
                 num_samples=MCMC_SAMPLES_PER_CHAIN,
                 num_chains=MCMC_CHAINS,

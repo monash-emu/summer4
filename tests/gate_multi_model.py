@@ -52,6 +52,9 @@ MCMC_CHAINS = 2
 MCMC_SAMPLES_PER_CHAIN = 200
 MCMC_WARMUP_START = 60
 MCMC_WARMUP_MIN = 80
+# Two or three members leave tau weakly determined; at 0.9 the divergence rate sits near the
+# warmup check's 1% limit and flips between platforms. 0.99 takes smaller steps.
+MCMC_TARGET_ACCEPT = 0.99
 OPT_MAX_STEPS = 300
 OPT_CHUNK = 50
 OPT_LR = 0.05

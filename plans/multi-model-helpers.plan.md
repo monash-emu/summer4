@@ -326,4 +326,9 @@ gate tests use the shared settings module.
   site is cast to float before `params_fn` sees it (documented). `local_params(prefix="")` takes
   any bare key equal to a fixed name as an override (documented). A `params_fn` returning `{}`
   now raises `ValueError` instead of `StopIteration`.
+- **Gate target acceptance (CI fix).** On the Linux CI runner the joint gate's warmup failed its
+  divergence check at every round to `max_warmup` with `target_accept_prob=0.9`, while it passed
+  in 120 steps on macOS: the divergence rate sat near the check's 1% limit and flipped between
+  platforms. The gate module now sets `MCMC_TARGET_ACCEPT = 0.99` (as guide page 11 does); joint
+  and A-alone fits converged in 120-240 warmup steps at four seeds.
 
