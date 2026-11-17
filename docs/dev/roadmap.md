@@ -311,7 +311,7 @@ core on import, and parallel MCMC chains when the devices allow.
 | 47 | K | CP7 | `feat/nuts-tuning` | `plans/nuts-tuning.plan.md` | all | done | CX36 CX37 CX38 |
 | 48 | N | — | `feat/clean-surface` | `plans/clean-surface.plan.md` | Steps C0–C9 | done | — |
 | 49 | N | — | `feat/runtime-defaults` | `plans/runtime-defaults.plan.md` | Steps R0–R5 | done | — |
-| 50 | K | CP9 | `feat/multi-model` | `plans/multi-model-helpers.plan.md` | all | planned | CX46 CX47 CX48 |
+| 50 | K | CP9 | `feat/multi-model` | `plans/multi-model-helpers.plan.md` | all | done | CX46 CX47 CX48 |
 <!-- /roadmap:steps -->
 
 `Closes` lists row IDs of {doc}`../evaluation/tb-ports` (and, where a step moves
@@ -3756,6 +3756,10 @@ the worker-tier tally. Then tag `v0.3.0a2`.
 
 ## Step 50 — `feat/multi-model`
 
+**Landed:** feat/multi-model, PR #79, 2026-11-17.
+
+**Worker:** Claude sonnet; checker opus; attempts 1 (sonnet). The orchestrator (opus) fixed the gate afterwards (solver, MCMC start, centring, convergence assertion; plan *Deviations*). Guide page 11 by a second sonnet worker.
+
 ### Summary
 
 Helpers for calibrating several models jointly, where models share local parameter names
@@ -3813,6 +3817,22 @@ The [standard checks](#exit-checks-every-step), plus `pixi run composability`. *
 
 Set step 50 `done`; step 28 `next` stays current. Record deviations from the plan and any
 `futureplans/` notes written.
+
+**Done (2026-11-17).**
+
+- **Shipped** as planned: `check_params`, `log_likelihood(strict=)`, `sample_params`, `factor`,
+  `local_params`, `posterior_runs(params_fn=)`; `CX46`–`CX48` done. Beyond the plan: guide page
+  `docs/guide/11-several-models.ipynb` (linked from 08), and the `latest` test environment moved
+  to a nightly workflow.
+- **Gate lesson.** A value passed through `given=` bypasses the model's prior, support included.
+  The worker's Euler gate let chains reach a cliff at large recovery, and warmup failed while
+  the interval assertions passed. Gate tests that run NUTS should assert `warm.converged`.
+  Centring was chosen per member: the data-rich cohort is centred.
+- **futureplans notes:** `hierarchical-centring-diagnostics.md`,
+  `multi-model-stacked-and-declarative.md`.
+- **Separate branch:** `docs/api-calibration` adds `summer4.epi`, `summer4.epi.calibration` and
+  `summer4.epi.calibration.workflow` to the API reference.
+- **Release:** `0.3.0a4` (this step plus PR #78's `Property` fix) is cut after this PR merges.
 
 ---
 
