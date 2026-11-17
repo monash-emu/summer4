@@ -39,7 +39,7 @@ pixi run composability         # statuses, evidence anchors, packages, totals
 ## Where things stand
 
 <!-- composability:totals -->
-Open findings: **8** (0 high, 3 medium, 5 low); planned: 6; deferred: 4; done: 27; rejected: 0.
+Open findings: **8** (0 high, 3 medium, 5 low); planned: 6; deferred: 4; done: 30; rejected: 0.
 <!-- /composability:totals -->
 
 The calibration workflow's MCMC stage (`CX25`), the solve (`CP1`, roadmap step
@@ -104,6 +104,9 @@ can be inspected and extended. What remains:
 | CX43 | run | P1 | medium | done | Before `feat/runtime-defaults`: `run()` defaulted to fixed-step Euler, which is silently inaccurate on oscillatory models (the Lotka-Volterra cycle spirals unless `dt` is tiny); a modeller had to know to pass `solver="dopri5", rtol=, atol=`. Diffrax has no default solver, so the choice fell to summer4. | Done in step 49: `run(solver=None)` is `default_solver()`, adaptive Tsit5 with a `PIDController` (rtol 1e-6, atol 1e-9), stated in its docstring as the one line it stands for; `set_default_solver` and `SUMMER4_SOLVER` change it process-wide and an explicit `solver=` always wins. | `tests/test_default_solver.py::def test_default_equals_explicit_default_solver` |
 | CX44 | calibration | P1, P2 | medium | done | Before `feat/runtime-defaults`: the host's CPU cores were unused by JAX (one CPU device), so numpyro's `"parallel"` method could not spread chains across cores. | Done in step 49: importing summer4 exposes one host device per core (`SUMMER4_HOST_DEVICES`, `XLA_FLAGS` and `runtime_info()` inspect or change it). Chain placement is `CX45`. | `tests/test_runtime_devices.py::def test_default_gives_one_device_per_cpu` |
 | CX45 | calibration | P2 | medium | open | `chain_method="parallel"` (one chain per host device) fails on JAX >= 0.11 when NUTS gradients go through the adaptive diffrax solve (equinox checkpointed loop: `Closure-converted function called with different dynamic arguments`), so `chain_method="auto"` stays `"vectorized"`; parallel works with `solver="euler"`. | See the note. | `futureplans/parallel-chains-diffrax-grad.md`; `tests/test_chain_method.py::def test_explicit_parallel_with_euler_recovers_parameter` |
+| CX46 | calibration | P2 | medium | done | `BayesianModel.log_likelihood(draws)` merges `draws` over `fixed_params`: a prior site left out of `draws`, or a misspelled name, silently uses the fixed value (or is ignored). In a joint model the mapping from global site names to each model's local names is hand-written, so a mis-mapping scores the wrong parameters with no error (tb-nh-joint-calibration wrote its own guard). | Done in step 50: public `check_params(params)` raises on missing prior sites and unknown names, and `log_likelihood(draws, strict=True)` checks first (`factor` always does). | `src/summer4/epi/calibration/model.py::params.update(dict(draws))` |
+| CX47 | calibration | P2, P4 | low | done | No namespacing: numpyro site names are global, a model's parameter names local. Sampling a `BayesianModel`'s priors under a prefix, holding some at given (hierarchical or shared) values, and getting the local-name dict back is boilerplate every joint model rewrites. | Done in step 50: `sample_params(prefix, given=, record=)` samples a model's priors under a prefix with given values, and `factor(name, params)` is exactly `numpyro.factor(name, log_likelihood(params, strict=True))`. | `src/summer4/epi/calibration/model.py::draws[prior.name] = numpyro.sample(prior.name, prior.to_numpyro())` |
+| CX48 | calibration | P3 | medium | done | `BayesianModel.posterior_runs` reads posterior sites by the model's own names and rejects non-scalar sites, so a joint posterior (prefixed sites, plate offsets) cannot be replayed through a member model without hand-built arrays. | Done in step 50: `local_params(draws, prefix)` rebuilds a model's local names from joint sites, and `posterior_runs(..., params_fn=)` flattens joint draws (plate sites allowed), maps them, checks them strictly and then replays. | `src/summer4/epi/calibration/posterior_runs.py::posterior_runs expects scalar parameter sites` |
 <!-- /composability:findings -->
 
 ## Work packages
@@ -127,6 +130,7 @@ tuning stage (`plans/nuts-tuning.plan.md`).
 | CP6 | One lazy node set for rates, outputs and parameters (roadmap steps 36-44) | CX11 CX30 CX31 CX32 CX33 CX34 |
 | CP7 | NUTS tuning: sampler statistics, worst-element diagnostics, steerable warm-up (roadmap step 47) | CX36 CX37 CX38 |
 | CP8 | Parallel MCMC chains with the adaptive solver (`futureplans/parallel-chains-diffrax-grad.md`) | CX45 |
+| CP9 | Multi-model calibration helpers (roadmap step 50, `plans/multi-model-helpers.plan.md`) | CX46 CX47 CX48 |
 <!-- /composability:packages -->
 
 ## Patterns to copy

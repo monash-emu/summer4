@@ -7,8 +7,10 @@ second ``preprocess`` hook on this class (see the deleted
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any, Literal
+
+import numpy as np
 
 from summer4.epi.calibration.likelihoods import prior_sites
 from summer4.epi.calibration.priors import Prior
@@ -214,14 +216,55 @@ class BayesianModel:
 
         return model
 
-    def log_likelihood(self, draws: Mapping[str, Any]) -> Any:
+    def check_params(self, params: Mapping[str, Any]) -> None:
+        """Raise ``ValueError`` if ``params`` misses a prior site or names an unknown one.
+
+        Reads names only, never values, so it is safe under ``jax.jit`` and on
+        batched arrays. *Missing* means a prior site (:meth:`prior_names`) absent
+        from ``params``; *unknown* means a name that is neither a prior site nor a
+        top-level key of ``fixed_params``. When both hold, one error lists both
+        (missing first). Fixed names may be present or absent.
+
+        Raises:
+            ValueError: on any missing or unknown name.
+        """
+        names = set(params)
+        prior_names = set(self.prior_names())
+        fixed_names = set(_params_as_dict(self.fixed_params))
+        missing = sorted(prior_names - names)
+        unknown = sorted(names - prior_names - fixed_names)
+        parts: list[str] = []
+        if missing:
+            parts.append(f"missing prior sites: {missing}")
+        if unknown:
+            parts.append(
+                f"unknown parameter names: {unknown} "
+                "(not a prior site or a fixed_params name of this model)"
+            )
+        if not parts:
+            return
+        message = "; ".join(parts)
+        if any("." in name for name in unknown):
+            message += (
+                ". Prefixed joint-model site names? Map them with local_params(draws, prefix)."
+            )
+        raise ValueError(message)
+
+    def log_likelihood(self, draws: Mapping[str, Any], *, strict: bool = False) -> Any:
         """Target log-likelihood (and solver-failure penalty) at constrained draws.
 
-        ``draws`` should name every site in :meth:`prior_names`; names omitted
-        fall back to :attr:`fixed_params`. Traceable under ``jax.jit``.
+        ``draws`` should name every site in :meth:`prior_names`; with the default
+        ``strict=False``, names omitted fall back to :attr:`fixed_params` and
+        misspelled names are silently ignored. Use ``strict=True`` whenever the
+        dict is built by hand, especially in a joint model: it calls
+        :meth:`check_params` first, so a missing or unknown name raises
+        ``ValueError``. :meth:`factor` always uses strict. Traceable under
+        ``jax.jit`` (the strict check reads names only).
         """
         import jax.numpy as jnp
 
+        if strict:
+            self.check_params(draws)
         params = self.merge_params(draws)
         result = self._run(params)
         scored = result
@@ -233,6 +276,108 @@ class BayesianModel:
         ll = jnp.where(ok, ll, fail)
         ll = jnp.nan_to_num(ll, nan=-1.0e30, posinf=-1.0e30, neginf=-1.0e30)
         return ll
+
+    def sample_params(
+        self,
+        prefix: str = "",
+        *,
+        given: Mapping[str, Any] | None = None,
+        record: bool = True,
+    ) -> dict[str, Any]:
+        """Sample this model's priors under ``prefix`` inside a numpyro model.
+
+        Each prior site is sampled as ``numpyro.sample(prefix + name, ...)``,
+        unless ``given`` supplies its value (a hierarchical member value, a
+        parameter shared with another model, or a value held fixed). With
+        ``record=True`` every given value is also stored as
+        ``numpyro.deterministic(prefix + name, value)``, so posterior samples carry
+        it and :meth:`local_params` can rebuild the full dict. Returns the
+        local-name dict: prior sites in :meth:`site_priors` order, then given
+        names that are not prior sites (``fixed_params`` overrides), in ``given``
+        order.
+
+        A given value replaces the prior entirely: neither its density nor its
+        support applies. A hierarchical value such as ``exp(mu + tau * z)`` is
+        unbounded, so the model must run sensibly across the whole range the
+        hierarchy can reach (a fixed-step Euler solve that goes unstable at large
+        rates puts cliffs in the likelihood there).
+
+        With ``prefix=""`` and ``record=True``, a given value whose name is already
+        a site in the joint model gives numpyro's duplicate-site error; pass
+        ``record=False`` or use a prefix. Plate members and centred hierarchical
+        children are not stratified by ``wf.lhs``; they are filled by ``Predictive``
+        (see :class:`~summer4.epi.calibration.posterior.NumpyroPosterior`).
+
+        Example, a two-model joint model with a hierarchical shared rate::
+
+            rec = jnp.exp(mu + tau * z)  # mu, tau, z sampled above, non-centred
+            pa = bm_a.sample_params("a.", given={"recovery": rec}); bm_a.factor("a", pa)
+            pb = bm_b.sample_params("b.", given={"recovery": rec}); bm_b.factor("b", pb)
+
+        Raises:
+            ValueError: if a ``given`` key is not a prior site or a ``fixed_params`` name.
+        """
+        numpyro = _require_numpyro()
+        given_map = dict(given or {})
+        local_names = set(self.prior_names()) | set(_params_as_dict(self.fixed_params))
+        bad = sorted(set(given_map) - local_names)
+        if bad:
+            raise ValueError(
+                f"given names are not parameters of this model: {bad} "
+                "(not a prior site or a fixed_params name)"
+            )
+        out: dict[str, Any] = {}
+        for prior in self.site_priors():
+            if prior.name in given_map:
+                out[prior.name] = given_map[prior.name]
+            else:
+                out[prior.name] = numpyro.sample(prefix + prior.name, prior.to_numpyro())
+        if record:
+            for name, value in given_map.items():
+                numpyro.deterministic(prefix + name, value)
+        for name, value in given_map.items():
+            if name not in out:
+                out[name] = value
+        return out
+
+    def factor(self, name: str, params: Mapping[str, Any]) -> None:
+        """Add this model's strict log-likelihood to a numpyro model as factor ``name``.
+
+        Exactly::
+
+            numpyro.factor(name, self.log_likelihood(params, strict=True))
+        """
+        numpyro = _require_numpyro()
+        numpyro.factor(name, self.log_likelihood(params, strict=True))
+
+    def local_params(self, draws: Mapping[str, Any], prefix: str = "") -> dict[str, Any]:
+        """Rebuild this model's local-name dict from joint-model site names.
+
+        The inverse of :meth:`sample_params`' naming. Every prior site must be
+        present as ``draws[prefix + name]``. A fixed name present as
+        ``draws[prefix + name]`` (an override recorded by ``sample_params``) is also
+        returned. Order: prior sites in :meth:`site_priors` order, then fixed names
+        in ``fixed_params`` order. Other keys (other models' sites, hyperparameters,
+        plate offsets) are ignored. Works on any leaf shape, batched draws included.
+        With ``prefix=""`` any key equal to a fixed name is taken as an override,
+        including another model's bare site or a hyperparameter of that name; use a
+        prefix when several models share the draws.
+
+        Raises:
+            ValueError: if a prior site is absent from ``draws``.
+        """
+        prior_names = self.prior_names()
+        missing = sorted(prefix + name for name in prior_names if prefix + name not in draws)
+        if missing:
+            raise ValueError(
+                f"draws lack sites for this model's priors: {missing}. "
+                "Sample them with sample_params(prefix), or record given values (record=True)."
+            )
+        out: dict[str, Any] = {name: draws[prefix + name] for name in prior_names}
+        for name in _params_as_dict(self.fixed_params):
+            if name not in out and prefix + name in draws:
+                out[name] = draws[prefix + name]
+        return out
 
     def _ensure_potential(self, rng_key: Any | None = None) -> tuple[Any, Any, Any]:
         """Lazily build unconstrained potential / postprocess via ``initialize_model``."""
@@ -456,12 +601,24 @@ class BayesianModel:
         seed: int = 0,
         scenarios: Mapping[str, Any] | None = None,
         batch_size: int = 64,
+        params_fn: Callable[[Mapping[str, np.ndarray]], Mapping[str, Any]] | None = None,
     ) -> Any:
         """Batched forward runs under scenarios; see :class:`PosteriorRuns`.
 
         ``draws`` is an ``arviz.InferenceData``, a mapping of constrained site
         arrays with leading axis ``n``, or (later) ``Candidates`` via ``.params``.
         ``scenarios`` maps names to ``None`` (baseline) or :class:`Scenario`.
+
+        ``params_fn`` replays a joint posterior through this model. Sites are
+        flattened to a leading draw axis (plate sites allowed), cast to float,
+        subsampled with ``n`` and ``seed``, and handed once, batched, to ``params_fn``, which must
+        return this model's local parameter arrays with the same leading axis.
+        The result goes through :meth:`check_params` (so a mis-mapped replay
+        fails) and each value must be one scalar per draw. Typical call::
+
+            bm_a.posterior_runs(run.idata, params_fn=lambda d: bm_a.local_params(d, "a."))
+
+        ``PosteriorRuns.draws`` then holds the local dict.
         """
         from summer4.epi.calibration.posterior_runs import run_posterior
 
@@ -473,6 +630,7 @@ class BayesianModel:
             seed=seed,
             scenarios=scenarios,
             batch_size=batch_size,
+            params_fn=params_fn,
         )
 
 

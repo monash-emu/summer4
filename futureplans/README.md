@@ -20,6 +20,10 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
 
 ## Notes
 
+- [`multi-model-stacked-and-declarative.md`](multi-model-stacked-and-declarative.md) —
+  vmapped members of one structure, and declarative hierarchical priors (after step 50).
+- [`hierarchical-centring-diagnostics.md`](hierarchical-centring-diagnostics.md) —
+  centred vs non-centred hierarchies (the funnel) and automated checks for it.
 - [`mcmc-chunk-recompile.md`](mcmc-chunk-recompile.md) — every `sample_until`
   chunk pays a full XLA compile inside numpyro's `MCMC.run`.
 

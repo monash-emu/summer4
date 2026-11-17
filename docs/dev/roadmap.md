@@ -234,7 +234,7 @@ orchestrates and checks.
 The order is fixed as:
 
 ```text
-14 → 15 → 24 → 25 → 26 → 27 → 29 → 30 → 46 → 47 → 31 → 32 → 33 → 34 → 35 → 48 → 49 → 28 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 16 → 17 → 18 → 19
+14 → 15 → 24 → 25 → 26 → 27 → 29 → 30 → 46 → 47 → 31 → 32 → 33 → 34 → 35 → 48 → 49 → 50 → 28 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 16 → 17 → 18 → 19
 ```
 
 Phase J comes **directly after step 15** and before Track G resumes at step 16.
@@ -246,6 +246,9 @@ the line places it where it was cut. If Phase L steps merge first, whoever
 merges step 46 moves it in this line to where it actually landed and fixes the
 two handoffs either side.
 Step 47 is placed the same way, after step 46.
+Step 50 (`feat/multi-model`, multi-model calibration helpers) was cut from `main` on
+2026-11-17 while step 28 was current. Like step 46 it does not move *Current position*; the
+line places it where it was cut.
 **Phase N** (step 48, `feat/clean-surface`, `plans/clean-surface.plan.md`) was inserted on
 2026-10-30, after PRs #69–#71 merged and before step 28. It removes the spellings that already
 have working replacements, rebuilds the published documentation in the unified idiom only, and
@@ -308,6 +311,7 @@ core on import, and parallel MCMC chains when the devices allow.
 | 47 | K | CP7 | `feat/nuts-tuning` | `plans/nuts-tuning.plan.md` | all | done | CX36 CX37 CX38 |
 | 48 | N | — | `feat/clean-surface` | `plans/clean-surface.plan.md` | Steps C0–C9 | done | — |
 | 49 | N | — | `feat/runtime-defaults` | `plans/runtime-defaults.plan.md` | Steps R0–R5 | done | — |
+| 50 | K | CP9 | `feat/multi-model` | `plans/multi-model-helpers.plan.md` | all | done | CX46 CX47 CX48 |
 <!-- /roadmap:steps -->
 
 `Closes` lists row IDs of {doc}`../evaluation/tb-ports` (and, where a step moves
@@ -3723,6 +3727,9 @@ The [standard checks](#exit-checks-every-step), plus `pixi run composability`. *
 
 ### Handoff
 
+(Re-sequenced 2026-11-17: step 50 `next` beside step 28. Step 50 was cut from `main` while
+step 28 was current and does not move *Current position*.)
+
 Set step 49 `done`, step 28 `next`. Record the R0 numbers, which tests were pinned to Euler, and
 the worker-tier tally. Then tag `v0.3.0a2`.
 
@@ -3744,6 +3751,88 @@ the worker-tier tally. Then tag `v0.3.0a2`.
   its pilots compare per-gradient cost. See `futureplans/euler-backend-slow.md`.
 - **For step 28.** Calibration runs now use Tsit5 and parallel chains by default. Its notebook
   should not pin `solver="euler"` unless it needs fixed-step numbers.
+
+---
+
+## Step 50 — `feat/multi-model`
+
+**Landed:** feat/multi-model, PR #79, 2026-11-17.
+
+**Worker:** Claude sonnet; checker opus; attempts 1 (sonnet). The orchestrator (opus) fixed the gate afterwards (solver, MCMC start, centring, convergence assertion; plan *Deviations*). Guide page 11 by a second sonnet worker.
+
+### Summary
+
+Helpers for calibrating several models jointly, where models share local parameter names
+(each has a `recovery`) but need different, hierarchically related values. `BayesianModel` gains
+`check_params` and `log_likelihood(strict=True)` (no silent fallback to `fixed_params`),
+`sample_params(prefix, given=)` and `factor` (prefixed sites, given hierarchical or shared
+values), and `local_params` plus `posterior_runs(params_fn=)` (replay any member model from a
+joint posterior). It lands on `feat/multi-model`, closes `CX46`, `CX47` and `CX48` (package
+`CP9`), and ships `38-calibration-multi-model.ipynb`.
+
+### What the previous worker left you
+
+- **Inserted on 2026-11-17** from a design discussion about multi-model and hierarchical
+  calibration. It runs beside step 28 and does not move *Current position*.
+- The same branch moved the `latest` (current JAX) test environment from pull-request CI to a
+  nightly workflow (`.github/workflows/nightly.yml`), and added
+  `futureplans/hierarchical-centring-diagnostics.md` (funnel diagnostics, out of scope here).
+- The plan is the full implementation spec, with exact signatures, messages and tests.
+
+### Worker
+
+Spec: **opus** (the orchestrator), committed as `plans/multi-model-helpers.plan.md`.
+Implementer: **sonnet**. Checker: **opus**. Escalate per
+[Running a step with tiered workers](#running-a-step-with-tiered-workers).
+
+### Files
+
+`src/summer4/epi/calibration/{model.py,posterior_runs.py}`, `tests/test_calib_multi_model.py`
+(new), `tests/gate_multi_model.py` (new),
+`examples/notebooks/38-calibration-multi-model.ipynb` (new),
+`docs/evaluation/composability.md`, `CHANGELOG.md`, `plans/multi-model-helpers.plan.md`.
+
+### Read first
+
+1. `AGENTS.md` (§ *Composability is a design goal*, § *Feature acceptance bar*)
+2. `plans/multi-model-helpers.plan.md`, all of it
+3. {doc}`../evaluation/composability`: rows `CX35`, `CX46`–`CX48`, package `CP9`
+4. `src/summer4/epi/calibration/model.py`, `posterior.py`, `posterior_runs.py`
+5. `examples/notebooks/28-calibration-custom-posterior.ipynb` and
+   `tests/gate_custom_posterior.py` (the pattern the gate notebook follows)
+
+### Do
+
+Follow the plan. Set `CX46`, `CX47` and `CX48` to `done` in the same commit as the code, then
+run `pixi run composability-write`.
+
+Cut from: `main`. Merges into: `main`.
+
+### Exit checks
+
+The [standard checks](#exit-checks-every-step), plus `pixi run composability`. **User gate:**
+`examples/notebooks/38-calibration-multi-model.ipynb`.
+
+### Handoff
+
+Set step 50 `done`; step 28 `next` stays current. Record deviations from the plan and any
+`futureplans/` notes written.
+
+**Done (2026-11-17).**
+
+- **Shipped** as planned: `check_params`, `log_likelihood(strict=)`, `sample_params`, `factor`,
+  `local_params`, `posterior_runs(params_fn=)`; `CX46`–`CX48` done. Beyond the plan: guide page
+  `docs/guide/11-several-models.ipynb` (linked from 08), and the `latest` test environment moved
+  to a nightly workflow.
+- **Gate lesson.** A value passed through `given=` bypasses the model's prior, support included.
+  The worker's Euler gate let chains reach a cliff at large recovery, and warmup failed while
+  the interval assertions passed. Gate tests that run NUTS should assert `warm.converged`.
+  Centring was chosen per member: the data-rich cohort is centred.
+- **futureplans notes:** `hierarchical-centring-diagnostics.md`,
+  `multi-model-stacked-and-declarative.md`.
+- **Separate branch:** `docs/api-calibration` adds `summer4.epi`, `summer4.epi.calibration` and
+  `summer4.epi.calibration.workflow` to the API reference.
+- **Release:** `0.3.0a4` (this step plus PR #78's `Property` fix) is cut after this PR merges.
 
 ---
 
