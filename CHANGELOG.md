@@ -41,6 +41,8 @@ Narrative release notes for the documentation site live in
   computes several values from parameters, time and state in one function; `f` runs once per
   step however many rates read it (a per-call memo of shared nodes), and parameter-only parts of
   the model still hoist to run start. `field_refs(Params(), Schema)` is typed parameter access.
+- A test that parallel MCMC chains work with gradients through the default Tsit5 solve on the
+  pinned JAX (`CX45`; an expected failure on JAX >= 0.7).
 
 ### Removed
 
@@ -60,6 +62,11 @@ Narrative release notes for the documentation site live in
   reaches `f` as an `Output`.
 - `OutputSet.evaluate` no longer returns names assigned with `keep=False`; pass
   `names=outputs.keys()` for every name. Sets without `keep=False` are unaffected.
+- The `default`, `nb` and `docs` environments use numpyro 0.18 (was 0.16.1). numpyro 0.18
+  no longer imports the deprecated `jax.core.call_p` / `closed_call_p`, so the two JAX
+  deprecation warnings on import are gone. JAX stays on 0.6.
+- Notebooks 17 and 22 mute only the warning each one triggers on purpose (an out-of-support
+  `log_prob` grid; an MCMC run stopped at its budget), with a comment saying why.
 
 ## [0.3.0a5] — 2026-11-17
 
