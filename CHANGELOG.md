@@ -11,6 +11,19 @@ Narrative release notes for the documentation site live in
 
 ## [Unreleased]
 
+### Changed
+
+- The `default`, `nb` and `docs` environments use numpyro 0.18 (was 0.16.1). numpyro 0.18
+  no longer imports the deprecated `jax.core.call_p` / `closed_call_p`, so the two JAX
+  deprecation warnings on import are gone. JAX stays on 0.6.
+- Notebooks 17 and 22 mute only the warning each one triggers on purpose (an out-of-support
+  `log_prob` grid; an MCMC run stopped at its budget), with a comment saying why.
+
+### Added
+
+- A test that parallel MCMC chains work with gradients through the default Tsit5 solve on the
+  pinned JAX (`CX45`; an expected failure on JAX >= 0.7).
+
 ## [0.3.0a5] — 2026-11-17
 
 Tag: [`v0.3.0a5`](https://github.com/monash-emu/summer4/releases/tag/v0.3.0a5)

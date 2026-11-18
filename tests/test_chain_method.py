@@ -106,6 +106,30 @@ def test_explicit_parallel_with_euler_recovers_parameter() -> None:
     assert abs(out["median"] - 0.5) < 0.05, out
 
 
+_JAX_AT_LEAST_0_7 = tuple(int(part) for part in jax.__version__.split(".")[:2]) >= (0, 7)
+
+
+@pytest.mark.xfail(
+    _JAX_AT_LEAST_0_7,
+    reason=(
+        "CX45: on JAX >= 0.7, parallel chains through an adaptive diffrax solve fail in "
+        "equinox's closure-convert check (futureplans/parallel-chains-diffrax-grad.md)."
+    ),
+    strict=False,
+)
+def test_explicit_parallel_with_tsit5_recovers_parameter() -> None:
+    """Parallel chains with gradients through the default Tsit5 solve, on the pinned JAX.
+
+    A user hit ``Closure-converted function called with different dynamic arguments``
+    (equinox, on diffrax's ``RESULTS``) with ``chain_method="parallel"`` and
+    ``solver="tsit5"`` after resolving JAX 0.12; pinning JAX to 0.6 fixed it. This guards
+    that pin: the ``default`` environment must keep this combination working.
+    """
+    out = _run_child(chain_method="parallel")
+    assert out["method"] == "parallel"
+    assert abs(out["median"] - 0.5) < 0.05, out
+
+
 def test_auto_keeps_ensemble_kernels_vectorized(monkeypatch: pytest.MonkeyPatch) -> None:
     """AIES and ESS only support vectorized chains, so ``"auto"`` must not pick parallel."""
     from numpyro.infer import AIES

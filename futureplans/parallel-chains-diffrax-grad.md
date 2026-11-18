@@ -24,6 +24,13 @@ Three-way reproduction on `examples/notebooks/31-calibration-output-targets.ipyn
 - vectorized + Tsit5: passes
 - parallel + Euler: passes
 
+A user reported the same error after their project resolved JAX 0.12 (mismatch on diffrax's
+`RESULTS`, traced vs unknown, inside the integrator state under `pmap`); pinning JAX to 0.6
+fixed it. The numpyro version does not matter here: on JAX 0.6.2, parallel + Tsit5 passes with
+numpyro 0.16.1 and 0.18.0 alike (checked 2026-11-19). The pinned combination is guarded by
+`tests/test_chain_method.py::test_explicit_parallel_with_tsit5_recovers_parameter`, which is an
+expected failure on JAX >= 0.7.
+
 So `chain_method="auto"` is pinned to `"vectorized"` (`resolve_chain_method` in
 `src/summer4/epi/calibration/workflow/mcmc.py`). Parallel stays covered by
 `tests/test_chain_method.py::test_explicit_parallel_with_euler_recovers_parameter`.
