@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, fields, replace
-from typing import Any, Protocol, cast
+from typing import Any, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -31,22 +31,21 @@ from summer4.flows.rates import (
     FlowRef,
     GaussianPulse,
     Interp,
+    Item,
     Lookup,
     Overwrite,
+    Params,
     RateOps,
     Reduce,
+    StateArray,
     TableInterp,
     Time,
     Transform,
     UnaryOp,
     _adjust_bytes,
-    _adjust_field_paths,
     _callable_key,
-    _field_paths,
     _lookup_path,
     _rate_bytes,
-    derived_return_schema,
-    validate_computed_path,
 )
 from summer4.flows.stages import HoistTable, Prepared, PrepareFn, box_float_leaves
 from summer4.flows.types import FlowLike
@@ -57,10 +56,10 @@ from summer4.selectors import Selector
 _NA: int = -1
 
 
-class DerivedFn(Protocol):
-    """``derived_fn(params, *, y, t)`` producing the derived-param struct."""
+Memo = dict[int, tuple[Any, Any]]
+"""Per-call values of non-leaf rate nodes: ``id(node) -> (node, value)``."""
 
-    def __call__(self, params: object, *, y: object, t: object) -> object: ...
+_MEMO_SKIP = (Const, Time, FieldRef, Params, StateArray)
 
 
 @dataclass(frozen=True, slots=True)
@@ -294,16 +293,61 @@ def _eval_rate(
     captures: dict[str, GroupedRate],
     hoisted: Prepared | None = None,
     table: HoistTable | None = None,
+    memo: Memo | None = None,
+) -> Any:
+    """Evaluate ``expr``: a hoisted slot first, then the per-call memo, then the node.
+
+    ``derived`` is the prepared parameters (what ``Params()`` and ``FieldRef``
+    read). ``memo`` holds this call's values of non-leaf nodes by identity, so a
+    node object shared by several rates (or a saved expression) runs once.
+    """
+    if table is not None and hoisted is not None:
+        value_slot = table.slot.get((id(expr), "value"))
+        if value_slot is not None:
+            return hoisted.hoisted[value_slot]
+    use_memo = memo is not None and not isinstance(expr, _MEMO_SKIP)
+    if use_memo:
+        assert memo is not None
+        hit = memo.get(id(expr))
+        if hit is not None and hit[0] is expr:
+            return hit[1]
+    value = _eval_rate_node(
+        expr,
+        derived=derived,
+        flow_values=flow_values,
+        flow_meta=flow_meta,
+        pmap=pmap,
+        t=t,
+        y_arr=y_arr,
+        captures=captures,
+        hoisted=hoisted,
+        table=table,
+        memo=memo,
+    )
+    if use_memo:
+        assert memo is not None
+        memo[id(expr)] = (expr, value)
+    return value
+
+
+def _eval_rate_node(
+    expr: RateOps,
+    *,
+    derived: Any,
+    flow_values: Mapping[str, Any],
+    flow_meta: Mapping[str, FlowEdges],
+    pmap: PropertyMap,
+    t: object,
+    y_arr: Any,
+    captures: dict[str, GroupedRate],
+    hoisted: Prepared | None = None,
+    table: HoistTable | None = None,
+    memo: Memo | None = None,
 ) -> Any:
     import jax.numpy as jnp
 
     from summer4.flows.rates import _RATE_EVALUATORS, ArrayConst, Capture
     from summer4.jax.propertydata import PropertyData
-
-    if table is not None and hoisted is not None:
-        value_slot = table.slot.get((id(expr), "value"))
-        if value_slot is not None:
-            return hoisted.hoisted[value_slot]
 
     def child(node: RateOps) -> Any:
         return _eval_rate(
@@ -317,6 +361,7 @@ def _eval_rate(
             captures=captures,
             hoisted=hoisted,
             table=table,
+            memo=memo,
         )
 
     match expr:
@@ -324,6 +369,15 @@ def _eval_rate(
             return value
         case Time():
             return t
+        case Params():
+            return derived
+        case StateArray():
+            return y_arr
+        case Item(arg=arg, key=key):
+            value = child(arg)
+            if isinstance(key, str) and not isinstance(value, Mapping):
+                return getattr(value, key)
+            return value[key]
         case FieldRef(path=path):
             return _lookup_path(derived, path)
         case ArrayConst(value=value):
@@ -439,7 +493,7 @@ def eval_closed(expr: RateOps, derived: object) -> Any:
 
     if not isinstance(expr, RateOps):
         raise TypeError(f"eval_closed expects a rate expression, got {type(expr).__name__}.")
-    if rate_stage(expr, params_are_static=True) != "run":
+    if rate_stage(expr) != "run":
         raise ValueError(
             "eval_closed only evaluates parameter-only expressions "
             "(constants and parameters, including exp, log, tanh and pow of them). "
@@ -583,6 +637,7 @@ def _eval_aligned(
     captures: dict[str, GroupedRate],
     hoisted: Prepared | None = None,
     table: HoistTable | None = None,
+    memo: Memo | None = None,
 ) -> Any:
     raw = _eval_rate(
         expr,
@@ -595,6 +650,7 @@ def _eval_aligned(
         captures=captures,
         hoisted=hoisted,
         table=table,
+        memo=memo,
     )
     pair_src, pair_dest, pair_n = _pair_info(flow)
     return _align_rate(
@@ -622,6 +678,7 @@ def _apply_adjustments(
     captures: dict[str, GroupedRate],
     hoisted: Prepared | None = None,
     table: HoistTable | None = None,
+    memo: Memo | None = None,
 ) -> Any:
     import jax.numpy as jnp
 
@@ -642,6 +699,7 @@ def _apply_adjustments(
                     captures=captures,
                     hoisted=hoisted,
                     table=table,
+                    memo=memo,
                 )
                 for arg in adj.args
             ]
@@ -660,6 +718,7 @@ def _apply_adjustments(
                 captures=captures,
                 hoisted=hoisted,
                 table=table,
+                memo=memo,
             )
             new = value if isinstance(adj, Overwrite) else prev * value
         prev = jnp.where(jnp.asarray(mask), new, prev) if mask is not None else new
@@ -736,6 +795,45 @@ def _fuse_scatter_add(
     return _scatter_add(target, all_idx, all_vals)
 
 
+def _infer_over(expr: RateOps, pmap: PropertyMap) -> Property | None:
+    """The property ``expr``'s value is grouped by, read from the expression; else ``None``.
+
+    Grouped nodes are ``TableInterp`` (``over``), ``Reduce(group_by=)``,
+    ``FlowRef(...).sum_by(p)`` and custom nodes with a ``group_by`` property (such
+    as ``ForceOfInfection``). Arithmetic, ``Capture``, ``Defer`` and ``Item`` pass
+    their children's grouping through. Evaluation checks the answer.
+    """
+    from summer4.flows.rates import Capture, Defer, rate_children
+
+    match expr:
+        case TableInterp(over=over):
+            return over
+        case Reduce(group_by=None):
+            return None
+        case Reduce(group_by=group_by):
+            assert group_by is not None
+            return pmap.get_property(group_by.name if isinstance(group_by, Property) else group_by)
+        case FlowRef(reduce=("sum_by", name)):
+            return pmap.get_property(name)
+        case FlowRef() | Time() | Const() | FieldRef() | Params() | StateArray():
+            return None
+        case BinOp() | UnaryOp() | Capture() | Defer() | Item() | Lookup() | Interp():
+            for child in rate_children(expr):
+                found = _infer_over(child, pmap)
+                if found is not None:
+                    return found
+            return None
+        case _:
+            custom = getattr(expr, "group_by", None)
+            if isinstance(custom, Property):
+                return custom
+            for child in rate_children(expr):
+                found = _infer_over(child, pmap)
+                if found is not None:
+                    return found
+            return None
+
+
 def _collect_capture_meta(expr: RateOps) -> dict[str, tuple[Property, ...]]:
     """Walk a rate tree for nodes that expose ``__capture_meta__``."""
     from summer4.flows.rates import rate_children
@@ -752,35 +850,12 @@ def _collect_capture_meta(expr: RateOps) -> dict[str, tuple[Property, ...]]:
     return out
 
 
-def _flow_paths(flow: FlowEdges) -> set[tuple[str, ...]]:
-    paths = _field_paths(flow.rate)
-    for adj in flow.adjust:
-        paths |= _adjust_field_paths(adj)
-    for root in split_roots(flow):
-        paths |= _field_paths(root)
-    return paths
-
-
 def _rate_flow_deps(flows: Mapping[str, FlowEdges]) -> frozenset[str]:
     """Flow names referenced by any rate / adjustment via ``FlowRef``."""
     names: set[str] = set()
     for flow in flows.values():
         names |= flow_rate_refs(flow)
     return frozenset(names)
-
-
-def _validate_plan_computed(plan: Any, derived_fn: DerivedFn | None) -> None:
-    """Validate ``ComputedValue`` paths against ``derived_fn``'s return schema."""
-    from summer4.results.plan import ComputedValue, SavePlan
-
-    if not isinstance(plan, SavePlan):
-        return
-    schema = derived_return_schema(derived_fn)
-    if schema is None:
-        return
-    for req in plan.requests.values():
-        if isinstance(req.what, ComputedValue):
-            validate_computed_path(req.what.path, schema)
 
 
 def _flow_digest(flow: FlowEdges, edge_map: EdgeMap) -> bytes:
@@ -806,8 +881,6 @@ def _model_digest(
     order: tuple[str, ...],
     flows: Mapping[str, FlowEdges],
     edge_maps: Mapping[str, EdgeMap],
-    derived_fn: DerivedFn | None,
-    computed_paths: tuple[tuple[str, ...], ...],
     prepare_fn: PrepareFn | None = None,
     hoist: bool = True,
     init_plan: InitPlan | None = None,
@@ -819,9 +892,6 @@ def _model_digest(
         hasher.update(pmap.parent_row.tobytes())
     for name in order:
         hasher.update(_flow_digest(flows[name], edge_maps[name]))
-    hasher.update(b"df")
-    hasher.update(_callable_key(derived_fn).encode() if derived_fn is not None else b"0")
-    hasher.update(repr(computed_paths).encode())
     hasher.update(b"pf")
     hasher.update(_callable_key(prepare_fn).encode() if prepare_fn is not None else b"0")
     hasher.update(b"hoist1" if hoist else b"hoist0")
@@ -830,15 +900,14 @@ def _model_digest(
     return hasher.digest()
 
 
-def _eval_derived(derived_fn: DerivedFn | None, params: object, y_arr: Any, t: object) -> Any:
-    if derived_fn is None:
-        return params
-    return derived_fn(params, y=y_arr, t=t)
-
-
 @dataclass(frozen=True, slots=True)
 class SaveContext:
-    """Snapshot of one field evaluation for save functions."""
+    """Snapshot of one field evaluation, which save quantities read.
+
+    ``derived`` is the prepared parameters. ``evaluate`` evaluates a rate
+    expression at this ``t`` and state, sharing the call's hoisted values and
+    memo, so a saved expression that a flow also uses is not recomputed.
+    """
 
     t: Any
     y: Any
@@ -846,6 +915,7 @@ class SaveContext:
     derived: Any
     flows: Mapping[str, Any]
     captures: Mapping[str, GroupedRate] = field(default_factory=dict)
+    evaluate: Callable[[RateOps], Any] | None = None
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -857,7 +927,7 @@ class CompiledModel:
     adjust masks) as well as topology, so two models that differ only in split
     proportions do not collide in the jit cache.
 
-    ``derived_fn``, :class:`Transform` callables, and ``SaveFn.fn`` hash by
+    ``prepare_fn``, :class:`Transform` callables and :func:`defer` functions hash by
     identity, so a lambda defined inside a loop retraces every call.
     """
 
@@ -865,8 +935,6 @@ class CompiledModel:
     order: tuple[str, ...]
     flows: Mapping[str, FlowEdges]
     edge_maps: Mapping[str, EdgeMap]
-    derived_fn: DerivedFn | None
-    computed_paths: tuple[tuple[str, ...], ...]
     prepare_fn: PrepareFn | None = None
     hoist_table: HoistTable | None = None
     hoist: bool = True
@@ -884,8 +952,6 @@ class CompiledModel:
                 self.order,
                 self.flows,
                 self.edge_maps,
-                self.derived_fn,
-                self.computed_paths,
                 prepare_fn=self.prepare_fn,
                 hoist=self.hoist,
                 init_plan=self.init_plan,
@@ -909,6 +975,7 @@ class CompiledModel:
         import jax.numpy as jnp
 
         hoisted: list[Any] = []
+        memo: Memo = {}
         for entry in table.entries:
             if entry.part == "value":
                 hoisted.append(
@@ -921,6 +988,7 @@ class CompiledModel:
                         t=None,
                         y_arr=None,
                         captures={},
+                        memo=memo,
                     )
                 )
             elif entry.part == "breakpoints":
@@ -937,6 +1005,7 @@ class CompiledModel:
                                 t=None,
                                 y_arr=None,
                                 captures={},
+                                memo=memo,
                             )
                         )
                         for bp in entry.node.breakpoints
@@ -957,6 +1026,7 @@ class CompiledModel:
                                 t=None,
                                 y_arr=None,
                                 captures={},
+                                memo=memo,
                             )
                         )
                         for val in entry.node.values
@@ -1009,7 +1079,8 @@ class CompiledModel:
             params = self.prepare(params)
         prepared = params
         y_arr, rebox = unpack_state(y, self.pmap)
-        derived = _eval_derived(self.derived_fn, prepared.params, y_arr, t)
+        derived = prepared.params
+        memo: Memo = {}
         dy: Any = jnp.zeros_like(y_arr)
         flow_values: dict[str, Any] = {}
         captures: dict[str, GroupedRate] = {}
@@ -1034,6 +1105,7 @@ class CompiledModel:
                 captures=captures,
                 hoisted=prepared,
                 table=table,
+                memo=memo,
             )
             rate = rate * jnp.asarray(flow.scale)
             rate = _apply_adjustments(
@@ -1049,6 +1121,7 @@ class CompiledModel:
                 captures=captures,
                 hoisted=prepared,
                 table=table,
+                memo=memo,
             )
             weight: Any = jnp.asarray(flow.weight)
             dyn = getattr(flow, "dynamic_split", None)
@@ -1067,6 +1140,7 @@ class CompiledModel:
                         captures=captures,
                         hoisted=prepared,
                         table=table,
+                        memo=memo,
                     ),
                     batch_shape=tuple(y_arr.shape[:-1]),
                     name=name,
@@ -1105,6 +1179,7 @@ class CompiledModel:
                         dy = _scatter_add(dy, dest_idx, mass)
         if fuse:
             dy = _fuse_scatter_add(dy, idx_parts, val_parts)
+        all_flow_values = flow_values  # unpruned, for saved expressions
         if keep is not None:
             retain = keep | _rate_flow_deps(self.flows)
             flow_values = {k: v for k, v in flow_values.items() if k in retain}
@@ -1121,8 +1196,30 @@ class CompiledModel:
         else:
             y_out = y_boxed
             dy_out = dy
+
+        def evaluate(expr: RateOps) -> Any:
+            return _eval_rate(
+                expr,
+                derived=derived,
+                flow_values=all_flow_values,
+                flow_meta=self.flows,
+                pmap=pmap,
+                t=t,
+                y_arr=y_arr,
+                captures=captures,
+                hoisted=prepared,
+                table=table,
+                memo=memo,
+            )
+
         return SaveContext(
-            t=t, y=y_out, dy=dy_out, derived=derived, flows=flow_values, captures=captures
+            t=t,
+            y=y_out,
+            dy=dy_out,
+            derived=derived,
+            flows=flow_values,
+            captures=captures,
+            evaluate=evaluate,
         )
 
     def vector_field(self, t: object, y: object, params: object) -> Any:
@@ -1130,12 +1227,17 @@ class CompiledModel:
         return self.observe(t, y, params).dy
 
     def expand(self, plan: Any) -> Any:
-        """Fill an empty (EVERYTHING) plan with compartments, flows, and computed paths."""
+        """Fill an empty (EVERYTHING) plan, and give each saved expression its ``over``.
+
+        ``EVERYTHING`` saves compartments, every flow and every captured grouped
+        rate. A :class:`~summer4.results.plan.SavedExpr` with ``over=None`` whose
+        expression is grouped by a property gets that property.
+        """
         from summer4.results.plan import (
             Compartments,
-            ComputedValue,
             FlowMass,
             GroupedOutput,
+            SavedExpr,
             SavePlan,
             SaveRequest,
         )
@@ -1143,26 +1245,37 @@ class CompiledModel:
         if not isinstance(plan, SavePlan):
             raise TypeError(f"Expected SavePlan, got {type(plan).__name__}.")
         if plan.requests:
-            _validate_plan_computed(plan, self.derived_fn)
-            return plan
+            resolved: dict[str, SaveRequest] = {}
+            changed = False
+            for key, req in plan.requests.items():
+                what = req.what
+                if isinstance(what, SavedExpr) and what.over is None:
+                    over = _infer_over(what.expr, self.pmap)
+                    if over is not None:
+                        req = replace(req, what=SavedExpr(what.expr, over=over))
+                        changed = True
+                resolved[key] = req
+            if not changed:
+                return plan
+            return SavePlan(
+                requests=resolved,
+                ts=plan.ts,
+                dense=plan.dense,
+                solver_stats=plan.solver_stats,
+            )
         requests: dict[str, SaveRequest] = {
             "compartments": SaveRequest(Compartments()),
         }
         for name in self.order:
             requests[name] = SaveRequest(FlowMass(flow=name))
-        for path in self.computed_paths:
-            key = ".".join(path)
-            requests[key] = SaveRequest(ComputedValue(path=path))
         for cap_name in self.capture_meta:
             requests[cap_name] = SaveRequest(GroupedOutput(name=cap_name))
-        expanded = SavePlan(
+        return SavePlan(
             requests=requests,
             ts=plan.ts,
             dense=plan.dense,
             solver_stats=plan.solver_stats,
         )
-        _validate_plan_computed(expanded, self.derived_fn)
-        return expanded
 
     def describe(
         self,
@@ -1181,7 +1294,7 @@ class CompiledModel:
         override the plan default).
 
         Pass ``params`` (or a pytree of ``jax.ShapeDtypeStruct`` stand-ins) when
-        the model has a ``derived_fn`` that indexes them. ``None`` remains valid
+        the model's rates or saved expressions read them. ``None`` remains valid
         for models that ignore params.
         """
         import jax
@@ -1207,8 +1320,8 @@ class CompiledModel:
             shaped = jax.eval_shape(_one, t0, y0, params)
         except Exception as exc:
             raise ValueError(
-                f"SavePlan failed shape inference (SaveFn must return statically "
-                f"shaped arrays): {exc}"
+                f"SavePlan failed shape inference (every saved quantity must have a "
+                f"static shape): {exc}"
             ) from exc
 
         if n_saves is not None:
@@ -1509,7 +1622,6 @@ class FlowModel:
     def compile(
         self,
         *,
-        derived_fn: DerivedFn | None = None,
         prepare_fn: PrepareFn | None = None,
         hoist: bool = True,
         fuse_compartment_updates: bool = True,
@@ -1525,9 +1637,9 @@ class FlowModel:
         adds ``slice``→``pad`` cost under ``grad`` (see
         ``futureplans/vf-gather-and-mul-followups.md``).
 
-        Legacy: removed in roadmap step 41, replaced by
-        ``field_refs(defer(f)(Params(), y=StateArray(), t=Time()), Schema)`` (step 39).
-        Not used in the documentation.
+        To compute several values from the parameters, time and state at once
+        (what a ``derived_fn`` did before step 41), read them through
+        ``field_refs(defer(f)(Params(), y=StateArray(), t=Time()), Schema)``.
         """
         from summer4.flows.stages import HoistTable, build_hoist_table, roots_of
 
@@ -1545,10 +1657,8 @@ class FlowModel:
         flows = {flow.name: flow for flow in actualized}
         order = tuple(flow.name for flow in actualized)
         edge_maps = {flow.name: flow.edge_map for flow in actualized}
-        paths: set[tuple[str, ...]] = set()
         capture_meta: dict[str, tuple[Property, ...]] = {}
         for flow in actualized:
-            paths |= _flow_paths(flow)
             capture_meta.update(_collect_capture_meta(flow.rate))
             for adj in flow.adjust:
                 if hasattr(adj, "value"):
@@ -1558,12 +1668,8 @@ class FlowModel:
                         capture_meta.update(_collect_capture_meta(arg))
             for root in split_roots(flow):
                 capture_meta.update(_collect_capture_meta(root))
-        computed_paths = tuple(sorted(paths))
         if hoist:
-            hoist_table = build_hoist_table(
-                roots_of(flows, order),
-                params_are_static=derived_fn is None,
-            )
+            hoist_table = build_hoist_table(roots_of(flows, order))
         else:
             hoist_table = HoistTable(entries=(), slot={})
         return CompiledModel(
@@ -1571,8 +1677,6 @@ class FlowModel:
             order=order,
             flows=flows,
             edge_maps=edge_maps,
-            derived_fn=derived_fn,
-            computed_paths=computed_paths,
             prepare_fn=prepare_fn,
             hoist_table=hoist_table,
             hoist=hoist,

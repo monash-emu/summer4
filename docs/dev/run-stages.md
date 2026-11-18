@@ -9,13 +9,13 @@ Implemented in `summer4.flows.stages` and wired through `CompiledModel`.
 |---|---|---|---|---|
 | **0 — compile** | `FlowModel.compile()`, once per model structure | host (NumPy) | `PropertyMap`, flows, `InitialPopulation` | index arrays, `HoistTable`, `InitPlan`, digest |
 | **1 — run start** | once per `CompiledModel.run` / `initial_state` / loss evaluation, **before** the solve | traced JAX | raw `params` | `Prepared(params=box_float_leaves(prepare_fn(params) or params), hoisted=(...))`; the initial state `y0`. Python `float` leaves are promoted to float64 arrays so equinox's `filter_jit` treats them as dynamic across draws |
-| **2 — per step** | every vector-field call | traced JAX, inside `scan`/`while` | `t`, `y`, `Prepared` | `derived = derived_fn(prepared.params, y=, t=)`; rates, reading hoisted values |
+| **2 — per step** | every vector-field call | traced JAX, inside `scan`/`while` | `t`, `y`, `Prepared` | rates, reading hoisted values and the prepared parameters |
 
 Rules:
 
-- **R1.** `prepare_fn(params) -> params'` is a user hook: `FlowModel.compile(prepare_fn=...)`. It must not depend on `t` or `y`. It hashes by `id` in the digest, like `derived_fn`. After the hook (or on raw params), `prepare` promotes plain Python `float` leaves to float64 arrays so Diffrax's equinox cache does not key on the numeric values.
-- **R2.** Initial-population expressions and callables read `Prepared.params`, never `derived_fn` output. A `Time()`, `FlowRef`, `Reduce` or `Capture` in one is a compile-time `ValueError`.
-- **R3.** A rate subtree is **run-stage** when it depends only on constants and (if `derived_fn is None`) on `FieldRef`s. When `derived_fn` is set, `FieldRef`s are **step-stage**, because they read `derived_fn` output. So adding a `derived_fn` disables parameter hoisting. The documented remedy is to move `t`/`y`-independent work into `prepare_fn`.
+- **R1.** `prepare_fn(params) -> params'` is a user hook: `FlowModel.compile(prepare_fn=...)`. It must not depend on `t` or `y`. It hashes by `id` in the digest. After the hook (or on raw params), `prepare` promotes plain Python `float` leaves to float64 arrays so Diffrax's equinox cache does not key on the numeric values.
+- **R2.** Initial-population expressions and callables read `Prepared.params`, never the output of a deferred function. A `Time()`, `FlowRef`, `Reduce` or `Capture` in one is a compile-time `ValueError`.
+- **R3.** Removed in step 41. A `FieldRef` (and a `Param`) is always run stage, so parameter-only subtrees always hoist. Code that reads `t` or `y` as well goes through `field_refs(defer(f)(Params(), y=StateArray(), t=Time()), Schema)`; that subtree is step stage, and parameter-only subtrees beside it still hoist.
 - **R4.** Hoisting is an optimisation only. `compile(hoist=False)` must give identical results. The digest includes the `hoist` flag.
 - **R5.** `observe` / `vector_field` still accept raw params. If `params` is not a `Prepared`, they call `self.prepare(params)` themselves, which is correct but not hoisted. Solvers always call `prepare` once and pass the `Prepared` down.
 - **R6.** In `run`, an explicit `y0` overrides a model-attached initial population (warm starts). With no `y0` and no initial population, `run` raises `ValueError`.
@@ -25,13 +25,14 @@ Rules:
 | Node | Stage |
 |---|---|
 | `Const`, `ArrayConst` | run (leaf) |
-| `FieldRef` | run if `params_are_static` (i.e. `derived_fn is None`), else step (leaf) |
+| `FieldRef`, `Param`, `Params()` | run (leaf) |
+| `StateArray()` | step (leaf) |
 | `Time`, `FlowRef`, `Reduce`, `Capture` | step |
 | `BinOp` | step if any child is step, else run |
 | `UnaryOp` | same stage as its argument |
 | `Interp` | step if any of breakpoints/values/arg is step, else run |
 | `GaussianPulse` | step if any of arg/centre/width/height is step, else run |
-| any other `RateOps` | `expr.__rate_stage__(params_are_static=...)` when the hook accepts that keyword, otherwise `expr.__rate_stage__()`, else **step** (conservative; `ForceOfInfection` stays step). `Defer` uses the keyword: a param-only call is run-stage only while parameters are static |
+| any other `RateOps` | `expr.__rate_stage__()` when the node defines it, else **step** (conservative; `ForceOfInfection` stays step). `Defer` is run stage when every argument is |
 
 ## Hoisting rule (`build_hoist_table`)
 

@@ -220,7 +220,7 @@ class GaussianPulse(RateOps):
 
 @dataclass(frozen=True, slots=True)
 class FieldRef(RateOps):
-    """Lazy path into the runtime derived-param struct."""
+    """Lazy path into the prepared parameters (``Param(name)`` is a one-step path)."""
 
     path: tuple[str, ...]
 
@@ -237,6 +237,38 @@ def Param(name: str) -> FieldRef:
     one-element :class:`FieldRef` path already does.
     """
     return FieldRef((name,))
+
+
+@dataclass(frozen=True, slots=True)
+class Params(RateOps):
+    """The whole prepared parameter object (run stage).
+
+    Pass it to :func:`defer` to compute several values from the parameters at
+    once: ``defer(f)(Params(), y=StateArray(), t=Time())``. Field-less, like
+    :class:`Time`: every instance compares equal.
+    """
+
+
+@dataclass(frozen=True, slots=True)
+class StateArray(RateOps):
+    """The raw compartment array at the current step (step stage).
+
+    The array a vector-field call integrates, with compartments on the last
+    axis in :class:`~summer4.propertymap.PropertyMap` row order. Field-less.
+    """
+
+
+@dataclass(frozen=True, slots=True)
+class Item(RateOps):
+    """One field or element of ``arg``'s value: ``getattr`` for a str key, else ``[key]``.
+
+    A str key reads an attribute (a NamedTuple field) and falls back to
+    ``value[key]`` for a mapping. Its stage is ``arg``'s. Built by
+    :func:`field_refs`.
+    """
+
+    arg: RateOps
+    key: str | int
 
 
 @dataclass(frozen=True, slots=True)
@@ -350,7 +382,7 @@ class Named:
     """A callable with a stable digest key. ``named(fn, name)`` builds one.
 
     Every hook that takes a callable accepts a ``Named``: :class:`Transform`,
-    :class:`~summer4.results.plan.SaveFn`, ``derived_fn`` and ``prepare_fn`` on
+    :func:`defer`, ``prepare_fn`` on
     :meth:`~summer4.flows.compiled.FlowModel.compile`, the callable base value
     of an :class:`~summer4.flows.initial.InitialPopulation`, and the ``kind``
     of a :class:`~summer4.epi.infection.ForceOfInfection`.
@@ -446,14 +478,12 @@ class Defer(RateOps):
         )
         object.__setattr__(self, "name", name)
 
-    def __rate_stage__(self, *, params_are_static: bool) -> str:
+    def __rate_stage__(self) -> str:
         """``step`` if any argument is step-stage, else ``run``."""
         from summer4.flows.stages import rate_stage
 
         children = (*self.args, *(value for _, value in self.kwargs))
-        if any(
-            rate_stage(child, params_are_static=params_are_static) == "step" for child in children
-        ):
+        if any(rate_stage(child) == "step" for child in children):
             return "step"
         return "run"
 
@@ -769,20 +799,42 @@ def _field_ref_tree(schema: type, prefix: tuple[str, ...]) -> Any:
     return schema(*values)
 
 
-def derived_refs[T: NamedTuple](schema: type[T]) -> T:
-    """Build a NamedTuple of :class:`FieldRef`s named after ``schema`` fields.
+def _item_tree(schema: type, root: RateOps) -> Any:
+    values: list[Any] = []
+    fields = cast(tuple[str, ...], cast(Any, schema)._fields)
+    for name in fields:
+        node = Item(root, name)
+        nested = _nested_schema(schema, name)
+        values.append(_item_tree(nested, node) if nested is not None else node)
+    return schema(*values)
 
-    Nested NamedTuple field annotations become nested ref trees so a bundle
-    like ``D.migration.baseline`` is one path. The return is annotated as
-    ``schema`` so IDEs complete only those fields. Runtime values are
-    ``FieldRef`` paths (or nested schemas of them), not the declared types.
 
-    Legacy: removed in roadmap step 41, replaced by ``field_refs`` (step 39).
-    Not used in the documentation.
+def field_refs[T: NamedTuple](expr: RateOps, schema: type[T]) -> T:
+    """A ``schema`` of rate nodes, one per field of ``expr``'s value.
+
+    Nested NamedTuple field annotations become nested trees, so a bundle like
+    ``D.migration.baseline`` is one node. The return is annotated as ``schema``
+    so IDEs complete only its fields; the runtime values are rate nodes.
+
+    With ``expr`` a :class:`Params`, each node is the parameter's
+    :class:`FieldRef`, so ``field_refs(Params(), Rates).beta`` is
+    ``Param("beta")``: typed parameter access. Any other ``expr`` gives
+    :class:`Item` nodes reading its value, which is how one computation feeds
+    many rates::
+
+        D = field_refs(defer(f)(Params(), y=StateArray(), t=Time()), Derived)
+        model.add_flow(TransitionFlow("infection", s, i, D.foi))
+
+    ``f`` then runs once per vector-field call however many rates read ``D``,
+    and a ``defer`` of parameters alone is evaluated once per run.
     """
     if not _is_namedtuple_class(schema):
-        raise TypeError(f"derived_refs expects a NamedTuple class, got {schema!r}.")
-    return cast(T, _field_ref_tree(schema, ()))
+        raise TypeError(f"field_refs expects a NamedTuple class, got {schema!r}.")
+    if not isinstance(expr, RateOps):
+        raise TypeError(f"field_refs expects a rate expression, got {type(expr).__name__}.")
+    if isinstance(expr, Params):
+        return cast(T, _field_ref_tree(schema, ()))
+    return cast(T, _item_tree(schema, expr))
 
 
 def as_rate(value: object) -> RateOps:
@@ -975,7 +1027,9 @@ def rate_children(expr: RateOps) -> tuple[RateOps, ...]:
     - ``Lookup``: ``table``, ``index``.
     - ``Capture``: ``inner``.
     - ``Defer``: positional arguments, then keyword values.
-    - Leaves (``Const``, ``Time``, ``FieldRef``, ``FlowRef``, ``Reduce``, ``ArrayConst``): none.
+    - ``Item``: ``arg``.
+    - Leaves (``Const``, ``Time``, ``FieldRef``, ``FlowRef``, ``Reduce``, ``ArrayConst``,
+      ``Params``, ``StateArray``): none.
     """
     match expr:
         case BinOp(left=left, right=right):
@@ -992,7 +1046,11 @@ def rate_children(expr: RateOps) -> tuple[RateOps, ...]:
             return (table, index)
         case Capture(inner=inner):
             return (inner,)
+        case Item(arg=arg):
+            return (arg,)
         case Time() | Const() | FieldRef() | FlowRef() | Reduce() | ArrayConst():
+            return ()
+        case Params() | StateArray():
             return ()
         case _:
             hook = getattr(expr, "__rate_children__", None)
@@ -1057,69 +1115,13 @@ def _lookup_path(root: object, path: tuple[str, ...]) -> object:
             try:
                 current = current[name]
             except KeyError as exc:
-                raise KeyError(f"Derived struct has no field {path!r}.") from exc
+                raise KeyError(f"Parameters have no field {path!r}.") from exc
         else:
             try:
                 current = getattr(current, name)
             except AttributeError as exc:
-                raise AttributeError(f"Derived struct has no field {path!r}.") from exc
+                raise AttributeError(f"Parameters have no field {path!r}.") from exc
     return current
-
-
-def _schema_paths(schema: type, prefix: tuple[str, ...] = ()) -> list[tuple[str, ...]]:
-    """List every leaf path on a NamedTuple schema (including nested bundles)."""
-    if not _is_namedtuple_class(schema):
-        return []
-    out: list[tuple[str, ...]] = []
-    fields = cast(tuple[str, ...], cast(Any, schema)._fields)
-    for name in fields:
-        path = (*prefix, name)
-        nested = _nested_schema(schema, name)
-        if nested is not None:
-            out.extend(_schema_paths(nested, path))
-        else:
-            out.append(path)
-    return out
-
-
-def derived_return_schema(derived_fn: Callable[..., Any] | None) -> type | None:
-    """Return the NamedTuple annotation on ``derived_fn``'s return, if any.
-
-    Unannotated hooks skip validation. Annotations that cannot be resolved
-    (e.g. a class local to the defining function under
-    ``from __future__ import annotations``) are treated as absent.
-    """
-    if derived_fn is None:
-        return None
-    if isinstance(derived_fn, Named):
-        derived_fn = derived_fn.fn
-    raw = getattr(derived_fn, "__annotations__", {}).get("return")
-    if isinstance(raw, type) and _is_namedtuple_class(raw):
-        return raw
-    try:
-        hints = get_type_hints(derived_fn)
-    except (NameError, TypeError, AttributeError):
-        hints = {}
-    ret = hints.get("return")
-    if isinstance(ret, type) and _is_namedtuple_class(ret):
-        return ret
-    if isinstance(raw, str):
-        candidate = derived_fn.__globals__.get(raw)
-        if isinstance(candidate, type) and _is_namedtuple_class(candidate):
-            return candidate
-    return None
-
-
-def validate_computed_path(path: tuple[str, ...], schema: type) -> None:
-    """Raise if ``path`` is not a leaf on ``schema``, listing available paths."""
-    available = _schema_paths(schema)
-    if path in available:
-        return
-    pretty = ", ".join(".".join(p) for p in available) or "(none)"
-    raise ValueError(
-        f"ComputedValue path {'.'.join(path)!r} is not a field of the derived "
-        f"schema {schema.__name__}. Available paths: {pretty}."
-    )
 
 
 def _selector_bytes(sel: Selector) -> bytes:
@@ -1159,6 +1161,12 @@ def _rate_bytes(expr: RateOps) -> bytes:
             return b"const" + np.float64(value).tobytes()
         case Time():
             return b"time"
+        case Params():
+            return b"params"
+        case StateArray():
+            return b"statearray"
+        case Item(arg=arg, key=key):
+            return b"item" + repr(key).encode() + b"|" + _rate_bytes(arg)
         case FieldRef(path=path):
             return b"field" + repr(path).encode()
         case FlowRef(name=name, reduce=reduce):

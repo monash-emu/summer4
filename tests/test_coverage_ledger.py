@@ -141,7 +141,9 @@ def test_ports_reject_undeclared_package(ports_text: str, text: str) -> None:
 def test_ports_reject_full_row_with_package(ports_text: str, text: str) -> None:
     from scripts.coverage_report import read_ports
 
-    broken = ports_text.replace("| `ComputedValue` over `derived_fn` | — |", "| x | WP13 |", 1)
+    broken = ports_text.replace(
+        "| `outputs[name] = expr` (`SavedExpr`, step 40) | — |", "| x | WP13 |", 1
+    )
     with pytest.raises(ValueError, match="is full but names"):
         read_ports(broken, text)
 

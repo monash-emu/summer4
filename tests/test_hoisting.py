@@ -37,29 +37,30 @@ from summer4.flows.rates import (  # noqa: E402
     FlowRef,
     GaussianPulse,
     Interp,
+    Params,
     RateOps,
     Reduce,
-    derived_refs,
+    StateArray,
+    defer,
+    field_refs,
 )
 from summer4.flows.stages import build_hoist_table, rate_stage  # noqa: E402
 from summer4.timevarying import gaussian_pulse, linear  # noqa: E402
 
 
 def test_rate_stage_classification_table() -> None:
-    assert rate_stage(Const(1.0), params_are_static=True) == "run"
-    assert rate_stage(ArrayConst(np.array([1.0])), params_are_static=True) == "run"
-    assert rate_stage(FieldRef(("a",)), params_are_static=True) == "run"
-    assert rate_stage(FieldRef(("a",)), params_are_static=False) == "step"
-    assert rate_stage(Time(), params_are_static=True) == "step"
-    assert rate_stage(FlowRef("f"), params_are_static=True) == "step"
-    assert rate_stage(Reduce(group_by="age"), params_are_static=True) == "step"
-    assert rate_stage(Capture("c", Const(1.0)), params_are_static=True) == "step"
+    assert rate_stage(Const(1.0)) == "run"
+    assert rate_stage(ArrayConst(np.array([1.0]))) == "run"
+    assert rate_stage(FieldRef(("a",))) == "run"
+    assert rate_stage(Time()) == "step"
+    assert rate_stage(FlowRef("f")) == "step"
+    assert rate_stage(Reduce(group_by="age")) == "step"
+    assert rate_stage(Capture("c", Const(1.0))) == "step"
 
     run_binop = BinOp("mul", Const(2.0), FieldRef(("a",)))
-    assert rate_stage(run_binop, params_are_static=True) == "run"
-    assert rate_stage(run_binop, params_are_static=False) == "step"
+    assert rate_stage(run_binop) == "run"
     step_binop = BinOp("add", Const(1.0), Time())
-    assert rate_stage(step_binop, params_are_static=True) == "step"
+    assert rate_stage(step_binop) == "step"
 
     interp_run = Interp(
         "linear",
@@ -67,32 +68,25 @@ def test_rate_stage_classification_table() -> None:
         (FieldRef(("y0",)), FieldRef(("y1",))),
         Const(0.5),
     )
-    assert rate_stage(interp_run, params_are_static=True) == "run"
+    assert rate_stage(interp_run) == "run"
     interp_step = linear(Time(), (0.0, 1.0), (0.0, 1.0))
-    assert rate_stage(interp_step, params_are_static=True) == "step"
+    assert rate_stage(interp_step) == "step"
 
     pulse = GaussianPulse(Time(), Const(1.0), Const(1.0), FieldRef(("h",)))
-    assert rate_stage(pulse, params_are_static=True) == "step"
+    assert rate_stage(pulse) == "step"
     pulse_run = GaussianPulse(Const(0.0), FieldRef(("c",)), Const(1.0), Const(1.0))
-    assert rate_stage(pulse_run, params_are_static=True) == "run"
+    assert rate_stage(pulse_run) == "run"
 
     class _Custom(RateOps):
         pass
 
-    assert rate_stage(_Custom(), params_are_static=True) == "step"
+    assert rate_stage(_Custom()) == "step"
 
     class _Staged(RateOps):
         def __rate_stage__(self) -> str:
             return "run"
 
-    assert rate_stage(_Staged(), params_are_static=True) == "run"
-
-    class _Flagged(RateOps):
-        def __rate_stage__(self, *, params_are_static: bool) -> str:
-            return "run" if params_are_static else "step"
-
-    assert rate_stage(_Flagged(), params_are_static=True) == "run"
-    assert rate_stage(_Flagged(), params_are_static=False) == "step"
+    assert rate_stage(_Staged()) == "run"
 
 
 def _equiv_model() -> tuple[FlowModel, PropertyMap, PropertyData, Any]:
@@ -105,7 +99,7 @@ def _equiv_model() -> tuple[FlowModel, PropertyMap, PropertyData, Any]:
         y1: float
         centre: float
 
-    refs = derived_refs(P)
+    refs = field_refs(Params(), P)
     state = Property("state", ("Y",))
     pmap = PropertyMap.from_property(state)
     model = FlowModel(pmap)
@@ -169,7 +163,7 @@ def test_knot_count_does_not_grow_loop_body() -> None:
 
     def make(k: int, *, hoist: bool) -> tuple[Any, Any]:
         KnotsNT = NamedTuple("KnotsNT", [(f"v{i}", float) for i in range(k)])  # noqa: N806
-        refs = derived_refs(KnotsNT)
+        refs = field_refs(Params(), KnotsNT)
         bps = tuple(float(i) for i in range(k))
         vals = tuple(getattr(refs, f"v{i}") for i in range(k))
         expr = linear(Time(), bps, vals)
@@ -254,6 +248,23 @@ def test_hoist_digest_differs() -> None:
 
 def test_build_hoist_table_slots_binop() -> None:
     expr = Param("a") * Param("b") + 1.0
-    table = build_hoist_table([expr], params_are_static=True)
+    table = build_hoist_table([expr])
     assert len(table.entries) == 1
     assert table.entries[0].part == "value"
+
+
+def test_parameter_product_beside_a_deferred_field_ref_is_slotted() -> None:
+    """A pure-parameter subtree hoists even when a ``defer`` reads the state and time."""
+
+    class _D(NamedTuple):
+        x: float
+
+    def f(params: object, *, y: object, t: object) -> _D:
+        return _D(x=1.0)
+
+    D = field_refs(defer(f)(Params(), y=StateArray(), t=Time()), _D)  # noqa: N806
+    product = Param("a") * Param("b")
+    expr = D.x * product
+    assert rate_stage(expr) == "step"
+    table = build_hoist_table([expr])
+    assert any(entry.node == product for entry in table.entries)

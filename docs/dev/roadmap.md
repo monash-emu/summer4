@@ -305,8 +305,8 @@ core on import, and parallel MCMC chains when the devices allow.
 | 37 | M | CP6 | `feat/post-stage-nodes` | `plans/unified-lazy-idiom.plan.md` | Step 37 | planned | — |
 | 38 | M | CP6 | `feat/outputset-on-rate-nodes` | `plans/unified-lazy-idiom.plan.md` | Step 38 | planned | CX30 |
 | 39 | M | CP6 | `feat/shared-nodes-and-fields` | `plans/unified-lazy-idiom.plan.md` | Step 39 | planned | — |
-| 40 | M | CP6 | `feat/save-expressions` | `plans/unified-lazy-idiom.plan.md` | Step 40 | planned | CX32 |
-| 41 | M | CP6 | `feat/derived-fn-deprecation` | `plans/unified-lazy-idiom.plan.md` | Step 41 | planned | CX31 |
+| 40 | M | CP6 | `feat/save-expressions` | `plans/save-expressions.plan.md` | Part C | done | CX32 |
+| 41 | M | CP6 | `feat/save-expressions` | `plans/save-expressions.plan.md` | Parts A, B | done | CX31 |
 | 42 | M | CP6 | `feat/callable-doors` | `plans/unified-lazy-idiom.plan.md` | Step 42 | planned | CX33 CX11 |
 | 43 | M | CP6 | `feat/typed-stages` | `plans/unified-lazy-idiom.plan.md` | Step 43 | planned | CX34 |
 | 44 | M | CP6 | `docs/unified-lazy-idiom` | `plans/unified-lazy-idiom.plan.md` | Step 44 | planned | — |
@@ -347,6 +347,7 @@ changed about them is recorded here instead, and overrides them.
 | `unified-lazy-idiom` | Steps 40, 41, 42, 45 | **Delete outright, no deprecation cycle** (user, 2026-10-30). Step 40 deletes `SaveFn` and `ComputedValue`; step 41 deletes `compile(derived_fn=...)`, `derived_refs`, rule R3 and the `params_are_static` keyword with its test call sites (the "hoist table unchanged for `derived_fn` models" test goes); step 42 deletes the bare-callable FOI `kind`. Each step migrates every caller and keeps equivalence tests only as replacement-only tests with hand values. Step 45 is absorbed and marked `done`. Notebook 27's "before" sections become text-only; its comparison plots use values saved from the old idiom before removal, or hand-computed references |
 | `unified-lazy-idiom` | Steps 36–44 | Step 48 rebuilt the published docs (`docs/guide/`, `docs/textbook/`, `docs/roadmap.md`). Each Phase M step that lands a replacement adds the new idiom to the matching guide page and deletes that door's row from `docs/roadmap.md` § *Still here, on the way out*. Step 44 only converts what Phase M added; `tests/test_docs_idiom.py` must keep passing |
 | `unified-lazy-idiom` | Step 42 | If step 48 (C2) removed the InitialPopulation callables, step 42's initial-population half is already done; see step 48's handoff |
+| `unified-lazy-idiom` | Steps 36–41 | **Steps 40 and 41 landed first, standalone** (user, 2026-11-19), on `feat/save-expressions` with `plans/save-expressions.plan.md`, on today's `OutputExpr`. They also landed the part of step 39 that step 41 needs: the per-call memo, `Item`, `field_refs`, `Params()` and `StateArray()` (step 39's sin-count and equivalence tests are in `tests/test_shared_nodes.py`; notebook 27 does not exist, the user gate is `40-save-expressions.ipynb`). Step 36 drops `params_are_static` from its scope (already gone). Step 38 must port `SavedExpr` lifting (`_coerce` of a step-stage rate expression) onto `Saved(SavedExpr(...))` and keep `tests/test_save_expressions.py` and `tests/test_output_requests.py` green unchanged. Step 39 is left with only what 41 did not need |
 | `wp9-contact-surveys`, `wp17-foi-susceptibility` | Steps 16–19 | Step 48 replaced the docs tree. Open PRs #46, #47, #50 and #52 must rebase onto it: textbook pages go under `docs/textbook/`, user-guide material under `docs/guide/`, and nothing may use an idiom `tests/test_docs_idiom.py` forbids |
 
 ---
@@ -2983,6 +2984,8 @@ Set step 39 `done`, step 40 `next`.
 
 ## Step 40 — `feat/save-expressions`
 
+**Landed:** feat/save-expressions, 2026-11-19 (PR pending); standalone, see the corrections table (*Steps 36–41*).
+
 ### Summary
 
 `outputs["foi"] = <step-stage expression>` is saved during the solve, through a
@@ -3047,9 +3050,17 @@ The [standard checks](#exit-checks-every-step), plus `pixi run composability`.
 
 Set step 40 `done`, step 41 `next`.
 
+**Done (2026-11-19), standalone with step 41 on `feat/save-expressions`.** See the corrections
+table (*Steps 36–41*) and `plans/save-expressions.plan.md` Part C: `SavedExpr(expr, over=)`,
+`SaveContext.evaluate` sharing the vector field's memo, `over` inferred in `expand`, lifting in
+`OutputSet._coerce` and `outputs[name] = expr`. `SaveFn` and `ComputedValue` are deleted. User
+gate: `examples/notebooks/40-save-expressions.ipynb` sections A–C.
+
 ---
 
 ## Step 41 — `feat/derived-fn-deprecation`
+
+**Landed:** feat/save-expressions, 2026-11-19 (PR pending); standalone, see the corrections table (*Steps 36–41*).
 
 ### Summary
 
@@ -3115,6 +3126,14 @@ The [standard checks](#exit-checks-every-step), plus `pixi run composability`.
 ### Handoff
 
 Set step 41 `done`, step 42 `next`.
+
+**Done (2026-11-19), standalone with step 40 on `feat/save-expressions`.** Plan Parts A and B:
+the per-call memo, `Params()`, `StateArray()`, `Item`, `field_refs`; `compile(derived_fn=)`,
+`derived_refs`, `computed_paths`, rule R3 and `params_are_static` are deleted and every caller
+migrated (`derived_refs(S)` for typed parameters is `field_refs(Params(), S)`, the same
+`FieldRef`s). The `EVERYTHING` plan no longer saves parameter paths. User gate:
+`examples/notebooks/40-save-expressions.ipynb` sections D–E. `futureplans/derived-fn-blocks-hoisting.md`
+is marked done.
 
 ---
 
@@ -3896,6 +3915,9 @@ Set step 51 `done`; step 28 `next` stays current.
   same equations per stratum as a hand loop, plus one grouped sum per grouping; its gain is that
   each stratum reads the small grouped array rather than the full save. The plan, test and
   notebook (section E) say so.
+- **Corrected on `feat/save-expressions`:** the plan's `out.cumulative(..., method=)` request
+  shipped as two requests, `cumulative_integral(name, source, start=)` and `cumsum(...)`,
+  mirroring `Output`: the docs ban `.cumulative(` since the old `Output.cumulative()` split.
 - **Not done here:** saving a computed value waits for step 40 (`CX32`), after which
   `out.set(name, expr)` does it with no new request;
   porting the Kiribati model's `outputs.py` to requests is downstream work in that repository.

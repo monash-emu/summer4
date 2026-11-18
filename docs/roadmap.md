@@ -27,8 +27,6 @@ has a newer replacement, which is being built in the steps shown.
 
 | Older way | What it is for | Replaced in | Newer way (will be) |
 | --- | --- | --- | --- |
-| `compile(derived_fn=...)` and `derived_refs` | A quantity that depends on the state of the model, and is shared between flows | Step 39, removed in step 41 | Fields written with `field_refs` and `defer`, which will read the state directly |
-| `SaveFn` and `ComputedValue` | Saving a value worked out at each step of a run | Step 40 | Assigning any expression to an entry in an output set, which will be saved like any other output |
 | `ForceOfInfection(kind=...)` with a plain Python function | A custom force of infection | Step 42 | `custom_kind(fn, Param(...))`, which will pass your parameters to the function |
 
 When a step replaces one of these, it removes the old way at the same time, and this table
@@ -36,7 +34,7 @@ loses that row.
 
 ## Coming next
 
-- **Phase M (steps 36 to 44)** will give rates and outputs one expression type, so any quantity can be combined and saved in the same way. It will also let you save any expression as an output, and check the stages of a run when the model is built, so that mistakes are caught before the model runs.
+- **Phase M (steps 36 to 44)** will give rates and outputs one expression type, so any quantity can be combined and saved in the same way. Steps 40 and 41 have already landed: any expression can be saved as an output, and `field_refs` with `defer` replaces `derived_fn`. It will also check the stages of a run when the model is built, so that mistakes are caught before the model runs.
 - **Step 28** will draw plots of calibrated outputs: many fitted runs as overlaid lines, and quantile ribbons with the observed targets on top.
 - **Track G (steps 16 to 19)** will add susceptibility to the force of infection, contact-survey matrices, and textbook chapters 15 to 19.
 

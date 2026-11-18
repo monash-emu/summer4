@@ -60,7 +60,7 @@ original analyses re-run on numpyro.
 | KI9 | Kiribati | Births into one stratum from sigmoidal interpolation × param | `full` | `EntryFlow` with `sigmoidal(...) * Param(...)` | — |
 | KI10 | Kiribati | Per-age time series from UN tables (death rates, treatment outcomes) | `full` | `Data.table(times, values, over=age).interp()` — one `TableInterp`, a `GroupedRate` over age | — |
 | KI11 | Kiribati | Interpolation knots derived with log / max (screening rate, outcome floors) | `full` | `log` / `maximum` on a `TableInterp` or on scalar `Interp` knots | — |
-| KI12 | Kiribati | Computed values (detection rates, matrix distance) | `full` | `ComputedValue` over `derived_fn` | — |
+| KI12 | Kiribati | Computed values (detection rates, matrix distance) | `full` | `outputs[name] = expr` (`SavedExpr`, step 40) | — |
 | KI13 | Kiribati | Outputs summed over several flows and filtered by strata | `full` | `OutputSet` leaf `FlowMass(flow=(...), where=..., group_by=...)`; derived names are not saved | — |
 | KI14 | Kiribati | Output arithmetic: per-capita, percentages, × parameter | `full` | `outputs.ref(a) / outputs.ref(b)` and `outputs.ref(a) * Param(...)` inside an `OutputSet` | — |
 | KI15 | Kiribati | Cumulative output from a start year | `full` | `outputs.ref(name).cumulative_integral(start=)` (a rate) or `.cumsum(start=)` (an amount) in an `OutputSet`; `start` must be a save time | — |

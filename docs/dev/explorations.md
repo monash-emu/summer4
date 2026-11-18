@@ -24,8 +24,8 @@ mapping. Initial-population split remains a separate API.
 **Ageing and migration are pairing overrides, not flow subclasses.**
 `TraitChain` and `TraitMatrix` replace the identity pairing on one property.
 
-**Rate laziness is a small expression tree.** `derived_refs` over a
-`NamedTuple` produce `FieldRef`s; `add_flow` returns a `FlowRef`; topological
+**Rate laziness is a small expression tree.** `field_refs(Params(), Schema)` over a
+`NamedTuple` produces `FieldRef`s; `add_flow` returns a `FlowRef`; topological
 evaluation catches cycles.
 
 **A `lax.scan` Euler step proves the seam.** `compile()` returns a

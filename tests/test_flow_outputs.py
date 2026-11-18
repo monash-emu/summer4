@@ -2,23 +2,22 @@
 
 from __future__ import annotations
 
-from typing import NamedTuple
-
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
 
 from summer4 import (
-    ComputedValue,
     Dest,
     Everything,
     ExitFlow,
     FlowMass,
     FlowModel,
+    Param,
     Property,
     PropertyData,
     PropertyMap,
+    SavedExpr,
     SavePlan,
     SaveRequest,
     Source,
@@ -209,27 +208,13 @@ def test_where_with_sum_over_uses_filtered_mass() -> None:
     np.testing.assert_allclose(np.asarray(post.values.data)[0], data[0])
 
 
-class _BetaDerived(NamedTuple):
-    beta: float
-
-
-def test_computed_value_validates_before_solve() -> None:
+def test_saved_param_expr_is_constant_series() -> None:
     state, age, pmap = _sir_age()
-
-    def derived_fn(params: object, *, y: object, t: object) -> _BetaDerived:
-        del y, t
-        assert isinstance(params, dict)
-        return _BetaDerived(beta=params["beta"])  # traceable: the default solver jits derived_fn
-
     model = FlowModel(pmap)
     model.add_flow(TransitionFlow("infection", state["S"], state["I"], 0.3))
-    cm = model.compile(derived_fn=derived_fn)
+    cm = model.compile()
     y0 = PropertyData.wrap(pmap, np.ones(pmap.size))
-    bad = SavePlan(requests={"x": SaveRequest(ComputedValue(path=("nope",)))})
-    with pytest.raises(ValueError, match="Available paths"):
-        cm.run({"beta": 0.3}, y0, t0=0.0, steps=1, dt=1.0, save=bad)
-
-    good = SavePlan(requests={"beta": SaveRequest(ComputedValue(path=("beta",)))})
+    good = SavePlan(requests={"beta": SaveRequest(SavedExpr(Param("beta")))})
     res = cm.run({"beta": 0.3}, y0, t0=0.0, steps=2, dt=1.0, save=good)
     np.testing.assert_allclose(np.asarray(res["beta"].values), 0.3)
 

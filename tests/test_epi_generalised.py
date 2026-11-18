@@ -492,7 +492,6 @@ def test_lookup_mixing_changes_force_over_time() -> None:
     model = FlowModel(pmap)
     model.add_flow(TransitionFlow("inf", state["S"], state["I"], foi))
     compiled = model.compile()
-    assert ("mixing",) in compiled.computed_paths
     at0 = np.asarray(compiled.observe(0.0, y, {"mixing": stack}).captures["infection"].data)
     at1 = np.asarray(compiled.observe(1.0, y, {"mixing": stack}).captures["infection"].data)
     assert not np.allclose(at0, at1)
@@ -515,7 +514,6 @@ def test_selector_weight_param_is_differentiable() -> None:
         source=state["S"],
         dest=state["sub"],
     )
-    assert ("rel_sub",) in cm.computed_paths  # type: ignore[attr-defined]
     y_j = jnp.asarray(y)
 
     def loss(rel_sub: object) -> object:

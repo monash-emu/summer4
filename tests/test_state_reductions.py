@@ -11,14 +11,18 @@ from summer4 import (
     Compartments,
     EntryFlow,
     FlowModel,
+    Params,
     Property,
     PropertyData,
     PropertyMap,
     Reduce,
     SavePlan,
     SaveRequest,
+    StateArray,
+    Time,
     TransitionFlow,
-    derived_refs,
+    defer,
+    field_refs,
 )
 from summer4.timevarying import linear
 
@@ -65,13 +69,13 @@ def test_reduce_where_matches_keep_sum_over() -> None:
     np.testing.assert_allclose(mass, expected[age_codes])
 
 
-def test_reduce_foi_matches_derived_fn_trajectory() -> None:
-    """Headline gate: Reduce-built SIR FOI matches hand-written derived_fn."""
+def test_reduce_foi_matches_deferred_trajectory() -> None:
+    """Headline gate: Reduce-built SIR FOI matches a hand-written deferred function."""
     pytest.importorskip("jax")
     state = Property("state", ("S", "I", "R"))
     age = Property("age", ("young", "old"))
     pmap = PropertyMap.from_property(state).stratify(age)
-    refs = derived_refs(_BetaParams)
+    refs = field_refs(Params(), _BetaParams)
 
     def build_reduce() -> object:
         m = FlowModel(pmap)
@@ -83,7 +87,7 @@ def test_reduce_foi_matches_derived_fn_trajectory() -> None:
     def build_derived() -> object:
         m = FlowModel(pmap)
 
-        def derived_fn(params: object, *, y: object, t: object) -> _FoiParams:
+        def field_fn(params: object, *, y: object, t: object) -> _FoiParams:
             pd_y = PropertyData(pmap, y)
             i_by = pd_y.where(~state["I"], 0.0).sum_by(age).data
             n_by = pd_y.sum_by(age).data
@@ -91,10 +95,10 @@ def test_reduce_foi_matches_derived_fn_trajectory() -> None:
             foi = beta * i_by / n_by
             return _FoiParams(foi=pd_y.broadcast_over(age, foi))
 
-        foi_refs = derived_refs(_FoiParams)
+        foi_refs = field_refs(defer(field_fn)(Params(), y=StateArray(), t=Time()), _FoiParams)
         m.add_flow(TransitionFlow("infection", state["S"], state["I"], foi_refs.foi))
         m.add_flow(TransitionFlow("recovery", state["I"], state["R"], 0.1))
-        return m.compile(derived_fn=derived_fn)
+        return m.compile()
 
     y0 = np.array([900.0, 800.0, 50.0, 40.0, 50.0, 60.0])
     params = {"beta": 0.4}

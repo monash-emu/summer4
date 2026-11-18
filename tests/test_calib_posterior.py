@@ -40,6 +40,7 @@ from tests.gate_custom_posterior import (
 from summer4 import (
     Compartments,
     FlowModel,
+    Params,
     Property,
     PropertyData,
     PropertyMap,
@@ -48,7 +49,7 @@ from summer4 import (
     Target,
     TargetSet,
     TransitionFlow,
-    derived_refs,
+    field_refs,
 )
 from summer4.epi.calibration import (
     BayesianModel,
@@ -83,7 +84,7 @@ class _Rates(NamedTuple):
 def _sir_bm_three_priors() -> BayesianModel:
     state = Property("state", ("S", "I", "R"))
     pmap = PropertyMap.from_property(state)
-    refs = derived_refs(_Rates)
+    refs = field_refs(Params(), _Rates)
     model = FlowModel(pmap)
     model.add_flow(TransitionFlow("infection", state["S"], state["I"], refs.infection))
     model.add_flow(TransitionFlow("recovery", state["I"], state["R"], refs.recovery))
@@ -129,7 +130,7 @@ def _sir_bm_three_priors() -> BayesianModel:
 def _sir_bm_gamma_truncated() -> BayesianModel:
     state = Property("state", ("S", "I", "R"))
     pmap = PropertyMap.from_property(state)
-    refs = derived_refs(_Rates)
+    refs = field_refs(Params(), _Rates)
     model = FlowModel(pmap)
     model.add_flow(TransitionFlow("infection", state["S"], state["I"], refs.infection))
     model.add_flow(TransitionFlow("recovery", state["I"], state["R"], refs.recovery))

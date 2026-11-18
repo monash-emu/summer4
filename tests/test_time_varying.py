@@ -19,6 +19,7 @@ from summer4 import (
     FlowModel,
     Multiply,
     Param,
+    Params,
     Property,
     PropertyData,
     PropertyMap,
@@ -26,7 +27,7 @@ from summer4 import (
     SaveRequest,
     Time,
     Transform,
-    derived_refs,
+    field_refs,
 )
 from summer4.flows.rates import _rate_bytes
 from summer4.timevarying import gaussian_pulse, linear, sigmoidal, step
@@ -116,7 +117,7 @@ def test_time_jit_cache_hit_across_rebuilds() -> None:
     # Digest equality is the cache key; separately-built Time() must match.
     model_c = FlowModel(pmap)
     model_c.add_flow(ExitFlow("out", state["Y"], Time() * 0.1))
-    # No derived_fn on a/b; rebuild with same structure still hashes equal.
+    # Rebuild with same structure still hashes equal.
     c = model_c.compile()
     assert c._digest == a._digest
     _ = a.run({}, y0, t0=0.0, steps=2, dt=1.0, save=plan)
@@ -194,12 +195,12 @@ def test_gaussian_pulse_peak() -> None:
 
 
 def test_gaussian_pulse_width_param_matches_literal() -> None:
-    """width is as_rate'd: Param / derived_refs match a literal, and scale the shoulders."""
+    """width is as_rate'd: Param / field_refs match a literal, and scale the shoulders."""
 
     class Width(NamedTuple):
         width: float
 
-    refs = derived_refs(Width)
+    refs = field_refs(Params(), Width)
     literal = gaussian_pulse(Time(), centre=10.0, width=2.0, height=5.0)
     via_refs = gaussian_pulse(Time(), centre=10.0, width=refs.width, height=5.0)
     via_param = gaussian_pulse(Time(), centre=10.0, width=Param("width"), height=5.0)
@@ -220,7 +221,7 @@ def test_interp_fieldref_knot_calibrates() -> None:
         lo: float
         hi: float
 
-    refs = derived_refs(Knots)
+    refs = field_refs(Params(), Knots)
     expr = linear(Time(), (0.0, 1.0), (refs.lo, refs.hi))
     state = Property("state", ("Y",))
     pmap = PropertyMap.from_property(state)
@@ -344,7 +345,7 @@ def test_parametric_breakpoint_midpoints() -> None:
         t0: float
         t1: float
 
-    refs = derived_refs(Times)
+    refs = field_refs(Params(), Times)
     expr = linear(Time(), (refs.t0, refs.t1), (0.0, 1.0))
     params = Times(t0=0.0, t1=2.0)
     np.testing.assert_allclose(_rate_at(expr, 0.0, params=params), 0.0)
@@ -356,7 +357,7 @@ def test_interp_fieldref_breakpoint_calibrates() -> None:
     class KnotX(NamedTuple):
         t_mid: float
 
-    refs = derived_refs(KnotX)
+    refs = field_refs(Params(), KnotX)
     expr = linear(Time(), (0.0, refs.t_mid, 2.0), (0.0, 1.0, 0.0))
     state = Property("state", ("Y",))
     pmap = PropertyMap.from_property(state)
@@ -382,7 +383,7 @@ def test_mixed_const_fieldref_breakpoints() -> None:
     class T1(NamedTuple):
         t1: float
 
-    refs = derived_refs(T1)
+    refs = field_refs(Params(), T1)
     expr = linear(Time(), (0.0, refs.t1, 4.0), (1.0, 3.0, 5.0))
     params = T1(t1=2.0)
     np.testing.assert_allclose(_rate_at(expr, 1.0, params=params), 2.0)
@@ -393,7 +394,7 @@ def test_step_with_parametric_breakpoint() -> None:
     class Cut(NamedTuple):
         t_cut: float
 
-    refs = derived_refs(Cut)
+    refs = field_refs(Params(), Cut)
     expr = step(Time(), (refs.t_cut,), (0.0, 1.0))
     params = Cut(t_cut=5.0)
     np.testing.assert_allclose(_rate_at(expr, 4.0, params=params), 0.0)
@@ -417,10 +418,10 @@ def test_parametric_breakpoint_digest_and_equality() -> None:
         )
         return model.compile()
 
-    a_refs = derived_refs(A)
-    b_refs = derived_refs(B)
+    a_refs = field_refs(Params(), A)
+    b_refs = field_refs(Params(), B)
     ca = build(a_refs.t)
-    ca2 = build(derived_refs(A).t)
+    ca2 = build(field_refs(Params(), A).t)
     cb = build(b_refs.u)
     assert ca._digest == ca2._digest
     assert ca._digest != cb._digest
@@ -445,7 +446,7 @@ def test_fieldref_breakpoints_skip_host_order_check() -> None:
         t0: float
         t1: float
 
-    refs = derived_refs(T)
+    refs = field_refs(Params(), T)
     # Construct succeeds even though we cannot know order yet.
     expr = linear(Time(), (refs.t0, refs.t1), (0.0, 1.0))
     assert len(expr.breakpoints) == 2
@@ -458,7 +459,7 @@ def test_jit_vector_field_matches_eager_parametric_xy() -> None:
         t_mid: float
         height: float
 
-    refs = derived_refs(Knots)
+    refs = field_refs(Params(), Knots)
     expr = linear(Time(), (0.0, refs.t_mid, 10.0), (0.0, refs.height, 0.0))
     state = Property("state", ("Y",))
     pmap = PropertyMap.from_property(state)
@@ -481,7 +482,7 @@ def test_jit_value_and_grad_through_parametric_xy() -> None:
         t_mid: float
         height: float
 
-    refs = derived_refs(Knots)
+    refs = field_refs(Params(), Knots)
     expr = linear(Time(), (0.0, refs.t_mid, 4.0), (0.0, refs.height, 0.0))
     state = Property("state", ("Y",))
     pmap = PropertyMap.from_property(state)
@@ -527,7 +528,7 @@ def test_jit_sigmoidal_and_gaussian_pulse_parametric() -> None:
         t1: float
         hi: float
 
-    refs = derived_refs(SigKnots)
+    refs = field_refs(Params(), SigKnots)
     sig = sigmoidal(Time(), (0.0, refs.t1), (0.0, refs.hi), sharpness=1.0)
     state = Property("state", ("Y",))
     pmap = PropertyMap.from_property(state)
@@ -544,7 +545,7 @@ def test_jit_sigmoidal_and_gaussian_pulse_parametric() -> None:
         centre: float
         height: float
 
-    prefs = derived_refs(Pulse)
+    prefs = field_refs(Params(), Pulse)
     pulse = gaussian_pulse(Time(), centre=prefs.centre, width=1.0, height=prefs.height)
     pm = FlowModel(pmap)
     pm.add_flow(EntryFlow("in", state["Y"], pulse))
@@ -571,7 +572,7 @@ def test_jit_run_parametric_interp_tsit5() -> None:
         t_mid: float
         height: float
 
-    refs = derived_refs(Knots)
+    refs = field_refs(Params(), Knots)
     expr = linear(Time(), (0.0, refs.t_mid, 10.0), (0.0, refs.height, 0.0))
     state = Property("state", ("Y",))
     pmap = PropertyMap.from_property(state)

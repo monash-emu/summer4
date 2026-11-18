@@ -7,15 +7,13 @@ from typing import Any
 import numpy as np
 
 from summer4.flows.edges import EdgeMap, rewrite_edge_selector, sum_by_edge
-from summer4.flows.rates import _lookup_path
 from summer4.jax.propertydata import PropertyData
 from summer4.propertymap import PropertyMap
 from summer4.results.plan import (
     Compartments,
-    ComputedValue,
     FlowMass,
     GroupedOutput,
-    SaveFn,
+    SavedExpr,
     SavePlan,
     flow_names,
 )
@@ -96,8 +94,39 @@ def _sum_named_flows(
     return acc
 
 
+def _eval_saved_expr(what: SavedExpr, ctx: Any) -> Any:
+    """A saved expression's value at this save: a scalar, or one value per trait of ``over``."""
+    import jax.numpy as jnp
+
+    from summer4.flows.compiled import GroupedRate
+
+    if ctx.evaluate is None:
+        raise ValueError("This SaveContext cannot evaluate expressions; build it with observe().")
+    value = ctx.evaluate(what.expr)
+    if isinstance(value, GroupedRate):
+        if not value.properties:
+            return value.data  # a whole-population grouped rate is one value
+        props = tuple(value.properties)
+        if what.over is None or props != (what.over,):
+            want = "none" if what.over is None else what.over.name
+            raise TypeError(
+                f"A saved expression evaluated to values grouped by "
+                f"{[p.name for p in props]}, but its over= is {want}. Pass "
+                f"SavedExpr(expr, over={props[0].name}) (or check the expression)."
+            )
+        return PropertyData(PropertyMap.from_property(what.over), value.data)
+    if isinstance(value, PropertyData) or jnp.ndim(value) != 0:
+        shape = tuple(jnp.shape(value.data if isinstance(value, PropertyData) else value))
+        raise TypeError(
+            f"A saved expression must give one value, or one per trait of a property; this "
+            f"one has shape {shape}. Save per-compartment or per-edge values with "
+            "Compartments or FlowMass."
+        )
+    return value
+
+
 def eval_quantity(
-    what: Compartments | FlowMass | ComputedValue | SaveFn | GroupedOutput,
+    what: Compartments | FlowMass | SavedExpr | GroupedOutput,
     ctx: Any,
     *,
     pmap: PropertyMap,
@@ -123,8 +152,8 @@ def eval_quantity(
             return pd.sum_by(group_by) if group_by is not None else pd
         case FlowMass(flow=flow, where=where, group_by=group_by):
             return _sum_named_flows(flow_names(flow), ctx, edge_maps, where, group_by)
-        case ComputedValue(path=path):
-            return _lookup_path(ctx.derived, path)
+        case SavedExpr():
+            return _eval_saved_expr(what, ctx)
         case GroupedOutput(name=name):
             if name not in ctx.captures:
                 known = ", ".join(sorted(ctx.captures)) or "(none)"
@@ -135,8 +164,6 @@ def eval_quantity(
                 return captured.data
             prop = captured.properties[0]
             return PropertyData(PropertyMap.from_property(prop), captured.data)
-        case SaveFn(fn=fn):
-            return fn(ctx)
         case _:
             raise TypeError(f"Unknown quantity {type(what).__name__}.")
 
@@ -175,6 +202,10 @@ def values_for(req: Any, raw: Any, model: Any) -> Any:
             if not props:
                 return raw
             return PropertyData(PropertyMap.from_property(props[0]), raw)
+        case SavedExpr(over=over):
+            if over is None:
+                return raw
+            return PropertyData(PropertyMap.from_property(over), raw)
         case _:
             return raw
 
@@ -197,7 +228,7 @@ def build_save_fn(
 
 
 def dims_for_quantity(
-    what: Compartments | FlowMass | ComputedValue | SaveFn | GroupedOutput,
+    what: Compartments | FlowMass | SavedExpr | GroupedOutput,
 ) -> tuple[str, ...]:
     match what:
         case Compartments(group_by=group_by):
@@ -212,7 +243,7 @@ def dims_for_quantity(
             # Property name filled in by callers that know capture_meta; default
             # keeps a stable second axis label when meta is unavailable.
             return ("time", name)
-        case ComputedValue() | SaveFn():
-            return ("time",)
+        case SavedExpr(over=over):
+            return ("time",) if over is None else ("time", over.name)
         case _:
             return ("time",)

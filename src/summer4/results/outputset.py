@@ -21,23 +21,23 @@ from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, ClassVar, Literal
 
+from summer4.flows.rates import RateOps
 from summer4.jax.propertydata import PropertyData
 from summer4.properties import Property, Trait
 from summer4.results.output import Output
 from summer4.results.plan import (
     Compartments,
-    ComputedValue,
     FlowMass,
     GroupedOutput,
     Quantity,
-    SaveFn,
+    SavedExpr,
     SavePlan,
     SaveRequest,
 )
 from summer4.results.result import Result
 from summer4.selectors import Dest, Selector, Source
 
-_LEAF_TYPES = (Compartments, FlowMass, ComputedValue, SaveFn, GroupedOutput)
+_LEAF_TYPES = (Compartments, FlowMass, SavedExpr, GroupedOutput)
 _CALLS = frozenset(
     {
         "select",
@@ -240,9 +240,13 @@ def _coerce(value: object) -> OutputExpr:
         return value
     if isinstance(value, _LEAF_TYPES):
         return OutputExpr.leaf(value)
-    from summer4.flows.rates import RateOps
-
     if isinstance(value, RateOps):
+        from summer4.flows.stages import rate_stage
+
+        # A parameter-only expression is applied after the solve. One that reads
+        # time, state or flows has no value there, so it is saved during the solve.
+        if rate_stage(value) == "step":
+            return OutputExpr.leaf(SavedExpr(value))
         return OutputExpr(kind="param", param=value)
     if _is_numeric(value):
         return OutputExpr(kind="const", value=value)
@@ -398,10 +402,12 @@ class OutputSet:
         self.flow_values: FlowValues = flow_values
         self.naming: Naming = naming
 
-    def __setitem__(self, name: str, value: Quantity | OutputExpr) -> None:
+    def __setitem__(self, name: str, value: Quantity | OutputExpr | RateOps) -> None:
         self.set(name, value)
 
-    def set(self, name: str, value: Quantity | OutputExpr, *, keep: bool = True) -> OutputExpr:
+    def set(
+        self, name: str, value: Quantity | OutputExpr | RateOps, *, keep: bool = True
+    ) -> OutputExpr:
         """Assign ``name`` and return its expression; ``outputs[name] = value`` is ``keep=True``.
 
         ``keep=False`` makes ``name`` an intermediate (summer2's
@@ -416,10 +422,18 @@ class OutputSet:
             expr = value
         elif isinstance(value, _LEAF_TYPES):
             expr = OutputExpr.leaf(value)
+        elif isinstance(value, RateOps):
+            expr = _coerce(value)
+            if expr.kind == "param":
+                raise ValueError(
+                    f"Output {name!r} is a constant (it reads only parameters), not a time "
+                    "series. Multiply a saved quantity by it, or save an expression that "
+                    "reads time, state or flows."
+                )
         else:
             raise TypeError(
-                f"Output {name!r} must be a save spec or an expression built from "
-                f"outputs.ref(...). Got {type(value).__name__}."
+                f"Output {name!r} must be a save spec, a rate expression, or an expression "
+                f"built from outputs.ref(...). Got {type(value).__name__}."
             )
         if name not in self._exprs:
             self._order.append(name)
@@ -569,34 +583,31 @@ class OutputSet:
             expr = expr + self.ref(other)
         return self.set(name, expr, keep=keep)
 
-    def cumulative(
-        self,
-        name: str,
-        source: str,
-        *,
-        start: Any = None,
-        method: Literal["integral", "sum"] = "integral",
-        keep: bool = True,
+    def cumulative_integral(
+        self, name: str, source: str, *, start: Any = None, keep: bool = True
     ) -> OutputExpr:
-        """Running total of the output ``source`` from ``start`` (a save time).
+        """Running integral of the rate ``source`` from ``start`` (a save time).
 
-        Stands for (summer2 ``request_cumulative_output``)::
+        Stands for (summer2 ``request_cumulative_output`` on a rate)::
 
-            outputs.set(name, outputs.ref(source).cumulative_integral(start=start))  # "integral"
-            outputs.set(name, outputs.ref(source).cumsum(start=start))               # "sum"
+            outputs.set(name, outputs.ref(source).cumulative_integral(start=start), keep=keep)
 
-        Use ``"integral"`` for a rate (a ``"rate"`` flow output) and ``"sum"``
-        for amounts per interval, such as summer2-style ``"midpoint"`` flow
-        values.
+        Use it on a rate, such as a ``"rate"`` flow output. For amounts per
+        interval (summer2-style ``"midpoint"`` flow values), use :meth:`cumsum`.
         """
-        ref = self.ref(source)
-        if method == "integral":
-            expr = ref.cumulative_integral(start=start)
-        elif method == "sum":
-            expr = ref.cumsum(start=start)
-        else:
-            raise ValueError(f"method must be 'integral' or 'sum', got {method!r}.")
-        return self.set(name, expr, keep=keep)
+        return self.set(name, self.ref(source).cumulative_integral(start=start), keep=keep)
+
+    def cumsum(self, name: str, source: str, *, start: Any = None, keep: bool = True) -> OutputExpr:
+        """Running sum of the amounts ``source`` from ``start`` (a save time).
+
+        Stands for (summer2 ``request_cumulative_output`` on amounts)::
+
+            outputs.set(name, outputs.ref(source).cumsum(start=start), keep=keep)
+
+        Use it on amounts per interval, such as summer2-style ``"midpoint"``
+        flow values; on a rate, use :meth:`cumulative_integral`.
+        """
+        return self.set(name, self.ref(source).cumsum(start=start), keep=keep)
 
     def function(
         self,

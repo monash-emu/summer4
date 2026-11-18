@@ -12,13 +12,17 @@ from summer4 import (
     FlowModel,
     GroupedRate,
     Param,
+    Params,
     Property,
     PropertyData,
     PropertyMap,
     SavePlan,
     SaveRequest,
+    StateArray,
+    Time,
     TransitionFlow,
-    derived_refs,
+    defer,
+    field_refs,
 )
 from summer4.epi import FOIKind, ForceOfInfection, MixingMatrix
 from summer4.results.plan import GroupedOutput
@@ -43,7 +47,7 @@ def _sir_age() -> tuple[Property, Property, PropertyMap]:
 def test_frequency_vs_density_differ_by_denominator() -> None:
     pytest.importorskip("jax")
     state, age, pmap = _sir_age()
-    refs = derived_refs(_ContactParams)
+    refs = field_refs(Params(), _ContactParams)
 
     def build(kind: FOIKind) -> object:
         m = FlowModel(pmap)
@@ -71,7 +75,7 @@ def test_frequency_vs_density_differ_by_denominator() -> None:
 def test_custom_kind_reimplements_frequency() -> None:
     pytest.importorskip("jax")
     state, age, pmap = _sir_age()
-    refs = derived_refs(_ContactParams)
+    refs = field_refs(Params(), _ContactParams)
 
     def as_freq(infectious: GroupedRate, denominator: GroupedRate) -> GroupedRate:
         return infectious / denominator
@@ -100,7 +104,7 @@ def test_homogeneous_lambda_identical_across_ages() -> None:
     """Identifiability gate: homogeneous mixing → max |λ_a - λ_b| == 0."""
     pytest.importorskip("jax")
     state, age, pmap = _sir_age()
-    refs = derived_refs(_ContactParams)
+    refs = field_refs(Params(), _ContactParams)
     m = FlowModel(pmap)
     K = np.ones((2, 2)) / 2.0
     foi = ForceOfInfection(
@@ -136,7 +140,7 @@ def test_homogeneous_lambda_identical_across_ages() -> None:
 def test_assortative_lambda_differs_across_ages() -> None:
     pytest.importorskip("jax")
     state, age, pmap = _sir_age()
-    refs = derived_refs(_ContactParams)
+    refs = field_refs(Params(), _ContactParams)
     m = FlowModel(pmap)
     K = np.array([[0.9, 0.1], [0.1, 0.9]])
     foi = ForceOfInfection(
@@ -224,10 +228,10 @@ def test_reciprocal_check_under_vmap() -> None:
     jax.vmap(_one)(Ks)
 
 
-def test_foi_matches_hand_derived_fn() -> None:
+def test_foi_matches_hand_deferred_fn() -> None:
     pytest.importorskip("jax")
     state, age, pmap = _sir_age()
-    refs = derived_refs(_ContactParams)
+    refs = field_refs(Params(), _ContactParams)
     K = np.array([[0.7, 0.3], [0.3, 0.7]])
 
     m1 = FlowModel(pmap)
@@ -246,7 +250,7 @@ def test_foi_matches_hand_derived_fn() -> None:
     class _Foi(NamedTuple):
         foi: object
 
-    def derived_fn(params: object, *, y: object, t: object) -> _Foi:
+    def foi_fn(params: object, *, y: object, t: object) -> _Foi:
         pd_y = PropertyData(pmap, y)
         i_by = pd_y.keep(state["I"], 0.0).sum_by(age).data
         n_by = pd_y.sum_by(age).data
@@ -256,10 +260,10 @@ def test_foi_matches_hand_derived_fn() -> None:
         return _Foi(foi=pd_y.broadcast_over(age, foi_v))
 
     m2 = FlowModel(pmap)
-    fr = derived_refs(_Foi)
+    fr = field_refs(defer(foi_fn)(Params(), y=StateArray(), t=Time()), _Foi)
     m2.add_flow(TransitionFlow("inf", state["S"], state["I"], fr.foi))
     m2.add_flow(TransitionFlow("rec", state["I"], state["R"], 0.1))
-    cm2 = m2.compile(derived_fn=derived_fn)
+    cm2 = m2.compile()
 
     y0 = np.array([900.0, 800.0, 50.0, 40.0, 50.0, 60.0])
     params = {"contact_rate": 0.35}
@@ -280,7 +284,7 @@ def test_grad_contact_rate_finite() -> None:
     jax = pytest.importorskip("jax")
     jnp = pytest.importorskip("jax.numpy")
     state, age, pmap = _sir_age()
-    refs = derived_refs(_ContactParams)
+    refs = field_refs(Params(), _ContactParams)
     m = FlowModel(pmap)
     foi = ForceOfInfection(
         "infection",
@@ -311,7 +315,7 @@ def test_infectiousness_normalize_population() -> None:
     """6.4: constant rescale of weights is a no-op under normalize='population'."""
     pytest.importorskip("jax")
     state, age, pmap = _sir_age()
-    refs = derived_refs(_ContactParams)
+    refs = field_refs(Params(), _ContactParams)
 
     def build(weights: dict[str, float], normalize: str | None) -> object:
         m = FlowModel(pmap)
@@ -393,11 +397,11 @@ def _compile_weighted_foi(
 
 
 def test_infectiousness_param_matches_literal() -> None:
-    """Param / derived_refs / string-key weights match the same literal floats."""
+    """Param / field_refs / string-key weights match the same literal floats."""
     pytest.importorskip("jax")
     state, age, pmap = _sir_age()
     y = np.array([900.0, 800.0, 50.0, 40.0, 0.0, 0.0])
-    refs = derived_refs(_InfectiousParams)
+    refs = field_refs(Params(), _InfectiousParams)
     literal = _compile_weighted_foi(state, age, pmap, {"young": 0.7, "old": 1.4})
     via_param = _compile_weighted_foi(
         state, age, pmap, {"young": Param("nu_young"), "old": Param("nu_old")}

@@ -47,7 +47,7 @@ question you cannot answer about an opaque callable.
 | `build_hoist_table` | `flows/stages.py` | which subtrees can move from per-step to run-start? | sub-node hoisting (an `Interp` knot stack) needs the node's internal structure |
 | `_rate_bytes` | `flows/rates.py` | are two models structurally identical? | callables have no value identity, only `id()` |
 | `_flow_refs` | `flows/rates.py` | which flows must be evaluated first? | `topo_sort` needs the edge before the call runs |
-| `_field_paths` | `flows/rates.py` | which parameter paths does the model read? | needed to validate `derived_fn` output |
+| `_field_paths` | `flows/rates.py` | which parameter paths does the model read? | which paths a `Params()`-rooted schema reads |
 | `_collect_capture_meta` | `flows/compiled.py` | which named grouped quantities are saveable? | `GroupedOutput` needs the properties before the solve |
 
 Three of those are load-bearing in a way worth spelling out.
@@ -212,7 +212,7 @@ caches internally. A bare `cm.run(...)` in a script pays no summer4-level
 cache miss at all.
 
 **Naming a callable removes the rebuild cost.** Every callable hook accepts
-`named(fn, "key")`: `Transform`, `SaveFn`, `derived_fn`, `prepare_fn`, the
+`named(fn, "key")`: `Transform`, `prepare_fn`, the
 callable base value of an `InitialPopulation`, and a `ForceOfInfection` `kind`.
 The wrapper forwards every call to `fn` unchanged, and its digest keys on
 `"key"` instead of `id(fn)`, so a model rebuilt with a fresh closure hits the
@@ -222,11 +222,12 @@ gives a wrong answer, silently, so give one name only to functions that compute
 the same program for every captured value. Leave the bare function when you
 cannot make that promise.
 
-### 2. `derived_fn` — arbitrary code, once per step, named outputs
+### 2. `field_refs(defer(f)(...))` — arbitrary code, once per call, named outputs
 
-`compile(derived_fn=...)` runs `derived_fn(params, y=, t=)` before the rates
-and exposes its result to every `FieldRef`. Annotate the return as a
-`NamedTuple` and `derived_refs(Schema)` hands back a typed accessor:
+To compute several named values from the parameters, `y` and `t` in one
+function, wrap it with `defer` and read the result through `field_refs`.
+Annotate the return as a `NamedTuple`; `field_refs(expr, Schema)` hands back a
+typed accessor whose fields are nodes:
 
 ```python
 class D(NamedTuple):
@@ -235,16 +236,21 @@ class D(NamedTuple):
 def derived(params, *, y, t) -> D:
     return D(rec=0.1 * (1.0 + params["amp"] * jnp.sin(t / 10.0) ** 2))
 
-D_ = derived_refs(D)
+D_ = field_refs(defer(derived)(Params(), y=StateArray(), t=Time()), D)
 model.add_flow(TransitionFlow("recovery", state["I"], state["R"], D_.rec))
-cm = model.compile(derived_fn=derived)
+cm = model.compile()
 ```
 
-This is the general-purpose hook, and `ComputedValue` can save its outputs. Two
-costs: it is keyed by `id(derived_fn)` in the digest (same rebuild caveat), and
-per [R3](run-stages.md) it makes **every** `FieldRef` step-stage, disabling
-parameter hoisting model-wide. Put `t`/`y`-independent work in `prepare_fn`
-instead.
+`derived` runs once per vector-field call however many rates read `D_` (a
+per-call memo on the shared node). It is keyed by `id(derived)` in the digest
+(same rebuild caveat; pass `name=` to avoid it). Because it reads `y` and `t`
+its subtree is step stage, but parameter-only subtrees elsewhere in the model
+still hoist. `field_refs(Params(), Schema)` is the same accessor over the raw
+parameters: each field is a `FieldRef` and is always run stage.
+
+To save an expression, assign it: `outputs[name] = expr` in an `OutputSet`, or
+`SavedExpr(expr)` in a raw `SavePlan`. The `derived_fn` argument to `compile`,
+`SaveFn` and `ComputedValue` were removed in step 41.
 
 ### 3. `RateOps` subclass + `register_rate_eval` — for reuse
 
@@ -283,7 +289,7 @@ is a wrong answer. See
 
 `Transform` is not this door. It cannot occupy the rate slot, it is an
 adjustment of a rate that already exists, and its callable takes the previous
-rate as a first argument. `derived_fn` still owns multi-output derived
+rate as a first argument. `field_refs(defer(f)(...), Schema)` owns multi-output derived
 quantities; it is not the way to write one hazard.
 
 ## The operator surface: a fixable mistake
@@ -379,7 +385,7 @@ sharp edge rather than a model to extend.
 ### (b) Proxy-with-intent — already half-built, worth finishing
 
 A typed proxy that records operations while preserving static type information
-is not hypothetical here: `derived_refs(Schema)` is one. It returns something
+is not hypothetical here: `field_refs(Params(), Schema)` is one. It returns something
 `cast` to `Schema`, so mypy and IDE completion see `D.migration.baseline` as its
 declared type, while the runtime value is a `FieldRef(("migration", "baseline"))`
 path. The user writes ordinary attribute access; the framework receives a typed

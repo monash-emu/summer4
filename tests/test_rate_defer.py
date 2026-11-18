@@ -79,10 +79,8 @@ def test_staging_is_the_join_of_the_arguments() -> None:
     def f(*_args: object) -> float:
         return 0.0
 
-    assert rate_stage(defer(f)(Param("x"), Param("y")), params_are_static=True) == "run"
-    assert rate_stage(defer(f)(Time(), Param("amp")), params_are_static=True) == "step"
-    # Parameters are dynamic: a param-only Defer is step-stage, not run.
-    assert rate_stage(defer(f)(Param("x")), params_are_static=False) == "step"
+    assert rate_stage(defer(f)(Param("x"), Param("y"))) == "run"
+    assert rate_stage(defer(f)(Time(), Param("amp"))) == "step"
 
 
 def test_param_only_defer_hoists_and_a_step_defer_hoists_its_argument() -> None:
@@ -90,13 +88,13 @@ def test_param_only_defer_hoists_and_a_step_defer_hoists_its_argument() -> None:
         return 0.0
 
     param_only = defer(f)(Param("x"), Param("y"))
-    table = build_hoist_table([param_only], params_are_static=True)
+    table = build_hoist_table([param_only])
     assert len(table.entries) == 1
     assert table.entries[0].node == param_only
 
     product = Param("a") * Param("b")
     stepped = defer(f)(product, Time())
-    stepped_table = build_hoist_table([stepped], params_are_static=True)
+    stepped_table = build_hoist_table([stepped])
     assert len(stepped_table.entries) == 1
     assert stepped_table.entries[0].node == product
 
@@ -246,7 +244,7 @@ def test_nested_defer_evaluates_and_stages() -> None:
         return jnp.asarray(value) * 2.0
 
     expr = defer(twice)(defer(add_one)(Param("x")))
-    assert rate_stage(expr, params_are_static=True) == "run"
+    assert rate_stage(expr) == "run"
     assert _entry_field(expr, 0.0, {"x": 3.0}) == pytest.approx(8.0)
 
 

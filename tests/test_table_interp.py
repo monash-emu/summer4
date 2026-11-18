@@ -15,12 +15,16 @@ from summer4 import (
     FlowModel,
     FlowRef,
     Param,
+    Params,
     Property,
     PropertyData,
     PropertyMap,
+    StateArray,
     Time,
     TransitionFlow,
+    defer,
     eval_closed,
+    field_refs,
     floor,
     log,
     maximum,
@@ -199,7 +203,7 @@ def _sir_age() -> tuple[Property, Property, PropertyMap]:
     return state, age, PropertyMap.from_property(state).stratify(age)
 
 
-def _foi_model(matrix: Any, *, derived_fn: Any | None = None) -> Any:
+def _foi_model(matrix: Any) -> Any:
     state, age, pmap = _sir_age()
     foi = ForceOfInfection(
         "infection",
@@ -211,10 +215,10 @@ def _foi_model(matrix: Any, *, derived_fn: Any | None = None) -> Any:
     )
     model = FlowModel(pmap)
     model.add_flow(TransitionFlow("inf", state["S"], state["I"], foi))
-    return model.compile(derived_fn=derived_fn)
+    return model.compile()
 
 
-def test_lookup_matches_derived_fn_foi_and_is_differentiable() -> None:
+def test_lookup_matches_deferred_foi_and_is_differentiable() -> None:
     stack = np.stack(
         [
             np.array([[0.8, 0.2], [0.3, 0.7]]),
@@ -231,8 +235,8 @@ def test_lookup_matches_derived_fn_foi_and_is_differentiable() -> None:
         return _YearMatrix(K=jnp.take(table, idx.astype(jnp.int32), axis=0))
 
     lookup_cm = _foi_model(Lookup(Param("stack"), floor(Time() - 1850.0)))
-    derived_cm = _foi_model(Param("K"), derived_fn=derived)
-    assert ("stack",) in lookup_cm.computed_paths
+    refs = field_refs(defer(derived)(Params(), y=StateArray(), t=Time()), _YearMatrix)
+    derived_cm = _foi_model(refs.K)
     for t in (1840.0, 1850.0, 1851.7, 1852.0, 1900.0):
         got = np.asarray(lookup_cm.observe(t, y, {"stack": stack}).captures["infection"].data)
         expect = np.asarray(derived_cm.observe(t, y, {"stack": stack}).captures["infection"].data)

@@ -16,9 +16,12 @@ from summer4 import (
     Multiply,
     Overwrite,
     Param,
+    Params,
     Property,
     PropertyMap,
     Source,
+    StateArray,
+    Time,
     TraitChain,
     TraitMatrix,
     Transform,
@@ -26,8 +29,9 @@ from summer4 import (
     actualize,
     as_adjust,
     as_rate,
-    derived_refs,
+    defer,
     euler,
+    field_refs,
     identity_join,
     selector_properties,
     selector_values,
@@ -307,13 +311,13 @@ class _ContactParams(NamedTuple):
     contact: float
 
 
-def test_derived_refs_exposes_only_schema_fields() -> None:
-    refs = derived_refs(_DeathParams)
+def test_field_refs_exposes_only_schema_fields() -> None:
+    refs = field_refs(Params(), _DeathParams)
     assert refs.death_rate == FieldRef(("death_rate",))
     with pytest.raises(AttributeError):
         _ = refs.foi  # type: ignore[attr-defined]
     with pytest.raises(TypeError, match="NamedTuple"):
-        derived_refs(object)  # type: ignore[arg-type]
+        field_refs(Params(), object)  # type: ignore[arg-type]
 
 
 def test_add_flow_returns_flow_ref() -> None:
@@ -341,7 +345,7 @@ def test_field_ref_and_flow_ref_vector_field() -> None:
     state = Property("state", ("S", "I", "R"))
     pm = PropertyMap.from_property(state)
     model = FlowModel(pm)
-    refs = derived_refs(_DeathParams)
+    refs = field_refs(Params(), _DeathParams)
     death = model.add_flow(ExitFlow("death", Everything(), refs.death_rate))
     model.add_flow(EntryFlow("birth", state["S"], death.sum_by()))
     vf = model.compile().vector_field
@@ -355,7 +359,7 @@ def test_sum_over_location_replacement_births() -> None:
     loc = Property("location", ("north", "south"))
     pm = PropertyMap.from_property(state).stratify(loc)
     model = FlowModel(pm)
-    refs = derived_refs(_DeathParams)
+    refs = field_refs(Params(), _DeathParams)
     death = model.add_flow(ExitFlow("death", Everything(), refs.death_rate))
     model.add_flow(EntryFlow("birth", state["S"], death.sum_by(loc)))
     y = np.array([100.0, 300.0, 10.0, 30.0])  # S-north, S-south, I-north, I-south
@@ -403,7 +407,7 @@ def test_transition_mass_conservation() -> None:
 
 
 def test_as_rate_accepts_scalar_and_ref() -> None:
-    refs = derived_refs(_ContactParams)
+    refs = field_refs(Params(), _ContactParams)
     expr = as_rate(0.25) * refs.contact
     recovered = as_rate(expr)
     assert recovered is expr
@@ -455,8 +459,8 @@ class _Cap(NamedTuple):
     foi_cap: float
 
 
-def test_derived_refs_recurses_into_nested_namedtuple() -> None:
-    refs = derived_refs(_NestedDerived)
+def test_field_refs_recurses_into_nested_namedtuple() -> None:
+    refs = field_refs(Params(), _NestedDerived)
     assert refs.foi == FieldRef(("foi",))
     assert refs.migration.baseline == FieldRef(("migration", "baseline"))
     assert refs.migration.seasonal == FieldRef(("migration", "seasonal"))
@@ -464,8 +468,8 @@ def test_derived_refs_recurses_into_nested_namedtuple() -> None:
         _ = refs.migration.unknown  # type: ignore[attr-defined]
 
 
-def test_derived_refs_non_namedtuple_field_stays_leaf() -> None:
-    refs = derived_refs(_LeafRates)
+def test_field_refs_non_namedtuple_field_stays_leaf() -> None:
+    refs = field_refs(Params(), _LeafRates)
     assert refs.rates == FieldRef(("rates",))
 
 
@@ -474,7 +478,13 @@ def test_matrix_rate_gathers_dest_source_by_time() -> None:
     loc = Property("location", ("north", "south"))
     pm = PropertyMap.from_property(state).stratify(loc)
     mask = np.array([[0.0, 1.0], [1.0, 0.0]])
-    refs = derived_refs(_MigRates)
+
+    def field_fn(params: object, *, y: object, t: object) -> _MigRates:
+        del params, y
+        time = float(np.asarray(t))
+        return _MigRates(mig=np.array([[0.0, time], [2.0 * time, 0.0]]))
+
+    refs = field_refs(defer(field_fn)(Params(), y=StateArray(), t=Time()), _MigRates)
     model = FlowModel(pm)
     model.add_flow(
         TransitionFlow(
@@ -486,13 +496,8 @@ def test_matrix_rate_gathers_dest_source_by_time() -> None:
         )
     )
 
-    def derived_fn(params: object, *, y: object, t: object) -> _MigRates:
-        del params, y
-        time = float(np.asarray(t))
-        return _MigRates(mig=np.array([[0.0, time], [2.0 * time, 0.0]]))
-
     y = np.array([10.0, 100.0, 0.0, 0.0])
-    vf = model.compile(derived_fn=derived_fn).vector_field
+    vf = model.compile().vector_field
     s_north, s_south = pm.select(state["S"])
     dy = np.asarray(vf(1.0, y, {}))
     np.testing.assert_allclose(dy[s_north], 80.0)
@@ -509,7 +514,15 @@ def test_nested_proxy_matrix_matches_combined_field() -> None:
     pm = PropertyMap.from_property(state).stratify(loc)
     mask = np.array([[0.0, 1.0], [1.0, 0.0]])
     baseline = np.array([[0.0, 0.1], [0.2, 0.0]])
-    refs = derived_refs(_NestedDerived)
+
+    def field_fn(params: object, *, y: object, t: object) -> _NestedDerived:
+        del params, y
+        return _NestedDerived(
+            foi=0.0,
+            migration=_MigBundle(baseline=baseline, seasonal=1.0 + float(np.asarray(t))),
+        )
+
+    refs = field_refs(defer(field_fn)(Params(), y=StateArray(), t=Time()), _NestedDerived)
     model = FlowModel(pm)
     model.add_flow(
         TransitionFlow(
@@ -521,15 +534,8 @@ def test_nested_proxy_matrix_matches_combined_field() -> None:
         )
     )
 
-    def derived_fn(params: object, *, y: object, t: object) -> _NestedDerived:
-        del params, y
-        return _NestedDerived(
-            foi=0.0,
-            migration=_MigBundle(baseline=baseline, seasonal=1.0 + float(np.asarray(t))),
-        )
-
     y = np.array([10.0, 40.0, 0.0, 0.0])
-    dy = np.asarray(model.compile(derived_fn=derived_fn).vector_field(1.0, y, {}))
+    dy = np.asarray(model.compile().vector_field(1.0, y, {}))
     s_north, s_south = pm.select(state["S"])
     np.testing.assert_allclose(dy[s_north], -0.4 * 10.0 + 0.2 * 40.0)
     np.testing.assert_allclose(dy[s_south], -0.2 * 40.0 + 0.4 * 10.0)
@@ -544,7 +550,7 @@ def test_as_adjust_defaults_to_multiply() -> None:
 def test_adjust_multiply_default() -> None:
     state = Property("state", ("S", "I"))
     pm = PropertyMap.from_property(state)
-    refs = derived_refs(_Seasonal)
+    refs = field_refs(Params(), _Seasonal)
     model = FlowModel(pm)
     model.add_flow(TransitionFlow("inf", state["S"], state["I"], 0.2, adjust=[refs.seasonal]))
     dy = np.asarray(
@@ -572,10 +578,10 @@ def test_adjust_overwrite_where() -> None:
 
 
 def test_adjust_overwrite_param_matches_literal() -> None:
-    """Overwrite(Param / derived_refs) matches Overwrite(0.05) on the masked ages."""
+    """Overwrite(Param / field_refs) matches Overwrite(0.05) on the masked ages."""
     pytest.importorskip("jax")
     state, age, pm = _sir_age()
-    refs = derived_refs(_Cap)
+    refs = field_refs(Params(), _Cap)
 
     def build(value: object) -> object:
         model = FlowModel(pm)
@@ -604,7 +610,7 @@ def test_adjust_transform_minimum() -> None:
     jnp = pytest.importorskip("jax.numpy")
     state = Property("state", ("S", "I"))
     pm = PropertyMap.from_property(state)
-    refs = derived_refs(_Cap)
+    refs = field_refs(Params(), _Cap)
     model = FlowModel(pm)
     model.add_flow(
         TransitionFlow(
@@ -664,13 +670,14 @@ def test_euler_jax_jit_matches_numpy_and_time_varies() -> None:
     loc = Property("location", ("north", "south"))
     pm = PropertyMap.from_property(state).stratify(loc)
     mask = np.array([[0.0, 1.0], [1.0, 0.0]])
-    refs = derived_refs(_MigRates)
 
-    def derived_fn(params: dict[str, float], *, y: object, t: object) -> _MigRates:
+    def field_fn(params: dict[str, float], *, y: object, t: object) -> _MigRates:
         del y
         seasonal = 1.0 + params["amp"] * jnp.sin(params["omega"] * t)
         baseline = jnp.asarray(np.array([[0.0, 0.1], [0.1, 0.0]]))
         return _MigRates(mig=baseline * seasonal)
+
+    refs = field_refs(defer(field_fn)(Params(), y=StateArray(), t=Time()), _MigRates)
 
     model = FlowModel(pm)
     model.add_flow(
@@ -684,7 +691,7 @@ def test_euler_jax_jit_matches_numpy_and_time_varies() -> None:
     )
     y0 = np.array([80.0, 20.0, 0.0, 0.0])
     params = {"amp": 0.5, "omega": 1.0}
-    vf = model.compile(derived_fn=derived_fn).vector_field
+    vf = model.compile().vector_field
     y_np = np.asarray(numpy_euler(vf, 0.0, y0, params, dt=0.25, steps=8))
     step = jax.jit(lambda y: euler(vf, 0.0, y, params, dt=0.25, steps=8))
     y_j = np.asarray(step(jnp.asarray(y0)))

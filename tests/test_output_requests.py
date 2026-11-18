@@ -153,8 +153,8 @@ def test_aggregate_cumulative_and_function() -> None:
     outputs.flow("inc_old", "infection", source=AGE["old"])
     outputs.aggregate("inc", ["inc_young", "inc_old"])
     outputs.flow("all_inc", "infection")
-    outputs.cumulative("cum", "inc", start=2.0)
-    outputs.cumulative("cum_sum", "inc", method="sum")
+    outputs.cumulative_integral("cum", "inc", start=2.0)
+    outputs.cumsum("cum_sum", "inc")
     outputs.compartments("pop")
 
     def per_capita(x: Any, pop: Any, scale: Any) -> Any:
@@ -195,11 +195,6 @@ def test_requests_return_expressions_that_chain() -> None:
         np.asarray(named["inc_x2"].array()), 2.0 * np.asarray(named["inc"].array())
     )
     assert "weekly" in named
-
-
-def test_cumulative_rejects_unknown_method() -> None:
-    with pytest.raises(ValueError, match="'integral' or 'sum'"):
-        OutputSet().cumulative("c", "x", method="mean")  # type: ignore[arg-type]
 
 
 # --- intermediates -------------------------------------------------------------------------

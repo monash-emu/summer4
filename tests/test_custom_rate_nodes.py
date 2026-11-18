@@ -166,7 +166,6 @@ def test_rate_children_alone_orders_flow_refs_and_finds_params() -> None:
     cm = _halved_model().compile()
 
     assert cm.order.index("vaccination") < cm.order.index("infection")
-    assert set(cm.computed_paths) == {("beta",), ("nu",), ("pop_scale",), ("vax_effect",)}
 
     p = _HALVED_PARAMS
     s, i, r = 900.0, 100.0, 0.0

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import inspect
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal, cast
@@ -19,11 +18,14 @@ from summer4.flows.rates import (
     FlowRef,
     GaussianPulse,
     Interp,
+    Item,
     Lookup,
     Multiply,
     Overwrite,
+    Params,
     RateOps,
     Reduce,
+    StateArray,
     TableInterp,
     Time,
     Transform,
@@ -92,55 +94,31 @@ class HoistTable:
     slot: Mapping[tuple[int, str], int]
 
 
-def rate_stage(expr: RateOps, *, params_are_static: bool) -> Stage:
-    """Classify a rate expression as run-stage or step-stage."""
-    if isinstance(expr, (Const, ArrayConst)):
+def rate_stage(expr: RateOps) -> Stage:
+    """Classify a rate expression as run-stage (parameters only) or step-stage."""
+    if isinstance(expr, (Const, ArrayConst, FieldRef, Params)):
         return "run"
-    if isinstance(expr, FieldRef):
-        return "run" if params_are_static else "step"
-    if isinstance(expr, (Time, FlowRef, Reduce, Capture)):
+    if isinstance(expr, (Time, FlowRef, Reduce, Capture, StateArray)):
         return "step"
-    if isinstance(expr, (BinOp, UnaryOp, Interp, GaussianPulse, TableInterp, Lookup)):
+    if isinstance(expr, (BinOp, UnaryOp, Interp, GaussianPulse, TableInterp, Lookup, Item)):
         # A TableInterp's knot arrays are constants, so its stage is its argument's.
-        children = rate_children(expr)
-        if any(rate_stage(c, params_are_static=params_are_static) == "step" for c in children):
+        if any(rate_stage(c) == "step" for c in rate_children(expr)):
             return "step"
         return "run"
     stage_fn = getattr(expr, "__rate_stage__", None)
     if callable(stage_fn):
-        result = _invoke_rate_stage(stage_fn, params_are_static=params_are_static)
+        result = stage_fn()
         if result not in ("run", "step"):
             raise TypeError(f"__rate_stage__ must return 'run' or 'step', got {result!r}.")
         return result  # type: ignore[no-any-return]
     return "step"
 
 
-def _invoke_rate_stage(stage_fn: Callable[..., Any], *, params_are_static: bool) -> Any:
-    """Call a custom stage hook, passing the flag only when it accepts it.
-
-    The historical contract is ``__rate_stage__(self)``. ``Defer`` needs the
-    flag: a param-only node is run-stage only while parameters are static.
-    A hook that does not declare the keyword keeps the old zero-argument call.
-    """
-    accepts_flag = False
-    try:
-        parameters = inspect.signature(stage_fn).parameters
-    except (TypeError, ValueError):
-        pass
-    else:
-        accepts_flag = "params_are_static" in parameters or any(
-            param.kind is inspect.Parameter.VAR_KEYWORD for param in parameters.values()
-        )
-    if accepts_flag:
-        return stage_fn(params_are_static=params_are_static)
-    return stage_fn()
-
-
 def _is_leaf(expr: RateOps) -> bool:
-    return isinstance(expr, (Const, ArrayConst, FieldRef))
+    return isinstance(expr, (Const, ArrayConst, FieldRef, Params))
 
 
-def build_hoist_table(roots: Sequence[RateOps], *, params_are_static: bool) -> HoistTable:
+def build_hoist_table(roots: Sequence[RateOps]) -> HoistTable:
     """Walk rate roots and slot run-stage non-leaf subtrees (and Interp knot stacks)."""
     entries: list[HoistEntry] = []
     slot: dict[tuple[int, str], int] = {}
@@ -159,19 +137,14 @@ def build_hoist_table(roots: Sequence[RateOps], *, params_are_static: bool) -> H
         if isinstance(node, TableInterp):
             walk(node.arg)
             return
-        stage = rate_stage(node, params_are_static=params_are_static)
+        stage = rate_stage(node)
         if stage == "run" and not _is_leaf(node):
             add(node, "value")
             return
         if isinstance(node, Interp):
-            if all(
-                rate_stage(bp, params_are_static=params_are_static) == "run"
-                for bp in node.breakpoints
-            ):
+            if all(rate_stage(bp) == "run" for bp in node.breakpoints):
                 add(node, "breakpoints")
-            if all(
-                rate_stage(v, params_are_static=params_are_static) == "run" for v in node.values
-            ):
+            if all(rate_stage(v) == "run" for v in node.values):
                 add(node, "values")
             walk(node.arg)
             bp_slotted = (id(node), "breakpoints") in slot

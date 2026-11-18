@@ -50,7 +50,7 @@ def infected_loss(solver: str, *, dt: float = 1e-4) -> Any:
     )
 
     def loss(scale: Any) -> Any:
-        # Rebuild rate through a trivial param multiply in derived_fn style:
+        # The rate is not rebuilt here:
         # infection rate is constant 0.3; we scale the initial infected seed.
         y = y0._with_data(y0.data * jnp.array([1.0, scale, 1.0]))
         kwargs: dict[str, Any] = {
