@@ -16,11 +16,13 @@ output; the arithmetic itself is traced. ``cumsum(start=)`` and
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator, Mapping
+import itertools
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, ClassVar, Literal
 
 from summer4.jax.propertydata import PropertyData
+from summer4.properties import Property, Trait
 from summer4.results.output import Output
 from summer4.results.plan import (
     Compartments,
@@ -33,6 +35,7 @@ from summer4.results.plan import (
     SaveRequest,
 )
 from summer4.results.result import Result
+from summer4.selectors import Dest, Selector, Source
 
 _LEAF_TYPES = (Compartments, FlowMass, ComputedValue, SaveFn, GroupedOutput)
 _CALLS = frozenset(
@@ -323,6 +326,35 @@ def _as_named_array(name: str, value: Any) -> Any:
     return jnp.asarray(value)
 
 
+type FlowValues = Literal["rate", "midpoint"]
+type Naming = str | Callable[[str, tuple[Trait, ...]], str]
+type By = Property | Sequence[Property | tuple[Property, ...]]
+
+DEFAULT_NAMING = "X{prop}_{trait}"
+"""summer2 port naming: ``prevXage_15Xreach_reachable``."""
+
+
+def _groupings(by: By) -> list[tuple[Property, ...]]:
+    if isinstance(by, Property):
+        return [(by,)]
+    groupings: list[tuple[Property, ...]] = []
+    for item in by:
+        grouping = (item,) if isinstance(item, Property) else tuple(item)
+        if not grouping or not all(isinstance(p, Property) for p in grouping):
+            raise TypeError(
+                "by= takes a Property, or a sequence of Properties and tuples of Properties; "
+                f"got {item!r}."
+            )
+        groupings.append(grouping)
+    return groupings
+
+
+def _stratum_name(naming: Naming, name: str, traits: tuple[Trait, ...]) -> str:
+    if callable(naming):
+        return naming(name, traits)
+    return name + "".join(naming.format(prop=t.property, trait=t.name) for t in traits)
+
+
 class OutputSet:
     """Declarative named outputs. Assign leaves and expressions; evaluate after a solve.
 
@@ -352,11 +384,32 @@ class OutputSet:
     does not. Derived names are not save keys.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        flow_values: FlowValues = "rate",
+        naming: Naming = DEFAULT_NAMING,
+    ) -> None:
+        if flow_values not in ("rate", "midpoint"):
+            raise ValueError(f"flow_values must be 'rate' or 'midpoint', got {flow_values!r}.")
         self._order: list[str] = []
         self._exprs: dict[str, OutputExpr] = {}
+        self._hidden: set[str] = set()
+        self.flow_values: FlowValues = flow_values
+        self.naming: Naming = naming
 
     def __setitem__(self, name: str, value: Quantity | OutputExpr) -> None:
+        self.set(name, value)
+
+    def set(self, name: str, value: Quantity | OutputExpr, *, keep: bool = True) -> OutputExpr:
+        """Assign ``name`` and return its expression; ``outputs[name] = value`` is ``keep=True``.
+
+        ``keep=False`` makes ``name`` an intermediate (summer2's
+        ``save_results=False``): other outputs can read it with :meth:`ref`, and
+        targets can score it, but :meth:`evaluate` does not return it and
+        :meth:`kept` does not list it, so ``posterior_runs`` does not record it.
+        Assigning a name again replaces its expression and its ``keep``.
+        """
         if not isinstance(name, str) or not name:
             raise ValueError(f"Output name must be a non-empty string, got {name!r}.")
         if isinstance(value, OutputExpr):
@@ -371,6 +424,11 @@ class OutputSet:
         if name not in self._exprs:
             self._order.append(name)
         self._exprs[name] = expr
+        if keep:
+            self._hidden.discard(name)
+        else:
+            self._hidden.add(name)
+        return expr
 
     def __getitem__(self, name: str) -> OutputExpr:
         try:
@@ -389,11 +447,238 @@ class OutputSet:
         return len(self._order)
 
     def keys(self) -> tuple[str, ...]:
+        """Every name, kept or not, in assignment order."""
         return tuple(self._order)
+
+    def kept(self) -> tuple[str, ...]:
+        """The names :meth:`evaluate` returns by default: those not assigned with ``keep=False``."""
+        return tuple(name for name in self._order if name not in self._hidden)
 
     def ref(self, name: str) -> OutputExpr:
         """Refer to a named output, including one assigned later."""
         return OutputExpr.ref(name)
+
+    def subset(self, names: Iterable[str]) -> OutputSet:
+        """A copy in which only ``names`` are kept; every other name becomes an intermediate.
+
+        The expressions and save leaves are shared, so the copy solves for
+        exactly what this set does. Use it where a whole set is recorded or
+        scored, such as ``posterior_runs(outputs=...)``.
+        """
+        wanted = list(dict.fromkeys(names))
+        missing = [name for name in wanted if name not in self._exprs]
+        if missing:
+            raise KeyError(f"OutputSet has no outputs {missing}. Known: {list(self._order)}.")
+        copy = OutputSet(flow_values=self.flow_values, naming=self.naming)
+        keep = set(wanted)
+        for name in self._order:
+            copy.set(name, self._exprs[name], keep=name in keep)
+        return copy
+
+    # --- requests: summer2-style one-call outputs ---------------------------------------
+    #
+    # Each request is one ``set`` call; the docstring gives the expression it
+    # assigns. Assign that expression yourself whenever a request does not fit.
+
+    def compartments(
+        self,
+        name: str,
+        where: Selector | None = None,
+        *,
+        by: By = (),
+        keep: bool = True,
+    ) -> OutputExpr:
+        """Total size of the compartments matching ``where``, per save time.
+
+        Stands for (summer2 ``request_output_for_compartments``)::
+
+            outputs.set(name, Compartments().select(where).sum_by(), keep=keep)
+
+        Every compartment request reads the one shared ``Compartments()`` save.
+        ``by`` adds one output per stratum; see :meth:`fan_out`.
+        """
+        leaf = OutputExpr.leaf(Compartments())
+        base = leaf if where is None else leaf.select(where)
+        expr = self.set(name, base.sum_by(), keep=keep)
+        self._fan_out(name, base, by, side=None, post=None, keep=keep)
+        return expr
+
+    def flow(
+        self,
+        name: str,
+        flow: str | tuple[str, ...],
+        *,
+        source: Selector | None = None,
+        dest: Selector | None = None,
+        values: FlowValues | None = None,
+        by: By = (),
+        side: Literal["source", "dest"] = "source",
+        keep: bool = True,
+    ) -> OutputExpr:
+        """Total of ``flow`` over the edges whose source matches ``source`` and dest ``dest``.
+
+        Stands for (summer2 ``request_output_for_flow``)::
+
+            sel = Source(source) & Dest(dest)          # whichever are given
+            expr = FlowMass(flow).select(sel).sum_by()
+            expr = expr.midpoint()                     # only when values="midpoint"
+            outputs.set(name, expr, keep=keep)
+
+        ``values`` defaults to the set's ``flow_values``: ``"rate"`` is the
+        instantaneous rate at each save time (people per unit time);
+        ``"midpoint"`` is summer2's flow-output convention. Every request on one
+        flow reads one shared ``FlowMass(flow)`` save. ``by`` adds one output per
+        stratum of the ``side`` compartment; see :meth:`fan_out`.
+        """
+        values = self.flow_values if values is None else values
+        if values not in ("rate", "midpoint"):
+            raise ValueError(f"values must be 'rate' or 'midpoint', got {values!r}.")
+        leaf = OutputExpr.leaf(FlowMass(flow))
+        parts: list[Selector] = []
+        if source is not None:
+            parts.append(Source(source))
+        if dest is not None:
+            parts.append(Dest(dest))
+        base = leaf
+        if parts:
+            sel = parts[0] if len(parts) == 1 else parts[0] & parts[1]
+            base = leaf.select(sel)
+        post: Literal["midpoint"] | None = "midpoint" if values == "midpoint" else None
+        total = base.sum_by()
+        expr = self.set(name, total.midpoint() if post else total, keep=keep)
+        self._fan_out(name, base, by, side=side, post=post, keep=keep)
+        return expr
+
+    def aggregate(self, name: str, sources: Sequence[str], *, keep: bool = True) -> OutputExpr:
+        """Sum of the named outputs ``sources``.
+
+        Stands for (summer2 ``request_aggregate_output``)::
+
+            outputs.set(name, sum(outputs.ref(s) for s in sources), keep=keep)
+        """
+        if isinstance(sources, str):
+            raise TypeError("aggregate() takes a sequence of output names, not one string.")
+        names = list(sources)
+        if not names:
+            raise ValueError(
+                f"aggregate({name!r}) needs at least one source. summer2 gave zeros for an "
+                "empty list; write 0.0 * outputs.ref(<any output>) for that."
+            )
+        expr = self.ref(names[0])
+        for other in names[1:]:
+            expr = expr + self.ref(other)
+        return self.set(name, expr, keep=keep)
+
+    def cumulative(
+        self,
+        name: str,
+        source: str,
+        *,
+        start: Any = None,
+        method: Literal["integral", "sum"] = "integral",
+        keep: bool = True,
+    ) -> OutputExpr:
+        """Running total of the output ``source`` from ``start`` (a save time).
+
+        Stands for (summer2 ``request_cumulative_output``)::
+
+            outputs.set(name, outputs.ref(source).cumulative_integral(start=start))  # "integral"
+            outputs.set(name, outputs.ref(source).cumsum(start=start))               # "sum"
+
+        Use ``"integral"`` for a rate (a ``"rate"`` flow output) and ``"sum"``
+        for amounts per interval, such as summer2-style ``"midpoint"`` flow
+        values.
+        """
+        ref = self.ref(source)
+        if method == "integral":
+            expr = ref.cumulative_integral(start=start)
+        elif method == "sum":
+            expr = ref.cumsum(start=start)
+        else:
+            raise ValueError(f"method must be 'integral' or 'sum', got {method!r}.")
+        return self.set(name, expr, keep=keep)
+
+    def function(
+        self,
+        name: str,
+        fn: Callable[..., Any],
+        *args: Any,
+        keep: bool = True,
+        **kwargs: Any,
+    ) -> OutputExpr:
+        """``fn`` applied after the solve to outputs and parameters.
+
+        Stands for (summer2 ``request_function_output``)::
+
+            outputs.set(name, defer(fn)(*args, **kwargs), keep=keep)
+
+        with every string argument replaced by ``outputs.ref(string)``. Other
+        arguments are passed as ``defer`` takes them: ``Param``, numbers,
+        arrays and output expressions. ``fn`` follows ``defer``'s return
+        contract (an ``Output``, or an array shaped like the first one).
+        """
+        from summer4.flows.rates import defer
+
+        def lift(arg: Any) -> Any:
+            return self.ref(arg) if isinstance(arg, str) else arg
+
+        deferred = defer(fn)(*(lift(a) for a in args), **{k: lift(v) for k, v in kwargs.items()})
+        return self.set(name, deferred, keep=keep)
+
+    def fan_out(
+        self,
+        name: str,
+        expr: OutputExpr,
+        by: By,
+        *,
+        side: Literal["source", "dest"] | None = None,
+        keep: bool = True,
+    ) -> tuple[str, ...]:
+        """One output per stratum of ``expr``, named with the set's ``naming``.
+
+        ``expr`` is an output with a compartment or edge axis, such as
+        ``Compartments().select(where)`` or ``FlowMass("f")`` (``side`` picks
+        the edge end for a flow). ``by`` is a property or a sequence of
+        groupings, each a property or a tuple of properties:
+        ``by=[age, reach, (age, reach)]`` adds ``{name}Xage_0``, …,
+        ``{name}Xreach_r``, …, and ``{name}Xage_0Xreach_r``, …. Each grouping
+        is one hidden ``sum_by`` output, and each stratum a row of it::
+
+            outputs.set(f"{name}[age]", expr.sum_by(age), keep=False)
+            outputs.set(f"{name}Xage_0", outputs.ref(f"{name}[age]").select(age["0"]).sum_by())
+
+        ``naming`` is a template formatted once per property with ``prop`` and
+        ``trait`` and appended to ``name`` (default ``"X{prop}_{trait}"``), or
+        a callable ``(name, traits) -> str``. Returns the names added.
+        """
+        return self._fan_out(name, expr, by, side=side, post=None, keep=keep)
+
+    def _fan_out(
+        self,
+        name: str,
+        expr: OutputExpr,
+        by: By,
+        *,
+        side: Literal["source", "dest"] | None,
+        post: Literal["midpoint"] | None,
+        keep: bool,
+    ) -> tuple[str, ...]:
+        added: list[str] = []
+        for grouping in _groupings(by):
+            group_name = f"{name}[{','.join(p.name for p in grouping)}]"
+            grouped = expr.sum_by(*grouping) if side is None else expr.sum_by(*grouping, side=side)
+            if post == "midpoint":
+                grouped = grouped.midpoint()
+            self.set(group_name, grouped, keep=False)
+            for combo in itertools.product(*(p.traits for p in grouping)):
+                traits = tuple(p.trait(t) for p, t in zip(grouping, combo, strict=True))
+                sel: Selector = traits[0]
+                for trait in traits[1:]:
+                    sel = sel & trait
+                stratum = _stratum_name(self.naming, name, traits)
+                self.set(stratum, self.ref(group_name).select(sel).sum_by(), keep=keep)
+                added.append(stratum)
+        return tuple(added)
 
     def _bindings(self) -> list[tuple[Quantity, str]]:
         bound: list[tuple[Quantity, str]] = []
@@ -464,8 +749,18 @@ class OutputSet:
             solver_stats=base.solver_stats,
         )
 
-    def evaluate(self, result: Result, params: object | None = None) -> Result:
-        """Compute every named output from ``result`` and ``params``.
+    def evaluate(
+        self,
+        result: Result,
+        params: object | None = None,
+        *,
+        names: Iterable[str] | None = None,
+    ) -> Result:
+        """Compute the kept outputs (or ``names``) from ``result`` and ``params``.
+
+        Only ``names`` and the outputs they read are computed; ``names``
+        defaults to :meth:`kept`. Pass ``names=outputs.keys()`` to get the
+        intermediates as well.
 
         ``result`` must contain the leaf keys from :meth:`plan`. ``params`` is
         the object :func:`~summer4.flows.compiled.eval_closed` reads for a
@@ -478,6 +773,18 @@ class OutputSet:
         """
         order = self._topo()
         bindings = self._bindings()
+        wanted = self.kept() if names is None else tuple(dict.fromkeys(names))
+        unknown = [name for name in wanted if name not in self._exprs]
+        if unknown:
+            raise KeyError(f"OutputSet has no outputs {unknown}. Known: {list(self._order)}.")
+        needed: set[str] = set()
+        pending = list(wanted)
+        while pending:
+            current = pending.pop()
+            if current not in needed:
+                needed.add(current)
+                pending.extend(_ref_list(self._exprs[current]))
+        order = [name for name in order if name in needed]
 
         def key_for(qty: Quantity) -> str:
             for existing, key in bindings:
@@ -570,11 +877,10 @@ class OutputSet:
             if not isinstance(value, Output):
                 value = _as_named_array(name, value)
             computed[name] = value
-        ordered = {
-            name: computed[name] for name in self._order if isinstance(computed[name], Output)
-        }
+        returned = [name for name in self._order if name in set(wanted)]
+        ordered = {name: computed[name] for name in returned if isinstance(computed[name], Output)}
         arrays = {
-            name: computed[name] for name in self._order if not isinstance(computed[name], Output)
+            name: computed[name] for name in returned if not isinstance(computed[name], Output)
         }
         return Result(
             times=result.times,

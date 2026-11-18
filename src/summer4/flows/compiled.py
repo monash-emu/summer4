@@ -1259,8 +1259,15 @@ class CompiledModel:
         atol: float | None = None,
         max_steps: int | None = None,
         throw: bool | None = None,
+        outputs: Any = None,
     ) -> Any:
         """Integrate and return a :class:`~summer4.results.Result`.
+
+        With ``outputs`` (an :class:`~summer4.results.OutputSet`), solve for
+        what it needs and return its evaluated outputs instead. That is::
+
+            result = model.run(params, ..., save=outputs.plan(save))
+            return outputs.evaluate(result, params)
 
         Exactly one of ``t1`` / ``steps``. With no ``solver`` the default is used:
         ``summer4.solvers.default_solver()``, which is one line::
@@ -1305,6 +1312,30 @@ class CompiledModel:
         from summer4.results.plan import EVERYTHING, SavePlan
         from summer4.solvers.base import SolveSpec
         from summer4.solvers.resolve import resolve_solver
+
+        if outputs is not None:
+            from summer4.results.outputset import OutputSet
+
+            if not isinstance(outputs, OutputSet):
+                raise TypeError(f"outputs must be an OutputSet, got {type(outputs).__name__}.")
+            if save is not None and not isinstance(save, SavePlan):
+                raise TypeError(f"save must be a SavePlan, got {type(save).__name__}.")
+            result = self.run(
+                params,
+                y0,
+                t0=t0,
+                t1=t1,
+                dt=dt,
+                steps=steps,
+                save=outputs.plan(save),
+                solver=solver,
+                epoch=epoch,
+                rtol=rtol,
+                atol=atol,
+                max_steps=max_steps,
+                throw=throw,
+            )
+            return outputs.evaluate(result, params)
 
         prepared = self.prepare(params)
         if y0 is None:

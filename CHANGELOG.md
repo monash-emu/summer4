@@ -11,6 +11,29 @@ Narrative release notes for the documentation site live in
 
 ## [Unreleased]
 
+### Added
+
+- **summer2-style output requests on `OutputSet`** (`feat/output-requests`, roadmap step 51,
+  `CX49`, `CX50`). `compartments(name, where)`, `flow(name, flow, source=, dest=, values=)`,
+  `aggregate(name, sources)`, `cumulative(name, source, start=, method=)` and
+  `function(name, fn, *args)` are each one assignment; the docstring gives the expression, and
+  each returns it so it chains like any other. `by=[age, reach, (age, reach)]` adds one output per
+  stratum (`prevXage_15Xreach_far`; `naming=` changes the names), and `fan_out` does the same for
+  any expression. `OutputSet(flow_values="midpoint")` gives summer2's flow-output convention.
+  Raw assignments, `ref`, ufuncs and `defer` mix freely with requests.
+- **Intermediates:** `OutputSet.set(name, expr, keep=False)` and `keep=` on every request
+  (summer2's `save_results=False`). `kept()` lists the rest, `subset(names)` keeps only `names`,
+  and `evaluate(result, params, names=)` returns `names` (default `kept()`), computing only what
+  they read. `posterior_runs` records `kept()`; `BayesianModel` evaluates every name, so a target
+  may score an intermediate.
+- **`CompiledModel.run(..., outputs=out)`** solves for what `out` needs and returns its evaluated
+  outputs: `out.evaluate(model.run(..., save=out.plan(save)), params)`.
+
+### Changed
+
+- `OutputSet.evaluate` no longer returns names assigned with `keep=False`; pass
+  `names=outputs.keys()` for every name. Sets without `keep=False` are unaffected.
+
 ## [0.3.0a5] — 2026-11-17
 
 Tag: [`v0.3.0a5`](https://github.com/monash-emu/summer4/releases/tag/v0.3.0a5)

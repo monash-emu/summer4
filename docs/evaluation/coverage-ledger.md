@@ -77,11 +77,11 @@ reach, and it is the denominator for every percentage on this site.
 | P7 | `get_sigmoidal_interpolation_function` | parameters | `full` | `summer4.timevarying.sigmoidal` | `sharpness` is summer2 curvature; breakpoints may be `FieldRef`s |
 | P8 | `get_piecewise_function` | parameters | `full` | `summer4.timevarying.step` / `piecewise` | Right-continuous; breakpoints may be `FieldRef`s |
 | P9 | `get_time_callable` | parameters | `partial` | `compile() -> vf(t, y, params)` | A time callable, but not summer2's graph wrapper |
-| D1 | `request_output_for_flow` | outputs | `full` | `FlowMass` / `Output` edge queries | `sum_by(..., side=)`, `integrate_intervals`, `integrate` |
-| D2 | `request_output_for_compartments` | outputs | `full` | `Compartments(where=)` / `Output.select` |  |
-| D3 | `request_aggregate_output` | outputs | `full` | `Output.sum_by` / `partition` |  |
-| D4 | `request_cumulative_output` | outputs | `full` | `Output.cumulative_integral()` on a rate; `Output.cumsum()` on amounts |  |
-| D5 | `request_function_output` | outputs | `full` | `SaveFn`; `Output` operators and `OutputSet` |  |
+| D1 | `request_output_for_flow` | outputs | `full` | `OutputSet.flow(name, flow, source=, dest=)`; `FlowMass` / `Output` edge queries | `sum_by(..., side=)`, `integrate_intervals`, `integrate`; `values="midpoint"` for summer2's convention |
+| D2 | `request_output_for_compartments` | outputs | `full` | `OutputSet.compartments(name, where)`; `Compartments(where=)` / `Output.select` | `by=` adds one output per stratum |
+| D3 | `request_aggregate_output` | outputs | `full` | `OutputSet.aggregate(name, sources)`; `Output.sum_by` / `partition` |  |
+| D4 | `request_cumulative_output` | outputs | `full` | `OutputSet.cumulative(name, source, start=)`; `Output.cumulative_integral()` on a rate; `Output.cumsum()` on amounts |  |
+| D5 | `request_function_output` | outputs | `full` | `OutputSet.function(name, fn, *args)` (`defer`); `SaveFn`; `Output` operators and `OutputSet` |  |
 | D6 | `request_computed_value_output` | outputs | `full` | `ComputedValue` | Path validated against `derived_fn` return schema |
 | D7 | `request_track_modelled_value` | outputs | `full` | `ComputedValue` | Same capture path as D6 |
 | D8 | `add_computed_value_func` | outputs | `full` | `derived_fn hook` | compute_derived_params runs every step; run-start work goes in `prepare_fn` |

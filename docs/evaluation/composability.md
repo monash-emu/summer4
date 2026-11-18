@@ -39,7 +39,7 @@ pixi run composability         # statuses, evidence anchors, packages, totals
 ## Where things stand
 
 <!-- composability:totals -->
-Open findings: **8** (0 high, 3 medium, 5 low); planned: 6; deferred: 4; done: 30; rejected: 0.
+Open findings: **8** (0 high, 3 medium, 5 low); planned: 6; deferred: 4; done: 32; rejected: 0.
 <!-- /composability:totals -->
 
 The calibration workflow's MCMC stage (`CX25`), the solve (`CP1`, roadmap step
@@ -107,6 +107,8 @@ can be inspected and extended. What remains:
 | CX46 | calibration | P2 | medium | done | `BayesianModel.log_likelihood(draws)` merges `draws` over `fixed_params`: a prior site left out of `draws`, or a misspelled name, silently uses the fixed value (or is ignored). In a joint model the mapping from global site names to each model's local names is hand-written, so a mis-mapping scores the wrong parameters with no error (tb-nh-joint-calibration wrote its own guard). | Done in step 50: public `check_params(params)` raises on missing prior sites and unknown names, and `log_likelihood(draws, strict=True)` checks first (`factor` always does). | `src/summer4/epi/calibration/model.py::params.update(dict(draws))` |
 | CX47 | calibration | P2, P4 | low | done | No namespacing: numpyro site names are global, a model's parameter names local. Sampling a `BayesianModel`'s priors under a prefix, holding some at given (hierarchical or shared) values, and getting the local-name dict back is boilerplate every joint model rewrites. | Done in step 50: `sample_params(prefix, given=, record=)` samples a model's priors under a prefix with given values, and `factor(name, params)` is exactly `numpyro.factor(name, log_likelihood(params, strict=True))`. | `src/summer4/epi/calibration/model.py::draws[prior.name] = numpyro.sample(prior.name, prior.to_numpyro())` |
 | CX48 | calibration | P3 | medium | done | `BayesianModel.posterior_runs` reads posterior sites by the model's own names and rejects non-scalar sites, so a joint posterior (prefixed sites, plate offsets) cannot be replayed through a member model without hand-built arrays. | Done in step 50: `local_params(draws, prefix)` rebuilds a model's local names from joint sites, and `posterior_runs(..., params_fn=)` flattens joint draws (plate sites allowed), maps them, checks them strictly and then replays. | `src/summer4/epi/calibration/posterior_runs.py::posterior_runs expects scalar parameter sites` |
+| CX49 | results | P2 | medium | done | Before step 51: an `OutputSet` had no way to mark an intermediate (summer2's `save_results=False`). `evaluate` returned every name and `posterior_runs` recorded every name, so the Kiribati port inlined its intermediates with a private `restrict_outputs` (workaround W5; ~680 names recorded per draw otherwise). | Done in step 51: `set(name, expr, keep=False)` and `keep=` on every request; `kept()`, `subset(names)` and `evaluate(..., names=)` (which computes only what the names read); `posterior_runs` records `kept()`. | `src/summer4/results/outputset.py::def subset(` |
+| CX50 | results | P4 | medium | done | Before step 51: the common summer2 requests (compartments, flow by source/dest strata, aggregate, cumulative, function, one output per stratum) had no one-call form, and a run needed `plan`, `run(save=)` and `evaluate`. The Kiribati port's `outputs.py` is 358 lines, mostly helpers for these. | Done in step 51: `OutputSet.compartments`, `flow`, `aggregate`, `cumulative`, `function` and `fan_out` (`by=` on requests), each one `set` call whose docstring gives the expression and whose equivalence is tested; `CompiledModel.run(outputs=)` is plan, run and evaluate. | `src/summer4/results/outputset.py::def fan_out(` |
 <!-- /composability:findings -->
 
 ## Work packages
@@ -131,6 +133,7 @@ tuning stage (`plans/nuts-tuning.plan.md`).
 | CP7 | NUTS tuning: sampler statistics, worst-element diagnostics, steerable warm-up (roadmap step 47) | CX36 CX37 CX38 |
 | CP8 | Parallel MCMC chains with the adaptive solver (`futureplans/parallel-chains-diffrax-grad.md`) | CX45 |
 | CP9 | Multi-model calibration helpers (roadmap step 50, `plans/multi-model-helpers.plan.md`) | CX46 CX47 CX48 |
+| CP10 | summer2-style output requests on `OutputSet` (roadmap step 51, `plans/output-requests.plan.md`) | CX49 CX50 |
 <!-- /composability:packages -->
 
 ## Patterns to copy

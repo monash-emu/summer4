@@ -249,6 +249,10 @@ Step 47 is placed the same way, after step 46.
 Step 50 (`feat/multi-model`, multi-model calibration helpers) was cut from `main` on
 2026-11-17 while step 28 was current. Like step 46 it does not move *Current position*; the
 line places it where it was cut.
+Step 51 (`feat/output-requests`, summer2-style output requests) was cut from `main` on
+2026-11-19 while step 28 was current, the same way: it does not move *Current position*. It
+uses only `OutputSet`'s public surface, so it lands before `CP6` (steps 36-44); step 38 must keep
+`tests/test_output_requests.py` green unchanged.
 **Phase N** (step 48, `feat/clean-surface`, `plans/clean-surface.plan.md`) was inserted on
 2026-10-30, after PRs #69–#71 merged and before step 28. It removes the spellings that already
 have working replacements, rebuilds the published documentation in the unified idiom only, and
@@ -312,6 +316,7 @@ core on import, and parallel MCMC chains when the devices allow.
 | 48 | N | — | `feat/clean-surface` | `plans/clean-surface.plan.md` | Steps C0–C9 | done | — |
 | 49 | N | — | `feat/runtime-defaults` | `plans/runtime-defaults.plan.md` | Steps R0–R5 | done | — |
 | 50 | K | CP9 | `feat/multi-model` | `plans/multi-model-helpers.plan.md` | all | done | CX46 CX47 CX48 |
+| 51 | K | CP10 | `feat/output-requests` | `plans/output-requests.plan.md` | all | done | CX49 CX50 |
 <!-- /roadmap:steps -->
 
 `Closes` lists row IDs of {doc}`../evaluation/tb-ports` (and, where a step moves
@@ -3833,6 +3838,67 @@ Set step 50 `done`; step 28 `next` stays current. Record deviations from the pla
 - **Separate branch:** `docs/api-calibration` adds `summer4.epi`, `summer4.epi.calibration` and
   `summer4.epi.calibration.workflow` to the API reference.
 - **Release:** `0.3.0a4` (this step plus PR #78's `Property` fix) is cut after this PR merges.
+
+## Step 51 — `feat/output-requests`
+
+**Landed:** feat/output-requests, 2026-11-19 (PR pending).
+
+**Worker:** the orchestrating session (opus) wrote the plan and implemented it directly, at the
+user's request ("plan and implement straight away").
+
+### Summary
+
+summer2-style one-call derived outputs on `OutputSet`, with every existing door kept as an escape
+hatch. `compartments`, `flow`, `aggregate`, `cumulative` and `function` are each one `set` call
+whose docstring gives the expression; `by=` / `fan_out` add one output per stratum with
+summer2-port names; `keep=False`, `kept()`, `subset()` and `evaluate(names=)` replace
+`save_results=False` and the Kiribati port's `restrict_outputs`; `CompiledModel.run(outputs=)` is
+plan, run and evaluate. Closes `CX49` and `CX50` (package `CP10`) and ships
+`39-output-requests.ipynb`.
+
+### What the previous worker left you
+
+- **Inserted on 2026-11-19** from a design discussion comparing summer2's request API with
+  `OutputSet`, using `kiribati-tb-summer4/src/kiribati_tb/outputs.py` as the evidence. It runs
+  beside step 28 and does not move *Current position*.
+
+### Files
+
+`src/summer4/results/outputset.py`, `src/summer4/flows/compiled.py`,
+`src/summer4/epi/calibration/{model.py,posterior_runs.py}`, `tests/test_output_requests.py`
+(new), `examples/notebooks/39-output-requests.ipynb` (new), `docs/guide/04-derived-outputs.ipynb`,
+`docs/evaluation/{composability.md,coverage-ledger.md}`, `CHANGELOG.md`,
+`plans/output-requests.plan.md`.
+
+### Read first
+
+1. `plans/output-requests.plan.md`, all of it
+2. {doc}`../evaluation/composability`: rows `CX49`, `CX50`, package `CP10`
+3. `src/summer4/results/outputset.py`
+
+### Do
+
+Follow the plan. Cut from: `main`. Merges into: `main`.
+
+### Exit checks
+
+The [standard checks](#exit-checks-every-step), plus `pixi run composability`. **User gate:**
+`examples/notebooks/39-output-requests.ipynb`.
+
+### Handoff
+
+Set step 51 `done`; step 28 `next` stays current.
+
+**Done (2026-11-19).**
+
+- **Shipped** as planned, with one correction found by the gate notebook: fan-out does not make
+  the traced `evaluate` smaller. Every named output is its own step either way, so it traces the
+  same equations per stratum as a hand loop, plus one grouped sum per grouping; its gain is that
+  each stratum reads the small grouped array rather than the full save. The plan, test and
+  notebook (section E) say so.
+- **Not done here:** saving a computed value waits for step 40 (`CX32`), after which
+  `out.set(name, expr)` does it with no new request;
+  porting the Kiribati model's `outputs.py` to requests is downstream work in that repository.
 
 ---
 
