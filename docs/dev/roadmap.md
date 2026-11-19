@@ -3930,7 +3930,7 @@ Set step 51 `done`; step 28 `next` stays current.
 
 ## Step 52 — `feat/kiribati-gaps`
 
-**Landed:** feat/kiribati-gaps, 2026-11-19 (PR pending).
+**Landed:** feat/kiribati-gaps, PR #84, 2026-11-19.
 
 **Worker:** a session started from the Kiribati port's orchestrating session (opus) wrote the plan
 and implemented it directly.
