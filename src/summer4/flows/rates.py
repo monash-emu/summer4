@@ -446,6 +446,17 @@ class Defer(RateOps):
     as an argument. A value closed over instead is invisible to staging, to
     hoisting and to the digest, and nothing here can catch that.
 
+    **Grouped arguments.** A per-trait argument (a
+    :class:`~summer4.data.TableData` interpolation, a grouped ``Reduce``) is a
+    ``GroupedRate``. Arithmetic, NumPy ufuncs (``np.exp``, ``np.log``,
+    ``np.maximum``, ``np.clip``) and summer4's own math functions
+    work on it and keep its grouping, so the result aligns per trait.
+    ``jax.numpy`` functions do **not** accept it: JAX would have to unwrap the
+    grouping, and its own operators would then drop it silently in the middle
+    of an expression (``p * g`` with ``p`` a traced parameter). Calling one
+    raises a ``TypeError`` that names the argument. Use the NumPy function, or
+    work on ``g.data`` and return ``GroupedRate(result, g.properties)``.
+
     ``name`` is optional and affects only the jit-cache digest. The default
     key is ``id(fn)``, which keeps two closures with the same source and
     different captured values from sharing a compiled program. If ``fn`` is a
@@ -519,12 +530,51 @@ class Defer(RateOps):
         return b"".join(parts)
 
 
+_GROUPED_JNP = (
+    "{fn} received a {kind} ({where}), and something refused it, usually a jax.numpy "
+    "function: {err}\n"
+    "jax.numpy does not accept summer4's grouped values. Use the NumPy function instead "
+    "(np.exp, np.log, np.maximum, np.clip are dispatched and keep the grouping), or work on the "
+    "raw array and wrap the answer yourself: GroupedRate(jnp.f(g.data), g.properties)."
+)
+
+
+def _grouped_arguments(args: Sequence[Any], kwargs: Mapping[str, Any]) -> list[tuple[str, str]]:
+    """``(position, type name)`` of every ``GroupedRate`` / ``PropertyData`` argument."""
+    from summer4.flows.compiled import GroupedRate
+    from summer4.jax.propertydata import PropertyData
+
+    found: list[tuple[str, str]] = []
+    labelled = [(f"argument {i}", v) for i, v in enumerate(args)]
+    labelled += [(f"argument {k!r}", v) for k, v in kwargs.items()]
+    for label, value in labelled:
+        if isinstance(value, (GroupedRate, PropertyData)):
+            found.append((label, type(value).__name__))
+    return found
+
+
 @register_rate_eval(Defer)
 def _eval_defer(expr: Defer, *, eval_child: Callable[[RateOps], Any], **_: Any) -> Any:
     """Evaluate ``expr.fn`` on its arguments. The return is aligned like any rate."""
     args = [eval_child(arg) for arg in expr.args]
     kwargs = {key: eval_child(value) for key, value in expr.kwargs}
-    return expr.fn(*args, **kwargs)
+    try:
+        return expr.fn(*args, **kwargs)
+    except TypeError as exc:
+        grouped = _grouped_arguments(args, kwargs)
+        message = str(exc)
+        kinds = {kind for _, kind in grouped}
+        if not any(kind in message for kind in kinds):
+            raise
+        name = getattr(expr.fn, "__name__", type(expr.fn).__name__)
+        raise TypeError(
+            _GROUPED_JNP.format(
+                fn=f"defer({name})",
+                kind=" / ".join(sorted(kinds)),
+                where=", ".join(label for label, _ in grouped),
+                err=message.splitlines()[0],
+            )
+        ) from exc
 
 
 def defer(fn: Callable[..., Any], *, name: str | None = None) -> Callable[..., Any]:
@@ -559,6 +609,11 @@ def defer(fn: Callable[..., Any], *, name: str | None = None) -> Callable[..., A
 
     ``Defer(f, outputs.ref(...))`` called directly still raises: a :class:`Defer` is
     a rate node and cannot hold an output. Use ``defer(f)(...)``.
+
+    **Grouped arguments (rate form).** A per-trait argument arrives as a
+    :class:`~summer4.flows.compiled.GroupedRate`. Use NumPy functions on it
+    (``np.exp(-p * g)``); they keep the grouping. A ``jax.numpy`` function on it
+    raises a ``TypeError`` naming the argument; see :class:`Defer`.
 
     The returned callable is typed ``Any`` because the node type depends on the
     arguments: a :class:`Defer` for rate arguments, an
@@ -656,26 +711,38 @@ class TableInterp(RateOps):
 
 @dataclass(frozen=True, slots=True)
 class Lookup(RateOps):
-    """Gather one row of an array carried in the parameters.
+    """Gather one row of a table along its first axis.
 
     ``index`` is typically ``floor(Time() - year0)``. With ``clamp=True``
     (the default) the index is clipped into ``[0, n_rows - 1]`` before
     :func:`jax.numpy.take`, so a time outside the table holds the end row.
     A ``(n_years, K, K)`` table therefore yields a ``(K, K)`` matrix, which
     is what :class:`~summer4.epi.mixing.MixingMatrix` evaluates.
+
+    ``table`` is any rate expression that evaluates to an array: a parameter
+    (``Param("mixing")``), an array literal, or a value computed from the
+    parameters. A table that reads only parameters is evaluated once per run
+    (it is hoisted), so a stack built from parameters needs no ``prepare_fn``::
+
+        S = field_refs(defer(build_stack)(Params()), Stacks)
+        matrix = Lookup(S.mixing, floor(Time() - 1850.0))
+
+    Raises:
+        TypeError: if ``table`` is a scalar.
     """
 
-    table: FieldRef
+    table: RateOps
     index: RateOps
     clamp: bool = True
 
-    def __init__(self, table: FieldRef, index: object, *, clamp: bool = True) -> None:
-        if not isinstance(table, FieldRef):
+    def __init__(self, table: object, index: object, *, clamp: bool = True) -> None:
+        resolved = as_rate(table)
+        if isinstance(resolved, Const):
             raise TypeError(
-                "Lookup table must be a FieldRef (Param(...) or FieldRef(...)), "
-                f"got {type(table).__name__}."
+                "Lookup table must be an array-valued rate expression (a Param, an array, or "
+                f"a value computed from the parameters), got the scalar {resolved.value!r}."
             )
-        object.__setattr__(self, "table", table)
+        object.__setattr__(self, "table", resolved)
         object.__setattr__(self, "index", as_rate(index))
         object.__setattr__(self, "clamp", bool(clamp))
 

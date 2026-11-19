@@ -834,11 +834,20 @@ def _infer_over(expr: RateOps, pmap: PropertyMap) -> Property | None:
             return None
 
 
-def _collect_capture_meta(expr: RateOps) -> dict[str, tuple[Property, ...]]:
-    """Walk a rate tree for nodes that expose ``__capture_meta__``."""
-    from summer4.flows.rates import rate_children
+def _collect_capture_meta(expr: RateOps, pmap: PropertyMap) -> dict[str, tuple[Property, ...]]:
+    """Walk a rate tree for captures: ``Capture`` nodes and nodes exposing ``__capture_meta__``.
+
+    A plain ``Capture(name, inner)`` records the grouping inferred from
+    ``inner``, so a :class:`~summer4.results.plan.GroupedOutput` of it is
+    labelled by its property like a ``ForceOfInfection`` capture.
+    """
+    from summer4.flows.rates import Capture, rate_children
 
     out: dict[str, tuple[Property, ...]] = {}
+    if isinstance(expr, Capture):
+        over = _infer_over(expr.inner, pmap)
+        if over is not None:
+            out[expr.name] = (over,)
     meta_fn = getattr(expr, "__capture_meta__", None)
     if callable(meta_fn):
         name, props = meta_fn()
@@ -846,7 +855,7 @@ def _collect_capture_meta(expr: RateOps) -> dict[str, tuple[Property, ...]]:
     custom = getattr(expr, "__capture_children__", None)
     children = custom() if callable(custom) else rate_children(expr)
     for child in children:
-        out.update(_collect_capture_meta(child))
+        out.update(_collect_capture_meta(child, pmap))
     return out
 
 
@@ -1659,15 +1668,15 @@ class FlowModel:
         edge_maps = {flow.name: flow.edge_map for flow in actualized}
         capture_meta: dict[str, tuple[Property, ...]] = {}
         for flow in actualized:
-            capture_meta.update(_collect_capture_meta(flow.rate))
+            capture_meta.update(_collect_capture_meta(flow.rate, self.pmap))
             for adj in flow.adjust:
                 if hasattr(adj, "value"):
-                    capture_meta.update(_collect_capture_meta(adj.value))
+                    capture_meta.update(_collect_capture_meta(adj.value, self.pmap))
                 elif hasattr(adj, "args"):
                     for arg in adj.args:
-                        capture_meta.update(_collect_capture_meta(arg))
+                        capture_meta.update(_collect_capture_meta(arg, self.pmap))
             for root in split_roots(flow):
-                capture_meta.update(_collect_capture_meta(root))
+                capture_meta.update(_collect_capture_meta(root, self.pmap))
         if hoist:
             hoist_table = build_hoist_table(roots_of(flows, order))
         else:

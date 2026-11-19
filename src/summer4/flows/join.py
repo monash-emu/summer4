@@ -10,7 +10,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from summer4.flows.edges import EdgeMap, EdgeRoles
-from summer4.flows.rates import RateOps, _rate_bytes, as_rate
+from summer4.flows.rates import Const, RateOps, _rate_bytes, as_rate
 from summer4.properties import Property, Trait
 from summer4.propertymap import PropertyMap
 from summer4.selectors import (
@@ -575,22 +575,68 @@ def _concat_dynamic_splits(parts: Sequence[EdgeArrays]) -> DynamicSplit | None:
     )
 
 
+def _chain_rate(rate: object) -> float | RateOps:
+    """A ``TraitChain`` rate: a plain number as ``float``, else a rate expression."""
+    if isinstance(rate, (bool, np.bool_)):
+        raise TypeError(f"TraitChain rate must be a number or a rate expression, got {rate!r}.")
+    if isinstance(rate, (int, float, np.integer, np.floating)):
+        return float(rate)
+    if isinstance(rate, RateOps):
+        if isinstance(rate, Const):
+            return float(rate.value)
+        return rate
+    raise TypeError(
+        f"TraitChain rate must be a number or a rate expression, got {type(rate).__name__}."
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class TraitChain:
-    """Explicit source→dest trait pairs on one property (ageing).
+    """Explicit ``(source trait, dest trait)`` pairs on one property.
 
-    One named flow can carry the whole chain. Optional ``rates`` are per-pair
-    multipliers (band width ``1/5``, ``1/10``, …) stored on the edge ``scale``,
-    the same place ``TraitMatrix`` puts nonzero entries. The flow ``rate`` still
-    applies on top. The last trait is omitted from ``pairs`` so it has no
-    outgoing edge.
+    One named flow carries every pair: each pair moves people from the source
+    trait to the dest trait of ``property`` while every other property keeps
+    its trait. The pairs are any list within that property, not only a chain.
+    Ageing is the common case (:meth:`from_breakpoints`), but paired moves
+    between states work the same way::
+
+        CLINICAL = (("subclin_inf", "clin_inf"), ("subclin_lowinf", "clin_lowinf"))
+        TransitionFlow("clinical_progression", state.present(), state.present(),
+                       Param("clinical_progression_rate"), pairing=TraitChain(state, CLINICAL))
+
+    The reverse moves are the same pairs swapped (``(dest, src)``). Two pairs
+    may share a source, which splits one source between two destinations.
+
+    ``rates`` are optional per-pair multipliers on top of the flow ``rate``.
+    Each is a number (an ageing band's ``1/5``) or a rate expression
+    (``Param("p")``, ``1 - Param("p")``, a function of ``Time()``), so a split
+    needs no ``Dest`` adjustments::
+
+        p = Param("progression_prop_infectious")
+        TransitionFlow("progression", state.present(), state.present(), Param("rate"),
+                       pairing=TraitChain(state, (("incipient", "subclin_lowinf"),
+                                                  ("incipient", "subclin_inf")),
+                                          rates=(1 - p, p)))
+
+    A number is stored on the edge ``scale``, the same place ``TraitMatrix``
+    puts its entries. An expression becomes, for that pair's edges, a
+    ``Multiply(rate, where=Source(property[src]) & Dest(property[dest]))``
+    applied before any other adjustment (as a ``scale`` is), so an
+    ``Overwrite`` still replaces it. For ageing, leave the last trait out of
+    ``pairs`` so it has no outgoing edge.
+
+    Raises:
+        ValueError: if ``pairs`` is empty, or ``rates`` has a different length.
+        KeyError: if a pair names a trait ``property`` does not have.
+        TypeError: if a rate is neither a number nor a rate expression.
     """
 
     property: Property
     pairs: tuple[tuple[str, str], ...]
-    rates: tuple[float, ...] | None = None
+    rates: tuple[float | RateOps, ...] | None = None
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "pairs", tuple((str(a), str(b)) for a, b in self.pairs))
         if not self.pairs:
             raise ValueError("TraitChain requires at least one trait pair.")
         known = set(self.property.traits)
@@ -600,11 +646,31 @@ class TraitChain:
                     f"Unknown trait in chain {(src, dest)} for "
                     f"{self.property.name!r}. Known: {list(self.property.traits)}"
                 )
-        if self.rates is not None and len(self.rates) != len(self.pairs):
-            raise ValueError(
-                f"TraitChain.rates length {len(self.rates)} does not match "
-                f"{len(self.pairs)} pairs."
-            )
+        if self.rates is not None:
+            if len(self.rates) != len(self.pairs):
+                raise ValueError(
+                    f"TraitChain.rates length {len(self.rates)} does not match "
+                    f"{len(self.pairs)} pairs."
+                )
+            object.__setattr__(self, "rates", tuple(_chain_rate(r) for r in self.rates))
+
+    def static_scale(self, index: int) -> float:
+        """The edge ``scale`` of pair ``index``: its number, or 1 for a rate expression."""
+        if self.rates is None:
+            return 1.0
+        rate = self.rates[index]
+        return rate if isinstance(rate, float) else 1.0
+
+    def rate_adjustments(self) -> tuple[tuple[RateOps, Selector], ...]:
+        """``(rate, where)`` for each pair whose rate is an expression, in pair order."""
+        if self.rates is None:
+            return ()
+        prop = self.property
+        return tuple(
+            (rate, Source(prop[src]) & Dest(prop[dest]))
+            for rate, (src, dest) in zip(self.rates, self.pairs, strict=True)
+            if not isinstance(rate, float)
+        )
 
     @classmethod
     def from_breakpoints(cls, age: Property, *, unit: float = 1.0) -> TraitChain:
@@ -689,7 +755,7 @@ def join_with_pairing(
                 dest & pairing.property[dest_name],
                 extra_bound=extra,
                 split=split,
-                scale=1.0 if pairing.rates is None else float(pairing.rates[index]),
+                scale=pairing.static_scale(index),
                 strict_pairing=strict_pairing,
             )
             for index, (src, dest_name) in enumerate(pairing.pairs)

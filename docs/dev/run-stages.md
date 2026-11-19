@@ -50,7 +50,7 @@ Walk the roots depth-first. The roots are every flow's `rate`, every
    Then descend into `arg`, and into any breakpoints/values not covered by a
    slot.
 3. Otherwise descend into the children of `BinOp`, `UnaryOp` and `GaussianPulse`, into a
-   `Lookup` index, and into `__rate_children__()` when a node defines it (so a step-stage
+   `Lookup` table and index (so a stack computed from parameters is built once per run), and into `__rate_children__()` when a node defines it (so a step-stage
    `Defer` still hoists a run-stage argument). Do not descend into `Capture` or unknown
    custom nodes.
 4. Skip a key that already has a slot, because shared node objects are

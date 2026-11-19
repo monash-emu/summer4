@@ -29,7 +29,15 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
 
 - [`state-ledgers-flow-integral.md`](state-ledgers-flow-integral.md) — opt-in
   exact flow accumulation via `State.ledgers` (post-hoc trapezoid is not the
-  solver's own integral).
+  solver's own integral); Kiribati screening evidence (`CX57`).
+- [`bayesian-model-forward-mode.md`](bayesian-model-forward-mode.md) — a forward-mode
+  `BayesianModel` for `Diffrax(adjoint=ForwardMode())` solves (Kiribati W6, `CX59`).
+- [`optimize-start-mapping.md`](optimize-start-mapping.md) — map `wf.optimize` starts other
+  than by `vmap` (Kiribati W7, `CX60`).
+- [`mcmc-run-save-load-tail-ess.md`](mcmc-run-save-load-tail-ess.md) — `MCMCRun.save` / `load`
+  and tail ESS in `StopRule` (Kiribati W8, `CX61`).
+- [`bayesian-model-coordinate-map.md`](bayesian-model-coordinate-map.md) — a joint coordinate
+  map on `BayesianModel` (Kiribati W9 and W11, `CX62`).
 - [`sa-multichain-init.md`](sa-multichain-init.md) — `bm.sample("sa", num_chains>1)`
   fails in numpyro's vectorised SA init.
 - [`per-model-dtype.md`](per-model-dtype.md) — the number width is process-wide

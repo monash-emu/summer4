@@ -231,7 +231,9 @@ def test_capture_inside_defer_is_saveable() -> None:
     y0 = PropertyData.wrap(pmap, np.array([1.0, 2.0, 3.0, 4.0]))
     plan = SavePlan(requests={"pool": SaveRequest(GroupedOutput("pool"))}, ts=np.array([0.0]))
     result = model.compile().run({}, y0, t0=0.0, t1=0.0, dt=1.0, save=plan)
-    saved = np.asarray(result["pool"].values)
+    # Step 52 (CX55): a plain Capture keeps its property map, so the save is PropertyData.
+    assert result["pool"].dims == ("time", "age")
+    saved = np.asarray(result["pool"].values.data)
     # S+I in each age band: young 1+3, old 2+4.
     np.testing.assert_allclose(saved.reshape(-1)[:2], [4.0, 6.0], rtol=1e-5, atol=1e-5)
 

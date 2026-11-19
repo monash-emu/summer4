@@ -415,6 +415,26 @@ def _entry_indices(
     return dest_idx, weights, _build_dynamic_split(pmap, split_n, dest_idx, group)
 
 
+CHAIN_RATE_PRECEDENCE = -1
+"""Level of a ``TraitChain`` rate expression's adjustment: before every ``Overwrite``.
+
+A numeric pair rate is the edge ``scale``, applied before every adjustment, so
+an expression rate runs first as well.
+"""
+
+
+def _chain_rate_adjustments(pairing: object) -> tuple[Adjustment, ...]:
+    """One ``Multiply`` per ``TraitChain`` pair whose rate is a rate expression."""
+    from summer4.flows.join import TraitChain
+
+    if not isinstance(pairing, TraitChain):
+        return ()
+    return tuple(
+        Multiply(rate, where=where, precedence=CHAIN_RATE_PRECEDENCE)
+        for rate, where in pairing.rate_adjustments()
+    )
+
+
 def actualize(flow: FlowLike, pmap: PropertyMap, *, strict_pairing: bool = True) -> FlowEdges:
     """Resolve ``flow`` to typed edge arrays against ``pmap``."""
     if isinstance(flow, TransitionFlow):
@@ -429,7 +449,7 @@ def actualize(flow: FlowLike, pmap: PropertyMap, *, strict_pairing: bool = True)
         src_codes, dest_codes, n_traits = _pairing_codes(
             pmap, flow.pairing, edges.src_idx, edges.dest_idx
         )
-        adjust = canonical_adjustments(flow.adjust)
+        adjust = canonical_adjustments(_chain_rate_adjustments(flow.pairing) + flow.adjust)
         masks = _bind_adjust_masks(
             adjust,
             edges.edge_map,

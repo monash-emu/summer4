@@ -253,6 +253,9 @@ Step 51 (`feat/output-requests`, summer2-style output requests) was cut from `ma
 2026-11-19 while step 28 was current, the same way: it does not move *Current position*. It
 uses only `OutputSet`'s public surface, so it lands before `CP6` (steps 36-44); step 38 must keep
 `tests/test_output_requests.py` green unchanged.
+Step 52 (`feat/kiribati-gaps`) was cut from `main` on 2026-11-19, after PR #83, while step 28 was
+current, the same way: it does not move *Current position*. It fixes or records the summer4 gaps
+found porting the Kiribati TB model (`plans/kiribati-gaps.plan.md`).
 **Phase N** (step 48, `feat/clean-surface`, `plans/clean-surface.plan.md`) was inserted on
 2026-10-30, after PRs #69–#71 merged and before step 28. It removes the spellings that already
 have working replacements, rebuilds the published documentation in the unified idiom only, and
@@ -317,6 +320,7 @@ core on import, and parallel MCMC chains when the devices allow.
 | 49 | N | — | `feat/runtime-defaults` | `plans/runtime-defaults.plan.md` | Steps R0–R5 | done | — |
 | 50 | K | CP9 | `feat/multi-model` | `plans/multi-model-helpers.plan.md` | all | done | CX46 CX47 CX48 |
 | 51 | K | CP10 | `feat/output-requests` | `plans/output-requests.plan.md` | all | done | CX49 CX50 |
+| 52 | K | CP11 | `feat/kiribati-gaps` | `plans/kiribati-gaps.plan.md` | all | done | CX51 CX52 CX53 CX54 CX55 CX56 CX58 |
 <!-- /roadmap:steps -->
 
 `Closes` lists row IDs of {doc}`../evaluation/tb-ports` (and, where a step moves
@@ -3921,6 +3925,70 @@ Set step 51 `done`; step 28 `next` stays current.
 - **Not done here:** saving a computed value waits for step 40 (`CX32`), after which
   `out.set(name, expr)` does it with no new request;
   porting the Kiribati model's `outputs.py` to requests is downstream work in that repository.
+
+---
+
+## Step 52 — `feat/kiribati-gaps`
+
+**Landed:** feat/kiribati-gaps, PR #84, 2026-11-19.
+
+**Worker:** a session started from the Kiribati port's orchestrating session (opus) wrote the plan
+and implemented it directly.
+
+### Summary
+
+Fixes the small summer4 gaps the two Kiribati TB ports found and records the large ones. `Lookup`
+indexes a table computed from the parameters; `TraitChain` takes rate-expression rates and is
+documented for paired state moves; requests take their own `naming=`; a plain `Capture` keeps its
+property map; `defer` explains `jnp` on grouped arguments; `differences(sign=-1)` gives averted
+burden; `Optax` passes `value_fn`. Closes `CX51`-`CX56` and `CX58` (package `CP11`), records
+`CX57` and `CX59`-`CX62` as deferred, and ships `41-kiribati-gaps.ipynb`.
+
+### What the previous worker left you
+
+- **Inserted on 2026-11-19** from the Kiribati ports' reports (gaps 1-6), gate notebook 40 (gap
+  7) and the first port's remaining workarounds (W4, W6-W9, W11). It runs beside step 28 and does
+  not move *Current position*.
+
+### Files
+
+`src/summer4/flows/{rates.py,stages.py,compiled.py,join.py,actualize.py}`,
+`src/summer4/results/outputset.py`, `src/summer4/epi/calibration/{model.py,posterior_runs.py}`,
+`src/summer4/epi/calibration/workflow/optimize.py`, `tests/test_kiribati_gaps.py` (new),
+`tests/test_rate_children.py`, `examples/notebooks/41-kiribati-gaps.ipynb` (new),
+`docs/evaluation/{composability.md,tb-ports.md}`, `docs/dev/run-stages.md`, `futureplans/`,
+`CHANGELOG.md`, `plans/kiribati-gaps.plan.md`.
+
+### Read first
+
+1. `plans/kiribati-gaps.plan.md`, all of it
+2. {doc}`../evaluation/composability`: rows `CX51`-`CX62`, package `CP11`
+
+### Do
+
+Follow the plan. Cut from: `main`. Merges into: `main`.
+
+### Exit checks
+
+The [standard checks](#exit-checks-every-step), plus `pixi run composability`. **User gate:**
+`examples/notebooks/41-kiribati-gaps.ipynb`.
+
+### Handoff
+
+Set step 52 `done`; step 28 `next` stays current.
+
+**Done (2026-11-19).**
+
+- **Shipped** as planned, with one change of approach: for gap 2, summer4 does not teach JAX to
+  unwrap a `GroupedRate` (`__jax_array__`), because JAX's binary operators call that hook too, so
+  `p * g` with `p` a traced parameter would drop the grouping silently and break the NumPy
+  spelling the Kiribati port uses. A `jnp` call on a grouped argument raises a clear `TypeError`
+  instead, and `defer` documents the contract.
+- **Recorded, not fixed:** an exact running total of a flow (`CX57`,
+  `futureplans/state-ledgers-flow-integral.md`, now with the Kiribati evidence), a forward-mode
+  `BayesianModel` (`CX59`), mapping optimise starts other than by `vmap` (`CX60`), `MCMCRun`
+  save/load and tail ESS (`CX61`), and a joint coordinate map (`CX62`). W8's `extra_fields` and
+  deadline were already on `main` (steps 47 and earlier).
 
 ---
 
