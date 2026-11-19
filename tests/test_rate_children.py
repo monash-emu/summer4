@@ -218,6 +218,24 @@ CASES: tuple[Case, ...] = (
         hoist=[("Lookup", "value")],
     ),
     Case(
+        id="lookup_computed_table",  # step 52 (CX51): a parameter-only table is hoisted
+        build=lambda: Lookup(Defer(_double, Param("stack")), floor(Time())),
+        flow_refs=set(),
+        field_paths={("stack",)},
+        capture_meta={},
+        stage="step",
+        hoist=[("Defer", "value")],
+    ),
+    Case(
+        id="capture_grouped",  # step 52 (CX55): a plain Capture records its inner's grouping
+        build=lambda: Capture("c", Reduce(group_by="age")),
+        flow_refs=set(),
+        field_paths=set(),
+        capture_meta={"c": ("age",)},
+        stage="step",
+        hoist=[],
+    ),
+    Case(
         id="capture_binop",
         build=lambda: Capture("c", Param("a") * FlowRef("x")),
         flow_refs={"x"},
@@ -321,7 +339,9 @@ CASES: tuple[Case, ...] = (
         build=lambda: Capture("c", _foi(Param("beta"))),
         flow_refs=set(),
         field_paths={("beta",)},
-        capture_meta={"infection": ("age",)},  # fixed in step 35: Capture folds over its inner
+        # fixed in step 35: Capture folds over its inner; step 52: a plain Capture of a
+        # grouped inner records that grouping too (CX55)
+        capture_meta={"c": ("age",), "infection": ("age",)},
         stage="step",
         hoist=[],
     ),
@@ -369,7 +389,7 @@ def test_field_paths(case: Case) -> None:
 
 @pytest.mark.parametrize("case", _PARAMS)
 def test_capture_meta(case: Case) -> None:
-    meta = _collect_capture_meta(case.build())
+    meta = _collect_capture_meta(case.build(), PropertyMap.from_property(_STATE).stratify(_AGE))
     assert {name: tuple(p.name for p in props) for name, props in meta.items()} == (
         case.capture_meta
     )

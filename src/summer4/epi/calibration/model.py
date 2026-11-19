@@ -117,8 +117,12 @@ class BayesianModel:
     output over the sparse observation points instead. ``rolling(n)`` counts
     saved points, so it is an ``n``-day window only on a daily grid.
 
-    Run-start work (yearly mixing stacks, interpolator knots) goes on
-    ``FlowModel.compile(prepare_fn=...)``. Passing ``preprocess=`` raises.
+    Run-start work (a yearly mixing stack, interpolator knots) is a rate
+    expression that reads only parameters, which is evaluated once per run:
+    ``field_refs(defer(build_stack)(Params()), Stacks).mixing``, indexed by
+    ``Lookup(..., floor(Time() - year0))``. ``FlowModel.compile(prepare_fn=...)``
+    remains for transforms of the parameter pytree itself. Passing
+    ``preprocess=`` raises.
     """
 
     def __init__(

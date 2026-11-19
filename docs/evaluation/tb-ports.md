@@ -54,7 +54,7 @@ original analyses re-run on numpyro.
 | KI3 | Kiribati | Initial population: seed in `clin_inf`, reachability split by `Param` | `full` | `InitialPopulation` | — |
 | KI4 | Kiribati | Generalised FOI `M @ (I_g / N_g**exp)` with a calibrated exponent | `full` | `ForceOfInfection(kind=FOIKind.GENERALISED, exponent=Param(...), mixing=...)` | — |
 | KI5 | Kiribati | Infectiousness weights by compartment × age | `full` | `infectiousness=[(selector, weight), ...]` multiplied per compartment before the group sum; a `group_by` trait map is sugar for the same pairs | — |
-| KI6 | Kiribati | Time-varying, parameterised mixing matrix (UN weights, fertility age gaps, spectral normalisation) | `full` | `Lookup(Param("mixing"), floor(Time() - year0))` inside `MixingMatrix`; the yearly stack is a parameter | — |
+| KI6 | Kiribati | Time-varying, parameterised mixing matrix (UN weights, fertility age gaps, spectral normalisation) | `full` | `Lookup(table, floor(Time() - year0))` inside `MixingMatrix`; the yearly stack is a parameter, or computed from the parameters once per run (`field_refs(defer(f)(Params()), S).stack`, step 52) | — |
 | KI7 | Kiribati | Flow adjustments by age and reachability with params and time functions | `full` | Stacked `Multiply(..., where=)` and `Transform` | — |
 | KI8 | Kiribati | Deaths recycled to (`mtb_naive`, age 0) preserving reachability | `full` | `TransitionFlow(state[x] & age[a], state["mtb_naive"] & age["0"], ...)` | — |
 | KI9 | Kiribati | Births into one stratum from sigmoidal interpolation × param | `full` | `EntryFlow` with `sigmoidal(...) * Param(...)` | — |

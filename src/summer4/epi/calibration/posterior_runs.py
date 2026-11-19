@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 
@@ -94,15 +94,23 @@ class PosteriorRuns:
         at: float,
         relative: bool = True,
         q: Sequence[float] = (0.025, 0.25, 0.5, 0.75, 0.975),
+        sign: Literal[1, -1] = 1,
     ) -> dict[str, Any]:
-        """Averted-burden quantiles vs ``ref`` at time ``at``.
+        """Quantiles over draws of each scenario's difference from ``ref`` at time ``at``.
 
         ``outputs`` maps a result name (column stem ``X``) to a stored output
-        name. Absolute difference is scenario − ref; relative is that divided
-        by the ref draw. The reference scenario is omitted from the result.
+        name. The difference is ``sign * (scenario - ref)``, per draw; relative
+        is that divided by the ref draw. ``sign=-1`` gives **averted** burden,
+        ``ref - scenario``, positive when the scenario lowers the output.
+        Quantiles do not commute with negation (the 2.5 % quantile of ``-d`` is
+        minus the 97.5 % quantile of ``d``), so ask for the sign you report
+        rather than flipping a frame afterwards. The reference scenario is
+        omitted from the result.
         """
         import pandas as pd
 
+        if sign not in (1, -1):
+            raise ValueError(f"sign must be 1 or -1, got {sign!r}.")
         if ref not in self.series:
             raise KeyError(f"Unknown ref scenario {ref!r}. Known: {list(self.series)}.")
         t_idx = _nearest_time_index(self.times, float(at))
@@ -116,7 +124,7 @@ class PosteriorRuns:
             for result_name, src_name in outputs.items():
                 scen_v = self.samples(scen, src_name)[:, t_idx]
                 ref_v = self.samples(ref, src_name)[:, t_idx]
-                diff = scen_v - ref_v
+                diff = sign * (scen_v - ref_v)
                 cols[result_name] = np.quantile(diff, q_arr, axis=0)
                 if relative:
                     with np.errstate(divide="ignore", invalid="ignore"):

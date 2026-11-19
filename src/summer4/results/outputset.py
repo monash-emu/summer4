@@ -17,6 +17,7 @@ output; the arithmetic itself is traced. ``cumsum(start=)`` and
 from __future__ import annotations
 
 import itertools
+import string
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, ClassVar, Literal
@@ -353,10 +354,36 @@ def _groupings(by: By) -> list[tuple[Property, ...]]:
     return groupings
 
 
+_SUFFIX_FIELDS = frozenset({"prop", "trait"})
+
+
+def _template_fields(template: str) -> set[str]:
+    return {field for _, field, _, _ in string.Formatter().parse(template) if field is not None}
+
+
 def _stratum_name(naming: Naming, name: str, traits: tuple[Trait, ...]) -> str:
+    """One stratum's output name.
+
+    ``naming`` is a callable ``(name, traits) -> str``; a **suffix template**
+    using only ``{prop}`` and ``{trait}``, formatted once per property and
+    appended to ``name`` (``"X{prop}_{trait}"``); or a **whole-name template**
+    using ``{name}`` and property names, each replaced by that property's trait
+    (``"{name}_from_{state}_age_{age}"``).
+    """
     if callable(naming):
         return naming(name, traits)
-    return name + "".join(naming.format(prop=t.property, trait=t.name) for t in traits)
+    fields = _template_fields(naming)
+    if fields <= _SUFFIX_FIELDS:
+        return name + "".join(naming.format(prop=t.property, trait=t.name) for t in traits)
+    values = {t.property: t.name for t in traits}
+    values["name"] = name
+    missing = sorted(fields - set(values))
+    if missing:
+        raise KeyError(
+            f"naming template {naming!r} names {missing}, which this grouping does not have. "
+            f"Known fields: {sorted(values)}."
+        )
+    return naming.format(**values)
 
 
 class OutputSet:
@@ -500,6 +527,7 @@ class OutputSet:
         where: Selector | None = None,
         *,
         by: By = (),
+        naming: Naming | None = None,
         keep: bool = True,
     ) -> OutputExpr:
         """Total size of the compartments matching ``where``, per save time.
@@ -509,12 +537,13 @@ class OutputSet:
             outputs.set(name, Compartments().select(where).sum_by(), keep=keep)
 
         Every compartment request reads the one shared ``Compartments()`` save.
-        ``by`` adds one output per stratum; see :meth:`fan_out`.
+        ``by`` adds one output per stratum, named by ``naming`` (default: the
+        set's); see :meth:`fan_out`.
         """
         leaf = OutputExpr.leaf(Compartments())
         base = leaf if where is None else leaf.select(where)
         expr = self.set(name, base.sum_by(), keep=keep)
-        self._fan_out(name, base, by, side=None, post=None, keep=keep)
+        self._fan_out(name, base, by, side=None, post=None, naming=naming, keep=keep)
         return expr
 
     def flow(
@@ -527,6 +556,7 @@ class OutputSet:
         values: FlowValues | None = None,
         by: By = (),
         side: Literal["source", "dest"] = "source",
+        naming: Naming | None = None,
         keep: bool = True,
     ) -> OutputExpr:
         """Total of ``flow`` over the edges whose source matches ``source`` and dest ``dest``.
@@ -542,7 +572,12 @@ class OutputSet:
         instantaneous rate at each save time (people per unit time);
         ``"midpoint"`` is summer2's flow-output convention. Every request on one
         flow reads one shared ``FlowMass(flow)`` save. ``by`` adds one output per
-        stratum of the ``side`` compartment; see :meth:`fan_out`.
+        stratum of the ``side`` compartment, named by ``naming`` (default: the
+        set's); see :meth:`fan_out`. One request gives summer2-port names such as
+        ``all_cause_mortality_from_<state>_age_<age>``::
+
+            outputs.flow("all_cause_mortality", "all_cause_mortality", by=[(state, age)],
+                         naming="{name}_from_{state}_age_{age}")
         """
         values = self.flow_values if values is None else values
         if values not in ("rate", "midpoint"):
@@ -560,7 +595,7 @@ class OutputSet:
         post: Literal["midpoint"] | None = "midpoint" if values == "midpoint" else None
         total = base.sum_by()
         expr = self.set(name, total.midpoint() if post else total, keep=keep)
-        self._fan_out(name, base, by, side=side, post=post, keep=keep)
+        self._fan_out(name, base, by, side=side, post=post, naming=naming, keep=keep)
         return expr
 
     def aggregate(self, name: str, sources: Sequence[str], *, keep: bool = True) -> OutputExpr:
@@ -643,9 +678,10 @@ class OutputSet:
         by: By,
         *,
         side: Literal["source", "dest"] | None = None,
+        naming: Naming | None = None,
         keep: bool = True,
     ) -> tuple[str, ...]:
-        """One output per stratum of ``expr``, named with the set's ``naming``.
+        """One output per stratum of ``expr``, named with ``naming`` (default: the set's).
 
         ``expr`` is an output with a compartment or edge axis, such as
         ``Compartments().select(where)`` or ``FlowMass("f")`` (``side`` picks
@@ -658,11 +694,21 @@ class OutputSet:
             outputs.set(f"{name}[age]", expr.sum_by(age), keep=False)
             outputs.set(f"{name}Xage_0", outputs.ref(f"{name}[age]").select(age["0"]).sum_by())
 
-        ``naming`` is a template formatted once per property with ``prop`` and
-        ``trait`` and appended to ``name`` (default ``"X{prop}_{trait}"``), or
-        a callable ``(name, traits) -> str``. Returns the names added.
+        ``naming`` is one of:
+
+        - a **suffix template** using only ``{prop}`` and ``{trait}``, formatted
+          once per property and appended to ``name`` (the default
+          ``"X{prop}_{trait}"``);
+        - a **whole-name template** using ``{name}`` and the grouping's property
+          names, each replaced by that property's trait:
+          ``"{name}_from_{state}_age_{age}"`` with ``by=[(state, age)]``;
+        - a callable ``(name, traits) -> str``.
+
+        ``naming=None`` uses the set's ``naming``, so one set can mix requests
+        named in different styles without a loop. Two strata given the same
+        name raise ``ValueError``. Returns the names added.
         """
-        return self._fan_out(name, expr, by, side=side, post=None, keep=keep)
+        return self._fan_out(name, expr, by, side=side, post=None, naming=naming, keep=keep)
 
     def _fan_out(
         self,
@@ -672,8 +718,10 @@ class OutputSet:
         *,
         side: Literal["source", "dest"] | None,
         post: Literal["midpoint"] | None,
+        naming: Naming | None = None,
         keep: bool,
     ) -> tuple[str, ...]:
+        naming = self.naming if naming is None else naming
         added: list[str] = []
         for grouping in _groupings(by):
             group_name = f"{name}[{','.join(p.name for p in grouping)}]"
@@ -686,7 +734,12 @@ class OutputSet:
                 sel: Selector = traits[0]
                 for trait in traits[1:]:
                     sel = sel & trait
-                stratum = _stratum_name(self.naming, name, traits)
+                stratum = _stratum_name(naming, name, traits)
+                if stratum in added:
+                    raise ValueError(
+                        f"naming gives two strata of {name!r} the name {stratum!r}; "
+                        "name every grouping property in the template."
+                    )
                 self.set(stratum, self.ref(group_name).select(sel).sum_by(), keep=keep)
                 added.append(stratum)
         return tuple(added)

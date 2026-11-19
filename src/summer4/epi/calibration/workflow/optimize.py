@@ -108,6 +108,10 @@ class Optax:
     :class:`AutoTune` can probe learning rates. A user-supplied
     ``GradientTransformation`` is used as-is; the LR probe then runs only if
     its state exposes ``hyperparams['learning_rate']``.
+
+    Each step passes ``value=``, ``grad=`` and ``value_fn=`` (the potential) to
+    ``update``, so a transform with a line search, such as ``optax.lbfgs()``,
+    runs as is: ``Optax(optax.lbfgs())``.
     """
 
     optimizer: Any | None = None
@@ -158,8 +162,11 @@ class _OptaxMethod:
     def step(self, state: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], Any]:
         z = state["z"]
         loss, grads = jax.value_and_grad(self.potential_fn)(z)
-        # reduce_on_plateau expects value=; plain adam ignores extra kwargs via ExtraArgs.
-        updates, opt_state = self.tx.update(grads, state["opt_state"], z, value=loss)
+        # reduce_on_plateau reads value=; optax.lbfgs's line search also reads grad=
+        # and value_fn=. Transforms that need none ignore them (GradientTransformationExtraArgs).
+        updates, opt_state = self.tx.update(
+            grads, state["opt_state"], z, value=loss, grad=grads, value_fn=self.potential_fn
+        )
         z_new = _require_optax().apply_updates(z, updates)
         improved = loss < state["best_loss"]
         best_z = jax.tree.map(lambda cur, best: jnp.where(improved, cur, best), z, state["best_z"])

@@ -13,6 +13,20 @@ Narrative release notes for the documentation site live in
 
 ### Added
 
+- **Kiribati port gaps** (`feat/kiribati-gaps`, roadmap step 52, `CX51`-`CX56`, `CX58`).
+  - `Lookup(table, index)` takes any array-valued rate expression as its table, such as a stack
+    computed from the parameters: `Lookup(field_refs(defer(f)(Params()), S).stack, floor(Time() -
+    1850))`. A parameter-only table is built once per run (hoisted), so a yearly mixing stack needs
+    neither a second `defer` nor `prepare_fn`.
+  - `TraitChain` rates may be rate expressions (`rates=(1 - p, p)` for a split), and its docstring
+    covers any explicit list of pairs within one property, such as paired state moves.
+  - `naming=` on `OutputSet.compartments`, `flow` and `fan_out`, and a whole-name template form:
+    `naming="{name}_from_{state}_age_{age}"`.
+  - `PosteriorRuns.differences(..., sign=-1)` gives averted burden (`ref - scenario`), quantiled
+    per draw.
+  - `wf.Optax` passes `value=`, `grad=` and `value_fn=` to the optax transform, so
+    `wf.Optax(optax.lbfgs())` runs.
+
 - **summer2-style output requests on `OutputSet`** (`feat/output-requests`, roadmap step 51,
   `CX49`, `CX50`). `compartments(name, where)`, `flow(name, flow, source=, dest=, values=)`,
   `aggregate(name, sources)`, `cumulative_integral(name, source, start=)`, `cumsum(...)` and
@@ -67,6 +81,14 @@ Narrative release notes for the documentation site live in
   deprecation warnings on import are gone. JAX stays on 0.6.
 - Notebooks 17 and 22 mute only the warning each one triggers on purpose (an out-of-support
   `log_prob` grid; an MCMC run stopped at its budget), with a comment saying why.
+
+### Fixed
+
+- A `GroupedOutput` of an explicit `Capture(name, inner)` keeps the inner expression's property
+  map, so `.select()` works on it (it returned a raw array; `CX55`).
+- A `jax.numpy` function called on a grouped (`GroupedRate`) argument inside `defer` raises a
+  `TypeError` naming the argument and the fix, instead of JAX's "not a valid JAX type"; `defer`
+  documents that NumPy functions keep the grouping (`CX52`).
 
 ## [0.3.0a5] — 2026-11-17
 

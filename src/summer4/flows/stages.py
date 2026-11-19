@@ -157,6 +157,9 @@ def build_hoist_table(roots: Sequence[RateOps]) -> HoistTable:
                     walk(v)
             return
         if isinstance(node, Lookup):
+            # A step-stage Lookup: the table may still read only parameters, so
+            # walk it too; a computed stack is then built once per run.
+            walk(node.table)
             walk(node.index)
             return
         if isinstance(node, Capture):
