@@ -93,8 +93,7 @@ class Case:
     flow_refs: set[str]
     field_paths: set[tuple[str, ...]]
     capture_meta: dict[str, tuple[str, ...]]  # capture name -> property names
-    stage_static: str
-    stage_dynamic: str
+    stage: str
     hoist: list[tuple[str, str]]  # sorted (type(node).__name__, part)
 
 
@@ -105,8 +104,7 @@ CASES: tuple[Case, ...] = (
         flow_refs=set(),
         field_paths=set(),
         capture_meta={},
-        stage_static="run",
-        stage_dynamic="run",
+        stage="run",
         hoist=[],
     ),
     Case(
@@ -115,8 +113,7 @@ CASES: tuple[Case, ...] = (
         flow_refs=set(),
         field_paths=set(),
         capture_meta={},
-        stage_static="step",
-        stage_dynamic="step",
+        stage="step",
         hoist=[],
     ),
     Case(
@@ -125,8 +122,7 @@ CASES: tuple[Case, ...] = (
         flow_refs=set(),
         field_paths={("a",)},
         capture_meta={},
-        stage_static="run",
-        stage_dynamic="step",
+        stage="run",
         hoist=[],
     ),
     Case(
@@ -135,8 +131,7 @@ CASES: tuple[Case, ...] = (
         flow_refs={"x"},
         field_paths=set(),
         capture_meta={},
-        stage_static="step",
-        stage_dynamic="step",
+        stage="step",
         hoist=[],
     ),
     Case(
@@ -145,8 +140,7 @@ CASES: tuple[Case, ...] = (
         flow_refs=set(),
         field_paths=set(),
         capture_meta={},
-        stage_static="run",
-        stage_dynamic="run",
+        stage="run",
         hoist=[],
     ),
     Case(
@@ -155,8 +149,7 @@ CASES: tuple[Case, ...] = (
         flow_refs=set(),
         field_paths={("a",), ("b",)},
         capture_meta={},
-        stage_static="run",
-        stage_dynamic="step",
+        stage="run",
         hoist=[("BinOp", "value")],
     ),
     Case(
@@ -165,8 +158,7 @@ CASES: tuple[Case, ...] = (
         flow_refs=set(),
         field_paths={("a",)},
         capture_meta={},
-        stage_static="run",
-        stage_dynamic="step",
+        stage="run",
         hoist=[("UnaryOp", "value")],
     ),
     Case(
@@ -175,8 +167,7 @@ CASES: tuple[Case, ...] = (
         flow_refs=set(),
         field_paths={("a",), ("b",)},
         capture_meta={},
-        stage_static="step",
-        stage_dynamic="step",
+        stage="step",
         hoist=[("Interp", "breakpoints"), ("Interp", "values")],
     ),
     Case(
@@ -185,8 +176,7 @@ CASES: tuple[Case, ...] = (
         flow_refs=set(),
         field_paths={("c",), ("h",)},
         capture_meta={},
-        stage_static="step",
-        stage_dynamic="step",
+        stage="step",
         hoist=[],
     ),
     Case(
@@ -195,8 +185,7 @@ CASES: tuple[Case, ...] = (
         flow_refs=set(),
         field_paths=set(),
         capture_meta={},
-        stage_static="step",
-        stage_dynamic="step",
+        stage="step",
         hoist=[],
     ),
     Case(
@@ -205,8 +194,7 @@ CASES: tuple[Case, ...] = (
         flow_refs=set(),
         field_paths={("a",), ("b",)},
         capture_meta={},
-        stage_static="run",
-        stage_dynamic="step",
+        stage="run",
         hoist=[("BinOp", "value")],
     ),
     Case(
@@ -217,8 +205,7 @@ CASES: tuple[Case, ...] = (
         flow_refs={"x"},
         field_paths={("a",), ("b",), ("stack",)},
         capture_meta={},
-        stage_static="step",
-        stage_dynamic="step",
+        stage="step",
         hoist=[("BinOp", "value")],
     ),
     Case(
@@ -227,8 +214,7 @@ CASES: tuple[Case, ...] = (
         flow_refs=set(),
         field_paths={("a",), ("b",), ("stack",)},
         capture_meta={},
-        stage_static="run",
-        stage_dynamic="step",
+        stage="run",
         hoist=[("Lookup", "value")],
     ),
     Case(
@@ -237,8 +223,7 @@ CASES: tuple[Case, ...] = (
         flow_refs={"x"},
         field_paths={("a",)},
         capture_meta={},
-        stage_static="step",
-        stage_dynamic="step",
+        stage="step",
         hoist=[],
     ),
     Case(
@@ -247,8 +232,7 @@ CASES: tuple[Case, ...] = (
         flow_refs={"x"},
         field_paths=set(),
         capture_meta={},
-        stage_static="step",
-        stage_dynamic="step",
+        stage="step",
         hoist=[],
     ),
     Case(
@@ -257,8 +241,7 @@ CASES: tuple[Case, ...] = (
         flow_refs={"x"},
         field_paths={("a",)},
         capture_meta={},
-        stage_static="step",
-        stage_dynamic="step",
+        stage="step",
         hoist=[],
     ),
     Case(
@@ -267,8 +250,7 @@ CASES: tuple[Case, ...] = (
         flow_refs=set(),
         field_paths={("a",), ("b",)},
         capture_meta={},
-        stage_static="run",
-        stage_dynamic="step",
+        stage="run",
         hoist=[("Defer", "value")],
     ),
     Case(
@@ -277,8 +259,7 @@ CASES: tuple[Case, ...] = (
         flow_refs={"x"},
         field_paths={("a",), ("b",)},
         capture_meta={},
-        stage_static="step",
-        stage_dynamic="step",
+        stage="step",
         hoist=[("Defer", "value")],
     ),
     Case(
@@ -287,8 +268,7 @@ CASES: tuple[Case, ...] = (
         flow_refs={"x"},
         field_paths={("a",)},
         capture_meta={},
-        stage_static="step",
-        stage_dynamic="step",
+        stage="step",
         hoist=[],
     ),
     Case(
@@ -297,8 +277,7 @@ CASES: tuple[Case, ...] = (
         flow_refs={"x"},
         field_paths={("a",)},
         capture_meta={},
-        stage_static="step",
-        stage_dynamic="step",
+        stage="step",
         hoist=[],
     ),
     Case(
@@ -307,8 +286,7 @@ CASES: tuple[Case, ...] = (
         flow_refs={"vacc"},  # fixed in step 35
         field_paths={("beta",)},
         capture_meta={"infection": ("age",)},
-        stage_static="step",
-        stage_dynamic="step",
+        stage="step",
         hoist=[],
     ),
     Case(
@@ -317,8 +295,7 @@ CASES: tuple[Case, ...] = (
         flow_refs=set(),
         field_paths={("beta",), ("scale",)},
         capture_meta={"infection": ("age",)},
-        stage_static="step",
-        stage_dynamic="step",
+        stage="step",
         hoist=[("BinOp", "value")],  # fixed in step 35: the contact-rate BinOp is slotted
     ),
     Case(
@@ -327,8 +304,7 @@ CASES: tuple[Case, ...] = (
         flow_refs=set(),
         field_paths={("a",), ("beta",)},
         capture_meta={"infection": ("age",)},
-        stage_static="step",
-        stage_dynamic="step",
+        stage="step",
         hoist=[],
     ),
     Case(
@@ -337,8 +313,7 @@ CASES: tuple[Case, ...] = (
         flow_refs=set(),
         field_paths={("beta",)},
         capture_meta={"infection": ("age",)},
-        stage_static="step",
-        stage_dynamic="step",
+        stage="step",
         hoist=[],
     ),
     Case(
@@ -347,8 +322,7 @@ CASES: tuple[Case, ...] = (
         flow_refs=set(),
         field_paths={("beta",)},
         capture_meta={"infection": ("age",)},  # fixed in step 35: Capture folds over its inner
-        stage_static="step",
-        stage_dynamic="step",
+        stage="step",
         hoist=[],
     ),
     Case(
@@ -357,8 +331,7 @@ CASES: tuple[Case, ...] = (
         flow_refs=set(),
         field_paths={("beta",)},
         capture_meta={"infection": ("age",)},  # fixed in step 35
-        stage_static="step",
-        stage_dynamic="step",
+        stage="step",
         hoist=[],
     ),
     Case(
@@ -367,8 +340,7 @@ CASES: tuple[Case, ...] = (
         flow_refs=set(),
         field_paths={("beta",), ("stack",)},
         capture_meta={"infection": ("age",)},  # fixed in step 35
-        stage_static="step",
-        stage_dynamic="step",
+        stage="step",
         hoist=[],
     ),
     Case(
@@ -377,8 +349,7 @@ CASES: tuple[Case, ...] = (
         flow_refs=set(),
         field_paths=set(),
         capture_meta={},
-        stage_static="step",
-        stage_dynamic="step",
+        stage="step",
         hoist=[],
     ),
 )
@@ -405,18 +376,13 @@ def test_capture_meta(case: Case) -> None:
 
 
 @pytest.mark.parametrize("case", _PARAMS)
-def test_rate_stage_params_static(case: Case) -> None:
-    assert rate_stage(case.build(), params_are_static=True) == case.stage_static
-
-
-@pytest.mark.parametrize("case", _PARAMS)
-def test_rate_stage_params_dynamic(case: Case) -> None:
-    assert rate_stage(case.build(), params_are_static=False) == case.stage_dynamic
+def test_rate_stage(case: Case) -> None:
+    assert rate_stage(case.build()) == case.stage
 
 
 @pytest.mark.parametrize("case", _PARAMS)
 def test_hoist_table(case: Case) -> None:
-    table = build_hoist_table([case.build()], params_are_static=True)
+    table = build_hoist_table([case.build()])
     got = sorted((type(entry.node).__name__, entry.part) for entry in table.entries)
     assert got == case.hoist
 

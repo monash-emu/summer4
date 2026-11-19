@@ -249,6 +249,10 @@ Step 47 is placed the same way, after step 46.
 Step 50 (`feat/multi-model`, multi-model calibration helpers) was cut from `main` on
 2026-11-17 while step 28 was current. Like step 46 it does not move *Current position*; the
 line places it where it was cut.
+Step 51 (`feat/output-requests`, summer2-style output requests) was cut from `main` on
+2026-11-19 while step 28 was current, the same way: it does not move *Current position*. It
+uses only `OutputSet`'s public surface, so it lands before `CP6` (steps 36-44); step 38 must keep
+`tests/test_output_requests.py` green unchanged.
 **Phase N** (step 48, `feat/clean-surface`, `plans/clean-surface.plan.md`) was inserted on
 2026-10-30, after PRs #69–#71 merged and before step 28. It removes the spellings that already
 have working replacements, rebuilds the published documentation in the unified idiom only, and
@@ -301,8 +305,8 @@ core on import, and parallel MCMC chains when the devices allow.
 | 37 | M | CP6 | `feat/post-stage-nodes` | `plans/unified-lazy-idiom.plan.md` | Step 37 | planned | — |
 | 38 | M | CP6 | `feat/outputset-on-rate-nodes` | `plans/unified-lazy-idiom.plan.md` | Step 38 | planned | CX30 |
 | 39 | M | CP6 | `feat/shared-nodes-and-fields` | `plans/unified-lazy-idiom.plan.md` | Step 39 | planned | — |
-| 40 | M | CP6 | `feat/save-expressions` | `plans/unified-lazy-idiom.plan.md` | Step 40 | planned | CX32 |
-| 41 | M | CP6 | `feat/derived-fn-deprecation` | `plans/unified-lazy-idiom.plan.md` | Step 41 | planned | CX31 |
+| 40 | M | CP6 | `feat/save-expressions` | `plans/save-expressions.plan.md` | Part C | done | CX32 |
+| 41 | M | CP6 | `feat/save-expressions` | `plans/save-expressions.plan.md` | Parts A, B | done | CX31 |
 | 42 | M | CP6 | `feat/callable-doors` | `plans/unified-lazy-idiom.plan.md` | Step 42 | planned | CX33 CX11 |
 | 43 | M | CP6 | `feat/typed-stages` | `plans/unified-lazy-idiom.plan.md` | Step 43 | planned | CX34 |
 | 44 | M | CP6 | `docs/unified-lazy-idiom` | `plans/unified-lazy-idiom.plan.md` | Step 44 | planned | — |
@@ -312,6 +316,7 @@ core on import, and parallel MCMC chains when the devices allow.
 | 48 | N | — | `feat/clean-surface` | `plans/clean-surface.plan.md` | Steps C0–C9 | done | — |
 | 49 | N | — | `feat/runtime-defaults` | `plans/runtime-defaults.plan.md` | Steps R0–R5 | done | — |
 | 50 | K | CP9 | `feat/multi-model` | `plans/multi-model-helpers.plan.md` | all | done | CX46 CX47 CX48 |
+| 51 | K | CP10 | `feat/output-requests` | `plans/output-requests.plan.md` | all | done | CX49 CX50 |
 <!-- /roadmap:steps -->
 
 `Closes` lists row IDs of {doc}`../evaluation/tb-ports` (and, where a step moves
@@ -342,6 +347,7 @@ changed about them is recorded here instead, and overrides them.
 | `unified-lazy-idiom` | Steps 40, 41, 42, 45 | **Delete outright, no deprecation cycle** (user, 2026-10-30). Step 40 deletes `SaveFn` and `ComputedValue`; step 41 deletes `compile(derived_fn=...)`, `derived_refs`, rule R3 and the `params_are_static` keyword with its test call sites (the "hoist table unchanged for `derived_fn` models" test goes); step 42 deletes the bare-callable FOI `kind`. Each step migrates every caller and keeps equivalence tests only as replacement-only tests with hand values. Step 45 is absorbed and marked `done`. Notebook 27's "before" sections become text-only; its comparison plots use values saved from the old idiom before removal, or hand-computed references |
 | `unified-lazy-idiom` | Steps 36–44 | Step 48 rebuilt the published docs (`docs/guide/`, `docs/textbook/`, `docs/roadmap.md`). Each Phase M step that lands a replacement adds the new idiom to the matching guide page and deletes that door's row from `docs/roadmap.md` § *Still here, on the way out*. Step 44 only converts what Phase M added; `tests/test_docs_idiom.py` must keep passing |
 | `unified-lazy-idiom` | Step 42 | If step 48 (C2) removed the InitialPopulation callables, step 42's initial-population half is already done; see step 48's handoff |
+| `unified-lazy-idiom` | Steps 36–41 | **Steps 40 and 41 landed first, standalone** (user, 2026-11-19), on `feat/save-expressions` with `plans/save-expressions.plan.md`, on today's `OutputExpr`. They also landed the part of step 39 that step 41 needs: the per-call memo, `Item`, `field_refs`, `Params()` and `StateArray()` (step 39's sin-count and equivalence tests are in `tests/test_shared_nodes.py`; notebook 27 does not exist, the user gate is `40-save-expressions.ipynb`). Step 36 drops `params_are_static` from its scope (already gone). Step 38 must port `SavedExpr` lifting (`_coerce` of a step-stage rate expression) onto `Saved(SavedExpr(...))` and keep `tests/test_save_expressions.py` and `tests/test_output_requests.py` green unchanged. Step 39 is left with only what 41 did not need |
 | `wp9-contact-surveys`, `wp17-foi-susceptibility` | Steps 16–19 | Step 48 replaced the docs tree. Open PRs #46, #47, #50 and #52 must rebase onto it: textbook pages go under `docs/textbook/`, user-guide material under `docs/guide/`, and nothing may use an idiom `tests/test_docs_idiom.py` forbids |
 
 ---
@@ -2978,6 +2984,8 @@ Set step 39 `done`, step 40 `next`.
 
 ## Step 40 — `feat/save-expressions`
 
+**Landed:** feat/save-expressions, 2026-11-19 (PR pending); standalone, see the corrections table (*Steps 36–41*).
+
 ### Summary
 
 `outputs["foi"] = <step-stage expression>` is saved during the solve, through a
@@ -3042,9 +3050,17 @@ The [standard checks](#exit-checks-every-step), plus `pixi run composability`.
 
 Set step 40 `done`, step 41 `next`.
 
+**Done (2026-11-19), standalone with step 41 on `feat/save-expressions`.** See the corrections
+table (*Steps 36–41*) and `plans/save-expressions.plan.md` Part C: `SavedExpr(expr, over=)`,
+`SaveContext.evaluate` sharing the vector field's memo, `over` inferred in `expand`, lifting in
+`OutputSet._coerce` and `outputs[name] = expr`. `SaveFn` and `ComputedValue` are deleted. User
+gate: `examples/notebooks/40-save-expressions.ipynb` sections A–C.
+
 ---
 
 ## Step 41 — `feat/derived-fn-deprecation`
+
+**Landed:** feat/save-expressions, 2026-11-19 (PR pending); standalone, see the corrections table (*Steps 36–41*).
 
 ### Summary
 
@@ -3110,6 +3126,14 @@ The [standard checks](#exit-checks-every-step), plus `pixi run composability`.
 ### Handoff
 
 Set step 41 `done`, step 42 `next`.
+
+**Done (2026-11-19), standalone with step 40 on `feat/save-expressions`.** Plan Parts A and B:
+the per-call memo, `Params()`, `StateArray()`, `Item`, `field_refs`; `compile(derived_fn=)`,
+`derived_refs`, `computed_paths`, rule R3 and `params_are_static` are deleted and every caller
+migrated (`derived_refs(S)` for typed parameters is `field_refs(Params(), S)`, the same
+`FieldRef`s). The `EVERYTHING` plan no longer saves parameter paths. User gate:
+`examples/notebooks/40-save-expressions.ipynb` sections D–E. `futureplans/derived-fn-blocks-hoisting.md`
+is marked done.
 
 ---
 
@@ -3833,6 +3857,70 @@ Set step 50 `done`; step 28 `next` stays current. Record deviations from the pla
 - **Separate branch:** `docs/api-calibration` adds `summer4.epi`, `summer4.epi.calibration` and
   `summer4.epi.calibration.workflow` to the API reference.
 - **Release:** `0.3.0a4` (this step plus PR #78's `Property` fix) is cut after this PR merges.
+
+## Step 51 — `feat/output-requests`
+
+**Landed:** feat/output-requests, 2026-11-19 (PR pending).
+
+**Worker:** the orchestrating session (opus) wrote the plan and implemented it directly, at the
+user's request ("plan and implement straight away").
+
+### Summary
+
+summer2-style one-call derived outputs on `OutputSet`, with every existing door kept as an escape
+hatch. `compartments`, `flow`, `aggregate`, `cumulative` and `function` are each one `set` call
+whose docstring gives the expression; `by=` / `fan_out` add one output per stratum with
+summer2-port names; `keep=False`, `kept()`, `subset()` and `evaluate(names=)` replace
+`save_results=False` and the Kiribati port's `restrict_outputs`; `CompiledModel.run(outputs=)` is
+plan, run and evaluate. Closes `CX49` and `CX50` (package `CP10`) and ships
+`39-output-requests.ipynb`.
+
+### What the previous worker left you
+
+- **Inserted on 2026-11-19** from a design discussion comparing summer2's request API with
+  `OutputSet`, using `kiribati-tb-summer4/src/kiribati_tb/outputs.py` as the evidence. It runs
+  beside step 28 and does not move *Current position*.
+
+### Files
+
+`src/summer4/results/outputset.py`, `src/summer4/flows/compiled.py`,
+`src/summer4/epi/calibration/{model.py,posterior_runs.py}`, `tests/test_output_requests.py`
+(new), `examples/notebooks/39-output-requests.ipynb` (new), `docs/guide/04-derived-outputs.ipynb`,
+`docs/evaluation/{composability.md,coverage-ledger.md}`, `CHANGELOG.md`,
+`plans/output-requests.plan.md`.
+
+### Read first
+
+1. `plans/output-requests.plan.md`, all of it
+2. {doc}`../evaluation/composability`: rows `CX49`, `CX50`, package `CP10`
+3. `src/summer4/results/outputset.py`
+
+### Do
+
+Follow the plan. Cut from: `main`. Merges into: `main`.
+
+### Exit checks
+
+The [standard checks](#exit-checks-every-step), plus `pixi run composability`. **User gate:**
+`examples/notebooks/39-output-requests.ipynb`.
+
+### Handoff
+
+Set step 51 `done`; step 28 `next` stays current.
+
+**Done (2026-11-19).**
+
+- **Shipped** as planned, with one correction found by the gate notebook: fan-out does not make
+  the traced `evaluate` smaller. Every named output is its own step either way, so it traces the
+  same equations per stratum as a hand loop, plus one grouped sum per grouping; its gain is that
+  each stratum reads the small grouped array rather than the full save. The plan, test and
+  notebook (section E) say so.
+- **Corrected on `feat/save-expressions`:** the plan's `out.cumulative(..., method=)` request
+  shipped as two requests, `cumulative_integral(name, source, start=)` and `cumsum(...)`,
+  mirroring `Output`: the docs ban `.cumulative(` since the old `Output.cumulative()` split.
+- **Not done here:** saving a computed value waits for step 40 (`CX32`), after which
+  `out.set(name, expr)` does it with no new request;
+  porting the Kiribati model's `outputs.py` to requests is downstream work in that repository.
 
 ---
 

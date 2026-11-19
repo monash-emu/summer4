@@ -89,8 +89,8 @@ def test_sin_compiles_to_the_numpy_seasonal_rate() -> None:
 
 
 def test_staging_follows_the_argument_not_the_op() -> None:
-    assert rate_stage(np.sin(Param("p")), params_are_static=True) == "run"
-    assert rate_stage(np.sin(Time()), params_are_static=True) == "step"
+    assert rate_stage(np.sin(Param("p"))) == "run"
+    assert rate_stage(np.sin(Time())) == "step"
 
 
 def test_sin_models_share_a_jit_cache_entry_and_cos_does_not() -> None:

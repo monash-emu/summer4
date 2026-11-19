@@ -22,6 +22,7 @@ from summer4 import (
     PropertyData,
     PropertyMap,
     Result,
+    SavedExpr,
     Time,
     TimeAxis,
     TransitionFlow,
@@ -215,15 +216,26 @@ def test_wrong_shape_raises_type_error_naming_the_function() -> None:
     assert "(5,)" in str(info.value)
 
 
-def test_mixed_time_and_output_arguments_raise_value_error_at_evaluate() -> None:
+def test_a_time_argument_is_saved_during_the_solve() -> None:
+    """Step 40: ``Time()`` beside an output is a saved expression, not an error."""
+
     def add_time(t: Any, series: Any) -> Any:
-        return jnp.asarray(t) + _raw(series)
+        # A lifted Time() is saved, so it arrives as an Output like any output argument.
+        return _raw(t) + _raw(series)
 
     outputs = OutputSet()
     outputs["inc"] = Compartments()
     outputs["mixed"] = defer(add_time)(Time(), outputs.ref("inc"))
-    with pytest.raises(ValueError, match="depends on time"):
-        outputs.evaluate(_series_result("inc", _incidence(5)), {"delay": 2.0})
+    plan = outputs.plan()
+    assert plan.requests["mixed"].what == SavedExpr(Time())
+    axis = _axis(5)
+    times = Output(times=axis, values=np.arange(5.0), dims=("time",))
+    inc = Output(times=axis, values=_incidence(5), dims=("time",))
+    result = Result(times=axis, outputs={"inc": inc, "mixed": times})
+    named = outputs.evaluate(result, {})
+    np.testing.assert_allclose(
+        np.asarray(named["mixed"].array()), np.arange(5.0) + np.asarray(_incidence(5))
+    )
 
 
 def test_array_return_without_an_output_argument_is_an_array_output() -> None:

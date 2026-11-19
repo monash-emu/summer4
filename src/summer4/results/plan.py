@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 from numpy.typing import NDArray
 
-from summer4.flows.rates import _callable_key
+from summer4.flows.rates import RateOps, _flow_refs, _rate_bytes
 from summer4.properties import Property
 from summer4.selectors import Selector
 
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from summer4.results.outputset import OutputExpr
 
 type Side = Literal["source", "dest"]
-type Quantity = Compartments | FlowMass | ComputedValue | SaveFn | GroupedOutput
+type Quantity = Compartments | FlowMass | SavedExpr | GroupedOutput
 
 
 class _OutputExprChain:
@@ -151,17 +151,6 @@ class FlowMass(_OutputExprChain):
 
 
 @dataclass(frozen=True, slots=True)
-class ComputedValue(_OutputExprChain):
-    """Capture a path from the derived-param struct produced by ``derived_fn``.
-
-    Legacy: removed in roadmap step 40, replaced by assigning an expression to an
-    ``OutputSet`` entry. Not used in the documentation.
-    """
-
-    path: tuple[str, ...]
-
-
-@dataclass(frozen=True, slots=True)
 class GroupedOutput(_OutputExprChain):
     """Save a :class:`~summer4.flows.rates.Capture`d :class:`GroupedRate` by name.
 
@@ -173,19 +162,47 @@ class GroupedOutput(_OutputExprChain):
     name: str
 
 
-@dataclass(frozen=True, slots=True)
-class SaveFn(_OutputExprChain):
-    """Escape hatch: ``fn(ctx: SaveContext) -> array``.
+@dataclass(frozen=True, slots=True, eq=False, init=False)
+class SavedExpr(_OutputExprChain):
+    """Save the value of a rate expression at every save time.
 
-    ``fn`` hashes by identity, so a lambda defined inside a loop retraces every
-    call (same trap as ``derived_fn`` / ``Transform.fn``).
+    ``expr`` is any rate expression: ``Param("b") * exp(Time())``, a
+    ``ForceOfInfection``, ``FlowRef("f").sum_by()``. It is evaluated during the
+    solve, at the save time and state, with the same hoisted values and per-call
+    memo as the vector field. A scalar value saves one series. A value grouped by
+    a property (a :class:`~summer4.flows.compiled.GroupedRate`) saves one series
+    per trait of ``over``; ``over`` is inferred when the solve's save plan is
+    expanded, and can be given. A per-compartment or per-edge value raises: save
+    those with :class:`Compartments` or :class:`FlowMass`.
 
-    Legacy: removed in roadmap step 40, replaced by assigning an expression to an
-    ``OutputSet`` entry. Not used in the documentation.
+    You rarely build one yourself: ``outputs[name] = expr`` in an
+    :class:`~summer4.results.outputset.OutputSet` does it for any expression that
+    depends on time, state or flows.
     """
 
-    fn: Callable[[Any], Any]
-    reads: frozenset[str] = field(default_factory=frozenset)
+    expr: RateOps
+    over: Property | None = None
+    _digest: bytes = field(default=b"", repr=False, compare=False)
+
+    def __init__(self, expr: RateOps, over: Property | None = None) -> None:
+        if not isinstance(expr, RateOps):
+            raise TypeError(f"SavedExpr needs a rate expression, got {type(expr).__name__}.")
+        if over is not None and not isinstance(over, Property):
+            raise TypeError(f"over must be a Property, got {type(over).__name__}.")
+        object.__setattr__(self, "expr", expr)
+        object.__setattr__(self, "over", over)
+        body = _rate_bytes(expr) + b"|over:"
+        if over is not None:
+            body += over.name.encode() + repr(over.traits).encode()
+        object.__setattr__(self, "_digest", hashlib.blake2b(body, digest_size=16).digest())
+
+    def __hash__(self) -> int:
+        return hash(self._digest)
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, SavedExpr):
+            return NotImplemented
+        return self._digest == other._digest
 
 
 @dataclass(frozen=True, slots=True)
@@ -203,12 +220,10 @@ def _quantity_bytes(what: Quantity) -> bytes:
         case FlowMass(flow=flow, where=where, group_by=group_by):
             names = b"\0".join(name.encode() for name in flow_names(flow))
             return b"flow" + names + repr(where).encode() + repr(group_by).encode()
-        case ComputedValue(path=path):
-            return b"cv" + repr(path).encode()
         case GroupedOutput(name=name):
             return b"grouped" + name.encode()
-        case SaveFn(fn=fn, reads=reads):
-            return b"fn" + _callable_key(fn).encode() + repr(sorted(reads)).encode()
+        case SavedExpr():
+            return b"expr" + what._digest
         case _:
             raise TypeError(f"Unknown quantity {type(what).__name__}.")
 
@@ -243,7 +258,7 @@ class SavePlan:
 
     An empty :attr:`requests` mapping is the ``EVERYTHING`` sentinel:
     :meth:`CompiledModel.expand` fills compartments, every flow, and every
-    computed path. There is exactly one code path below ``expand``.
+    captured grouped rate. There is exactly one code path below ``expand``.
     """
 
     requests: Mapping[str, SaveRequest] = field(default_factory=dict)
@@ -268,14 +283,14 @@ class SavePlan:
         return self._digest == other._digest
 
     def flow_reads(self) -> frozenset[str]:
-        """Return flow names this plan materialises (directly or via SaveFn.reads)."""
+        """Return flow names this plan materialises (directly, or read by a saved expression)."""
         names: set[str] = set()
         for req in self.requests.values():
             match req.what:
                 case FlowMass(flow=flow):
                     names.update(flow_names(flow))
-                case SaveFn(reads=reads):
-                    names |= set(reads)
+                case SavedExpr(expr=expr):
+                    names |= _flow_refs(expr)
                 case _:
                     pass
         return frozenset(names)

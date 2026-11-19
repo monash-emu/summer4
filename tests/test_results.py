@@ -16,15 +16,17 @@ from summer4 import (
     Epoch,
     FlowMass,
     FlowModel,
+    Params,
     Property,
     PropertyData,
     PropertyMap,
-    SaveFn,
+    Reduce,
+    SavedExpr,
     SavePlan,
     SaveRequest,
     State,
     TransitionFlow,
-    derived_refs,
+    field_refs,
 )
 from summer4.jax.propertydata import PropertyData as PD
 from summer4.results.plan import PlanDescription
@@ -62,23 +64,15 @@ class _DescribeRates(NamedTuple):
     recovery: float
 
 
-def test_describe_with_params_indexing_derived_fn() -> None:
-    """describe(params=...) sizes a plan when derived_fn indexes params."""
+def test_describe_with_params_indexing_params() -> None:
+    """describe(params=...) sizes a plan when rates read typed parameters."""
     state, _age, pmap = _sir_age()
 
-    def derived_fn(params: object, *, y: object, t: object) -> _DescribeRates:
-        del y, t
-        assert isinstance(params, dict)
-        return _DescribeRates(
-            infection=params["infection"],
-            recovery=params["recovery"],
-        )
-
-    refs = derived_refs(_DescribeRates)
+    refs = field_refs(Params(), _DescribeRates)
     model = FlowModel(pmap)
     model.add_flow(TransitionFlow("infection", state["S"], state["I"], refs.infection))
     model.add_flow(TransitionFlow("recovery", state["I"], state["R"], refs.recovery))
-    cm = model.compile(derived_fn=derived_fn)
+    cm = model.compile()
     y0 = np.zeros(pmap.size)
     y0[pmap.select(state["S"])] = 999.0
     y0[pmap.select(state["I"])] = 1.0
@@ -96,7 +90,7 @@ def test_describe_with_params_indexing_derived_fn() -> None:
     assert desc.total_nbytes == actual
 
 
-def test_describe_without_params_still_works_without_derived_fn() -> None:
+def test_describe_without_params_still_works() -> None:
     _state, _age, _pmap, cm, y0 = _compiled_sir()
     plan = SavePlan(requests={"compartments": SaveRequest(Compartments())})
     desc = cm.describe(plan, y0=y0, n_saves=5)
@@ -389,17 +383,9 @@ def test_to_pandas_optional() -> None:
     assert pdf.index.name == "time"
 
 
-def test_savefn_escape_hatch() -> None:
+def test_saved_expr_total_population() -> None:
     _state, _age, _pmap, cm, y0 = _compiled_sir()
-
-    def fn(ctx: object) -> object:
-        import jax.numpy as jnp
-
-        y = ctx.y  # type: ignore[attr-defined]
-        data = y.data if isinstance(y, PropertyData) else y
-        return jnp.sum(data)
-
-    plan = SavePlan(requests={"pop": SaveRequest(SaveFn(fn=fn))})
+    plan = SavePlan(requests={"pop": SaveRequest(SavedExpr(Reduce()))})
     res = cm.run({}, y0, t0=0.0, steps=3, dt=1.0, save=plan)
     assert res["pop"].dims == ("time",)
     np.testing.assert_allclose(np.asarray(res["pop"].values), 3000.0, rtol=1e-4)

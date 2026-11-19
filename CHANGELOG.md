@@ -11,18 +11,62 @@ Narrative release notes for the documentation site live in
 
 ## [Unreleased]
 
+### Added
+
+- **summer2-style output requests on `OutputSet`** (`feat/output-requests`, roadmap step 51,
+  `CX49`, `CX50`). `compartments(name, where)`, `flow(name, flow, source=, dest=, values=)`,
+  `aggregate(name, sources)`, `cumulative_integral(name, source, start=)`, `cumsum(...)` and
+  `function(name, fn, *args)` are each one assignment; the docstring gives the expression, and
+  each returns it so it chains like any other. `by=[age, reach, (age, reach)]` adds one output per
+  stratum (`prevXage_15Xreach_far`; `naming=` changes the names), and `fan_out` does the same for
+  any expression. `OutputSet(flow_values="midpoint")` gives summer2's flow-output convention.
+  Raw assignments, `ref`, ufuncs and `defer` mix freely with requests.
+- **Intermediates:** `OutputSet.set(name, expr, keep=False)` and `keep=` on every request
+  (summer2's `save_results=False`). `kept()` lists the rest, `subset(names)` keeps only `names`,
+  and `evaluate(result, params, names=)` returns `names` (default `kept()`), computing only what
+  they read. `posterior_runs` records `kept()`; `BayesianModel` evaluates every name, so a target
+  may score an intermediate.
+- **`CompiledModel.run(..., outputs=out)`** solves for what `out` needs and returns its evaluated
+  outputs: `out.evaluate(model.run(..., save=out.plan(save)), params)`.
+
+- **Save any expression** (`feat/save-expressions`, roadmap step 40, `CX32`).
+  `outputs[name] = expr` saves the value of any rate expression that reads time, state or flows,
+  during the solve: a seasonal contact rate, `ForceOfInfection(...)` by age (one series per trait;
+  `over` is read from the expression), `Reduce(...)`, `FlowRef(...).sum_by()`. In a mixed
+  expression such as `Param("k") * Time() * outputs.ref("inc")`, the step-stage part is saved and
+  the rest is applied afterwards. The quantity is `SavedExpr(expr, over=None)`; it shares the
+  vector field's per-call values, so an expression a flow also uses is not recomputed.
+- **`field_refs(expr, Schema)`, `Params()`, `StateArray()` and `Item`** (step 41, with the part of
+  step 39 it needs, `CX31`). `field_refs(defer(f)(Params(), y=StateArray(), t=Time()), Schema)`
+  computes several values from parameters, time and state in one function; `f` runs once per
+  step however many rates read it (a per-call memo of shared nodes), and parameter-only parts of
+  the model still hoist to run start. `field_refs(Params(), Schema)` is typed parameter access.
+- A test that parallel MCMC chains work with gradients through the default Tsit5 solve on the
+  pinned JAX (`CX45`; an expected failure on JAX >= 0.7).
+
+### Removed
+
+- **`FlowModel.compile(derived_fn=)`, `derived_refs`, `DerivedFn`, `CompiledModel.derived_fn`,
+  `computed_paths`, rule R3 and the `params_are_static` keyword** of `rate_stage` and
+  `build_hoist_table` (step 41). Use `field_refs(defer(f)(Params(), y=StateArray(), t=Time()),
+  Schema)`, and `field_refs(Params(), Schema)` in place of `derived_refs(Schema)`. A custom
+  node's `__rate_stage__` takes no arguments.
+- **`SaveFn` and `ComputedValue`** (step 40). Assign the expression (`outputs[name] = expr`) or
+  save `SavedExpr(expr)`. The `EVERYTHING` save plan no longer saves every parameter path.
+- Downstream code using any of these (for example the Kiribati port's `SaveFn` outputs) must move
+  to the replacements when it upgrades.
+
 ### Changed
 
+- `defer(f)(outputs.ref(...), Time())` no longer raises: the `Time()` argument is saved and
+  reaches `f` as an `Output`.
+- `OutputSet.evaluate` no longer returns names assigned with `keep=False`; pass
+  `names=outputs.keys()` for every name. Sets without `keep=False` are unaffected.
 - The `default`, `nb` and `docs` environments use numpyro 0.18 (was 0.16.1). numpyro 0.18
   no longer imports the deprecated `jax.core.call_p` / `closed_call_p`, so the two JAX
   deprecation warnings on import are gone. JAX stays on 0.6.
 - Notebooks 17 and 22 mute only the warning each one triggers on purpose (an out-of-support
   `log_prob` grid; an MCMC run stopped at its budget), with a comment saying why.
-
-### Added
-
-- A test that parallel MCMC chains work with gradients through the default Tsit5 solve on the
-  pinned JAX (`CX45`; an expected failure on JAX >= 0.7).
 
 ## [0.3.0a5] — 2026-11-17
 

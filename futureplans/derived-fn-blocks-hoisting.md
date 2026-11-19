@@ -19,3 +19,8 @@ evaluation) and 41 (`derived_fn` deprecated) in
 `plans/unified-lazy-idiom.plan.md` take route (b): new-idiom models read
 parameters through `FieldRef` and derived values through `field_refs(defer(...))`,
 so their parameter work hoists. Step 41 marks this note done.
+
+**Done (2026-11-19, steps 40-41 standalone, `plans/save-expressions.plan.md`):** `derived_fn`,
+`derived_refs`, rule R3 and `params_are_static` are deleted. Models read derived values through
+`field_refs(defer(f)(Params(), y=StateArray(), t=Time()), Schema)`; a per-call memo runs `f` once
+per step, and parameter-only subtrees always hoist.

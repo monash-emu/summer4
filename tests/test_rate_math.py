@@ -169,15 +169,14 @@ def test_digest_distinguishes_exp_and_log() -> None:
 def test_stage_and_hoist_of_parameter_only_unary() -> None:
     inner = Param("a") * Param("b")
     expr = exp(inner)
-    assert rate_stage(expr, params_are_static=True) == "run"
-    assert rate_stage(expr, params_are_static=False) == "step"
-    assert rate_stage(exp(Time()), params_are_static=True) == "step"
-    table = build_hoist_table([expr], params_are_static=True)
+    assert rate_stage(expr) == "run"
+    assert rate_stage(exp(Time())) == "step"
+    table = build_hoist_table([expr])
     assert len(table.entries) == 1
 
     # The parameter product inside a step-stage exp is still hoisted.
     stepped = exp(inner + Time())
-    stepped_table = build_hoist_table([stepped], params_are_static=True)
+    stepped_table = build_hoist_table([stepped])
     assert any(entry.node == inner for entry in stepped_table.entries)
 
     state = Property("state", ("Y",))

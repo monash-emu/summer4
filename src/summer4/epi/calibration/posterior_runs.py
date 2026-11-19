@@ -335,9 +335,10 @@ def _output_names_for(
     probe_result: Any,
 ) -> tuple[str, ...]:
     if outputs is not None:
-        return tuple(outputs.keys())
+        return outputs.kept()
     if bm.outputs is not None:
-        return tuple(bm.outputs.keys())
+        kept: tuple[str, ...] = bm.outputs.kept()
+        return kept
     # Fall back to every key on the probe result (targets + leaves).
     return tuple(str(k) for k in probe_result)
 

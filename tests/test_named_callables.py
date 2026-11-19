@@ -20,7 +20,6 @@ jnp = pytest.importorskip("jax.numpy")
 
 from summer4 import (  # noqa: E402
     Compartments,
-    ComputedValue,
     Defer,
     EntryFlow,
     Everything,
@@ -28,17 +27,19 @@ from summer4 import (  # noqa: E402
     InitialPopulation,
     Named,
     Param,
+    Params,
     Property,
     PropertyData,
     PropertyMap,
-    SaveFn,
+    SavedExpr,
     SavePlan,
     SaveRequest,
+    StateArray,
     Time,
     Transform,
     TransitionFlow,
     defer,
-    derived_refs,
+    field_refs,
     named,
 )
 from summer4.epi import ForceOfInfection, MixingMatrix  # noqa: E402
@@ -70,28 +71,31 @@ def _build_transform(name: str | None) -> object:
 
 
 def _build_save(name: str | None) -> object:
-    def harvest(ctx: Any) -> Any:
-        return jnp.asarray(ctx.t) * 2.0
+    def harvest(t: Any) -> Any:
+        return jnp.asarray(t) * 2.0
 
-    fn = SaveFn(fn=_maybe_named(harvest, name))
-    return SavePlan(requests={"harvest": SaveRequest(fn)}, ts=np.array([1.0]))
+    expr = SavedExpr(defer(_maybe_named(harvest, name))(Time()))
+    return SavePlan(requests={"harvest": SaveRequest(expr)}, ts=np.array([1.0]))
 
 
 class _Derived(NamedTuple):
     rec: Any
 
 
-def _build_derived(name: str | None) -> object:
-    state, pmap = _state_pmap()
-    refs = derived_refs(_Derived)
-
+def _deferred_refs(name: str | None) -> _Derived:
     def derived(params: Any, *, y: Any, t: Any) -> _Derived:
         del y
         return _Derived(rec=0.1 * (1.0 + params["amp"] * jnp.sin(t / 10.0) ** 2))
 
+    deferred = defer(_maybe_named(derived, name))(Params(), y=StateArray(), t=Time())
+    return field_refs(deferred, _Derived)
+
+
+def _build_derived(name: str | None) -> object:
+    state, pmap = _state_pmap()
     model = FlowModel(pmap)
-    model.add_flow(EntryFlow("in", state["Y"], refs.rec))
-    return model.compile(derived_fn=_maybe_named(derived, name))
+    model.add_flow(EntryFlow("in", state["Y"], _deferred_refs(name).rec))
+    return model.compile()
 
 
 def _build_prepare(name: str | None) -> object:
@@ -127,7 +131,7 @@ def _build_foi(name: str | None) -> object:
     state = Property("state", ("S", "I", "R"))
     age = Property("age", ("young", "old"))
     pmap = PropertyMap.from_property(state).stratify(age)
-    refs = derived_refs(_ContactParams)
+    refs = field_refs(Params(), _ContactParams)
 
     def as_freq(infectious: Any, denominator: Any) -> Any:
         return infectious / denominator
@@ -147,8 +151,8 @@ def _build_foi(name: str | None) -> object:
 
 _HOOKS = (
     pytest.param(_build_transform, id="transform"),
-    pytest.param(_build_save, id="save-fn"),
-    pytest.param(_build_derived, id="derived-fn"),
+    pytest.param(_build_save, id="saved-expr"),
+    pytest.param(_build_derived, id="deferred-field-refs"),
     pytest.param(_build_prepare, id="prepare-fn"),
     pytest.param(_build_initial, id="initial-base"),
     pytest.param(_build_foi, id="foi-kind"),
@@ -216,19 +220,14 @@ def test_named_transform_gives_the_bare_trajectory() -> None:
 
 
 @pytest.mark.parametrize("name", ["d", None])
-def test_derived_fn_still_validates_computed_paths(name: str | None) -> None:
-    _state, pmap = _state_pmap()
+def test_deferred_field_ref_saves_as_an_expression(name: str | None) -> None:
+    state, pmap = _state_pmap()
     y0 = PropertyData.wrap(pmap, np.array([1.0]))
-    params = {"amp": 0.5}
-
-    def save(path: tuple[str, ...]) -> SavePlan:
-        return SavePlan(requests={"x": SaveRequest(ComputedValue(path=path))}, ts=np.array([1.0]))
-
-    compiled = cast(Any, _build_derived(name))
-    with pytest.raises(ValueError, match="not a field of the derived schema"):
-        compiled.run(params, y0, t0=0.0, t1=1.0, dt=0.5, save=save(("nope",)), solver="euler")
-
-    res = compiled.run(params, y0, t0=0.0, t1=1.0, dt=0.5, save=save(("rec",)), solver="euler")
+    refs = _deferred_refs(name)
+    model = FlowModel(pmap)
+    model.add_flow(EntryFlow("in", state["Y"], refs.rec))
+    plan = SavePlan(requests={"x": SaveRequest(SavedExpr(refs.rec))}, ts=np.array([1.0]))
+    res = model.compile().run({"amp": 0.5}, y0, t0=0.0, t1=1.0, dt=0.5, save=plan, solver="euler")
     expected = 0.1 * (1.0 + 0.5 * np.sin(1.0 / 10.0) ** 2)
     np.testing.assert_allclose(np.asarray(res["x"].values).reshape(-1)[-1], expected, rtol=1e-5)
 

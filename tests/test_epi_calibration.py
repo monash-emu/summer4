@@ -15,6 +15,7 @@ from summer4 import (
     FlowModel,
     OutputSet,
     Param,
+    Params,
     Property,
     PropertyData,
     PropertyMap,
@@ -23,7 +24,7 @@ from summer4 import (
     Target,
     TargetSet,
     TransitionFlow,
-    derived_refs,
+    field_refs,
 )
 from summer4.epi.calibration import (
     BayesianModel,
@@ -59,7 +60,7 @@ def _sir_fixture(
     """Compiled SIR, y0, targets at synthetic truth, and fixed-param dict."""
     state = Property("state", ("S", "I", "R"))
     pmap = PropertyMap.from_property(state)
-    refs = derived_refs(_Rates)
+    refs = field_refs(Params(), _Rates)
     model = FlowModel(pmap)
     model.add_flow(TransitionFlow("infection", state["S"], state["I"], refs.infection))
     model.add_flow(TransitionFlow("recovery", state["I"], state["R"], refs.recovery))

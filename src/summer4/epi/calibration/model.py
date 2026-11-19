@@ -269,7 +269,8 @@ class BayesianModel:
         result = self._run(params)
         scored = result
         if self.outputs is not None:
-            scored = self.outputs.evaluate(result, params)
+            # Every name, so a target may score an intermediate (keep=False).
+            scored = self.outputs.evaluate(result, params, names=self.outputs.keys())
         ll = self.targets.log_likelihood(scored, params)
         ok = True if result.solver is None else result.solver.ok
         fail = jnp.asarray(-1.0e30, dtype=jnp.result_type(ll))

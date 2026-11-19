@@ -6,12 +6,11 @@ from summer4.results.outputset import OutputSet
 from summer4.results.plan import (
     EVERYTHING,
     Compartments,
-    ComputedValue,
     FlowMass,
     GroupedOutput,
     OutputShape,
     PlanDescription,
-    SaveFn,
+    SavedExpr,
     SavePlan,
     SaveRequest,
 )
@@ -21,7 +20,6 @@ from summer4.results.targets import Target, TargetSet
 __all__ = [
     "EVERYTHING",
     "Compartments",
-    "ComputedValue",
     "FlowMass",
     "GroupedOutput",
     "Output",
@@ -30,7 +28,7 @@ __all__ = [
     "PlanDescription",
     "Result",
     "ResultWithParams",
-    "SaveFn",
+    "SavedExpr",
     "SaveGroup",
     "SavePlan",
     "SaveRequest",

@@ -13,9 +13,10 @@ from summer4 import (
     ExitFlow,
     FlowModel,
     GroupedRate,
+    Params,
     Property,
     PropertyMap,
-    derived_refs,
+    field_refs,
 )
 
 
@@ -99,7 +100,7 @@ def test_flow_ref_sum_by_still_works() -> None:
     loc = Property("location", ("north", "south"))
     pm = PropertyMap.from_property(state).stratify(loc)
     model = FlowModel(pm)
-    refs = derived_refs(_DeathParams)
+    refs = field_refs(Params(), _DeathParams)
     death = model.add_flow(ExitFlow("death", Everything(), refs.death_rate))
     model.add_flow(EntryFlow("birth", state["S"], death.sum_by(loc)))
     y = np.array([100.0, 300.0, 10.0, 30.0])
@@ -118,7 +119,7 @@ def test_binop_preserves_grouped_rate_through_eval() -> None:
     loc = Property("location", ("north", "south"))
     pm = PropertyMap.from_property(state).stratify(loc)
     model = FlowModel(pm)
-    refs = derived_refs(_DeathParams)
+    refs = field_refs(Params(), _DeathParams)
     death = model.add_flow(ExitFlow("death", Everything(), refs.death_rate))
     # Scale the per-location death total before using it as a birth rate.
     model.add_flow(EntryFlow("birth", state["S"], death.sum_by(loc) * 2.0))

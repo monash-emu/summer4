@@ -15,6 +15,7 @@ from numpyro.infer import MCMC, NUTS
 from summer4 import (
     Compartments,
     FlowModel,
+    Params,
     Property,
     PropertyData,
     PropertyMap,
@@ -23,7 +24,7 @@ from summer4 import (
     Target,
     TargetSet,
     TransitionFlow,
-    derived_refs,
+    field_refs,
 )
 from summer4.epi.calibration import BayesianModel, NormalLikelihood, Uniform
 from summer4.epi.calibration import workflow as wf
@@ -37,7 +38,7 @@ class _Rates(NamedTuple):
 def _sir_bm() -> BayesianModel:
     state = Property("state", ("S", "I", "R"))
     pmap = PropertyMap.from_property(state)
-    refs = derived_refs(_Rates)
+    refs = field_refs(Params(), _Rates)
     model = FlowModel(pmap)
     model.add_flow(TransitionFlow("infection", state["S"], state["I"], refs.infection))
     model.add_flow(TransitionFlow("recovery", state["I"], state["R"], refs.recovery))

@@ -294,7 +294,7 @@ def _validate_base_value(value: BaseValue) -> BaseValue:
     if isinstance(value, (int, float, np.integer, np.floating)):
         return float(value)
     if isinstance(value, RateOps):
-        if rate_stage(value, params_are_static=True) != "run":
+        if rate_stage(value) != "run":
             raise ValueError(
                 f"Base value rate expression must be run-stage, got step-stage {value!r}."
             )
@@ -336,7 +336,7 @@ def _validate_weights(split: Split, prop: Property) -> tuple[tuple[str, ...] | N
                 concrete.append(concrete_f)
                 continue
             if isinstance(w, RateOps):
-                if rate_stage(w, params_are_static=True) != "run":
+                if rate_stage(w) != "run":
                     raise ValueError(
                         f"Split on {prop.name!r}: weight for {trait!r} must be run-stage."
                     )
@@ -365,7 +365,7 @@ def _validate_weights(split: Split, prop: Property) -> tuple[tuple[str, ...] | N
                 coerced[trait] = float(w)
         return keys, coerced
     if isinstance(weights, RateOps):
-        if rate_stage(weights, params_are_static=True) != "run":
+        if rate_stage(weights) != "run":
             raise ValueError(f"Split on {prop.name!r}: weights RateOps must be run-stage.")
         return None, weights
     if callable(weights):
