@@ -8,6 +8,7 @@ from typing import Any, NamedTuple
 import jax
 import jax.numpy as jnp
 import numpy as np
+import pytest
 
 from summer4 import (
     Compartments,
@@ -239,3 +240,30 @@ def test_prior_draws_length() -> None:
     c = wf.prior_draws(bm, 10, seed=0)
     assert len(c) == 10
     assert c.log_density is None
+
+
+@pytest.mark.parametrize("name", ["cands.npz", "cands", "run.v1", "out.dat"])
+@pytest.mark.parametrize("load_by", ["given", "npz"])
+def test_save_load_round_trip_any_name(tmp_path: Path, name: str, load_by: str) -> None:
+    c = wf.Candidates(
+        sites=("a",),
+        z={"a": np.arange(3.0)},
+        params={"a": np.arange(3.0) + 1.0},
+        log_density=np.array([-1.0, -2.0, -3.0]),
+    )
+    c.save(tmp_path / name)
+    archive = name if name.endswith(".npz") else name + ".npz"
+    assert sorted(p.name for p in tmp_path.iterdir()) == [archive, archive + ".json"]
+    loaded = wf.Candidates.load(tmp_path / (name if load_by == "given" else archive))
+    np.testing.assert_array_equal(loaded.params["a"], c.params["a"])
+    np.testing.assert_array_equal(np.asarray(loaded.log_density), np.asarray(c.log_density))
+
+
+@pytest.mark.parametrize("load_name", ["cands", "cands.npz"])
+def test_load_reads_legacy_sidecar_name(tmp_path: Path, load_name: str) -> None:
+    """Older versions wrote ``save("cands")`` as ``cands.npz`` plus ``cands.json``."""
+    c = wf.Candidates(sites=("a",), z={"a": np.zeros(2)}, params={"a": np.ones(2)})
+    c.save(tmp_path / "cands.npz")
+    (tmp_path / "cands.npz.json").rename(tmp_path / "cands.json")
+    loaded = wf.Candidates.load(tmp_path / load_name)
+    np.testing.assert_array_equal(loaded.params["a"], c.params["a"])
