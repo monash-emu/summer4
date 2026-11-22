@@ -109,6 +109,15 @@ Narrative release notes for the documentation site live in
   `.npz` (`save("cands")`) wrote `cands.npz` and `cands.json`, which `load` could not find under
   either name. `save` now writes `cands.npz` plus `cands.npz.json`, `load` takes the name given
   to `save` or the `.npz` name, and batches saved the old way still load.
+- **`sample_until` no longer recompiles on every chunk.** numpyro's `MCMC.run` recompiled its
+  sampling loop on each call, for `chain_method="parallel"` (a fresh `jax.pmap` per call) and
+  `"vectorized"` alike, so every chunk paid a full XLA compile. `MCMCRun` now maps the chains
+  through a cached `jax.pmap` / `jax.jit(jax.vmap(...))`: only the first two chunks compile (the
+  first only, after `warmup_until`), and draws are identical. On the SIR test posterior later
+  chunks went from 0.50 s to 0.003 s (vectorized) and 0.38 s to 0.002 s (parallel); NUTS tuning
+  pilots now time a chunk without a compile in it. `mcmc.chain_method` is restored after each
+  chunk. Single-chain, `"sequential"`, ensemble-kernel and `progress_bar=True` runs are
+  unchanged (`futureplans/mcmc-chunk-recompile.md`, now resolved).
 - A `GroupedOutput` of an explicit `Capture(name, inner)` keeps the inner expression's property
   map, so `.select()` works on it (it returned a raw array; `CX55`).
 - A `jax.numpy` function called on a grouped (`GroupedRate`) argument inside `defer` raises a

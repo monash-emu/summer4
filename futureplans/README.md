@@ -24,8 +24,8 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
   vmapped members of one structure, and declarative hierarchical priors (after step 50).
 - [`hierarchical-centring-diagnostics.md`](hierarchical-centring-diagnostics.md) —
   centred vs non-centred hierarchies (the funnel) and automated checks for it.
-- [`mcmc-chunk-recompile.md`](mcmc-chunk-recompile.md) — every `sample_until`
-  chunk pays a full XLA compile inside numpyro's `MCMC.run`.
+- [`mcmc-chunk-recompile.md`](mcmc-chunk-recompile.md) — **resolved**: `sample_until`
+  maps chains through a cached `pmap` / `jit(vmap)`, so later chunks do not recompile.
 
 - [`state-ledgers-flow-integral.md`](state-ledgers-flow-integral.md) — opt-in
   exact flow accumulation via `State.ledgers` (post-hoc trapezoid is not the
