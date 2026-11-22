@@ -105,6 +105,10 @@ Narrative release notes for the documentation site live in
 
 ### Fixed
 
+- `Candidates.save` and `Candidates.load` agree on file names for any path. A path without
+  `.npz` (`save("cands")`) wrote `cands.npz` and `cands.json`, which `load` could not find under
+  either name. `save` now writes `cands.npz` plus `cands.npz.json`, `load` takes the name given
+  to `save` or the `.npz` name, and batches saved the old way still load.
 - A `GroupedOutput` of an explicit `Capture(name, inner)` keeps the inner expression's property
   map, so `.select()` works on it (it returned a raw array; `CX55`).
 - A `jax.numpy` function called on a grouped (`GroupedRate`) argument inside `defer` raises a
