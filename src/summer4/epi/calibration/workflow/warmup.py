@@ -50,7 +50,9 @@ class WarmupRule:
     """NUTS-oriented warmup check (``None`` disables a criterion).
 
     Every statistic comes from the **second half** of the round's warmup draws,
-    where step size and mass matrix have mostly settled. A criterion with no
+    where step size and mass matrix have mostly settled. The HMC statistics (step
+    size aside) leave out the draw right after each of numpyro's step-size restarts
+    (see ``skip_after_reset`` of :func:`warmup_until`). A criterion with no
     data for the kernel (step size, acceptance, divergences and tree depth
     exist only for HMC/NUTS) is skipped, so other kernels are checked on R-hat
     alone.
@@ -172,6 +174,25 @@ def _hmc_settings(sampler: Any) -> tuple[float | None, int | None]:
     )
 
 
+def _reset_draws(num_warmup: int, skip: int) -> np.ndarray:
+    """Warmup draws taken just after numpyro restarts its step-size search.
+
+    numpyro's NUTS warmup ends each middle adaptation window by installing the new
+    mass matrix and restarting dual averaging from ten times a freshly found step
+    size; the next draw, and the very first draws, routinely diverge in every chain
+    whatever the posterior. Returns the ``skip`` draws from the one after each
+    restart (including the one at the start of warmup), as sorted indices.
+    """
+    if skip <= 0:
+        return np.zeros(0, dtype=int)
+    from numpyro.infer.hmc_util import build_adaptation_schedule  # type: ignore[import-untyped]
+
+    windows = build_adaptation_schedule(int(num_warmup))
+    starts = [0] + [int(end) + 1 for _, end in windows[1:-1]]
+    idx = {s + 1 + k for s in starts for k in range(int(skip))}
+    return np.array(sorted(i for i in idx if i < int(num_warmup)), dtype=int)
+
+
 def warmup_until(
     make_mcmc: Callable[..., Any],
     num_warmup: int,
@@ -185,6 +206,7 @@ def warmup_until(
     seed: int = 0,
     growth: float = 2.0,
     max_warmup: int = 4000,
+    skip_after_reset: int = 1,
     warn: bool = True,
 ) -> WarmupRun:
     """Warm up in rounds of growing length until ``check`` passes.
@@ -214,12 +236,26 @@ def warmup_until(
     ``max_tree_depth`` and a longer round would only cost more. Rows record
     ``grad_evals``, the leapfrog steps (gradient evaluations) of the whole round
     summed over chains.
+
+    ``skip_after_reset`` draws per chain after each of numpyro's step-size restarts are
+    left out of the HMC statistics (``accept_mean``, ``divergence_frac``,
+    ``treedepth_frac``). At the end of each adaptation window numpyro installs the new
+    mass matrix and restarts its step-size search from ten times a fresh guess, so the
+    next draw diverges in every chain on almost any posterior; the window boundaries
+    put at least one such draw in the checked half of every round (one in 75 checked
+    draws for ``num_warmup=150``, over a 1% divergence limit on its own). Those draws
+    are discarded warmup and do not affect the step size used for sampling.
+    ``reset_divergences`` counts the divergences left out (summed over chains);
+    ``skip_after_reset=0`` checks every draw. Kernels that do not adapt their step size
+    have no restarts and nothing is left out.
     """
     from jax import random
     from numpyro.infer import HMC  # type: ignore[import-untyped]
 
     _require_numpyro()
     n = int(num_warmup)
+    if int(skip_after_reset) < 0:
+        raise ValueError(f"warmup_until needs skip_after_reset >= 0, got {skip_after_reset}.")
     if n < 1:
         raise ValueError(f"warmup_until needs num_warmup >= 1, got {n}.")
     if float(growth) <= 1.0:
@@ -257,6 +293,7 @@ def warmup_until(
             "accept_mean": None,
             "target_accept_prob": target,
             "divergence_frac": None,
+            "reset_divergences": None,
             "treedepth_frac": None,
             "grad_evals": None,
         }
@@ -265,7 +302,12 @@ def warmup_until(
             whole = {
                 k: np.asarray(v) for k, v in mcmc.get_extra_fields(group_by_chain=True).items()
             }
-            extra = {k: v[:, half:] for k, v in whole.items()}
+            adapts_step = bool(getattr(mcmc.sampler, "_adapt_step_size", True))
+            skipped = _reset_draws(n, int(skip_after_reset) if adapts_step else 0)
+            skipped = skipped[skipped >= half]
+            keep = np.ones(n - half, dtype=bool)
+            keep[skipped - half] = False
+            extra = {k: v[:, half:][:, keep] for k, v in whole.items()}
             step = np.atleast_1d(np.asarray(state.adapt_state.step_size))
             row.update(
                 step_size_min=float(step.min()),
@@ -273,6 +315,7 @@ def warmup_until(
                 step_size_ratio=float(step.max() / step.min()),
                 accept_mean=float(np.mean(extra["accept_prob"])),
                 divergence_frac=float(np.mean(extra["diverging"])),
+                reset_divergences=int(np.sum(np.asarray(whole["diverging"])[:, skipped])),
                 treedepth_frac=(
                     None if depth is None else float(np.mean(extra["num_steps"] >= 2**depth - 1))
                 ),

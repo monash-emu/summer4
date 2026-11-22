@@ -52,8 +52,10 @@ PILOT_WARMUP_RULE = WarmupRule(max_divergence_frac=None)
 """The pilots' default warm-up check: :class:`WarmupRule` without its divergence criterion.
 
 numpyro restarts step-size adaptation at 10x the step size at the end of every
-adaptation window, so a few divergent warm-up transitions are expected even on
-a Gaussian; each pilot counts the divergences that matter, those after warm-up.
+adaptation window. :func:`warmup_until` leaves the draw after each restart out
+of its statistics, but the step size still swings while it re-adapts, so a few
+more divergent warm-up transitions are expected; each pilot counts the
+divergences that matter, those after warm-up.
 """
 
 
