@@ -84,6 +84,15 @@ Narrative release notes for the documentation site live in
 
 ### Fixed
 
+- **`warmup_until` no longer fails short warmups on numpyro's step-size restarts.** At the end
+  of each adaptation window numpyro installs the new mass matrix and restarts its step-size search
+  from ten times a fresh guess, so the next draw diverges in every chain, even on a standard
+  normal. The window boundaries always put at least one such draw in the half of the round that
+  `WarmupRule` checks: on its own one in 75 draws for `num_warmup=150`, over the 1% divergence
+  limit, so warmups of 300 or less failed whatever the posterior. The draw after each restart is
+  now left out of the round's acceptance, divergence and tree-depth statistics
+  (`warmup_until(skip_after_reset=1)`; `0` checks every draw), and the new progress column
+  `reset_divergences` counts what was left out.
 - A `GroupedOutput` of an explicit `Capture(name, inner)` keeps the inner expression's property
   map, so `.select()` works on it (it returned a raw array; `CX55`).
 - A `jax.numpy` function called on a grouped (`GroupedRate`) argument inside `defer` raises a
