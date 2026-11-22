@@ -9,6 +9,7 @@ and before compiling a model.
 # First, so float64 is on before any summer4 module builds a JAX array.
 from summer4 import _precision  # noqa: F401  # isort: skip
 from summer4 import _devices  # noqa: F401  # isort: skip
+from summer4 import _cpu_runtime  # noqa: F401  # isort: skip
 from summer4.flows import (
     REMAINDER,
     BinOp,

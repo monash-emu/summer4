@@ -79,3 +79,48 @@ pixi run pytest benchmarks/test_bench_tb_scale.py -v -s
 The test prints a markdown row block. Paste it into the table above (keep the
 Machine column). Numbers will differ across hardware; what matters for
 regressions is the same machine (or CI) before/after a change.
+
+## Weighted `Reduce` sums and the XLA:CPU runtime (`weighted_reduce.py`)
+
+A 41-compartment chain whose `active` stage is a 6 x 6 grid; the infectious pool weights each
+cell, written three ways: 36 scalar `Reduce` terms (`terms`), a `ForceOfInfection` with 12
+weight pairs (`foi`), and one unweighted `Reduce` for scale (`plain`). 100 years: Euler
+`dt=0.05` (2000 steps) and the default adaptive Tsit5. Best of 20 after a warm call,
+`devq bench --strict`, macOS arm64 12-core mini, jax/jaxlib 0.6.2, float64, 2026-11-20.
+`pixi run -e default sh benchmarks/weighted_reduce_suite.sh` (add `--no-fuse` for the
+term-by-term form); `benchmarks/weighted_reduce_numerics.py` prints the fused/unfused
+differences.
+
+`terms` form (vector-field jaxpr equations: 263 top level / 407 with nested `_take` bodies
+unfused, 84 / 84 fused):
+
+| Configuration | Euler solve (ms) | Euler grad (ms) | Tsit5 solve (ms) | Tsit5 grad (ms) |
+| --- | ---: | ---: | ---: | ---: |
+| before: thunk runtime, term by term (`main`) | 2.57 | 9.07 | 0.67 | 3.26 |
+| thunk runtime, fused | 3.47 | 3.92 | 1.14 | 2.23 |
+| legacy runtime, term by term | 1.00 | 1.70 | 0.34 | 0.94 |
+| **after: legacy runtime, fused (defaults)** | **0.95** | **1.59** | **0.31** | **0.89** |
+
+- The legacy runtime (`--xla_cpu_use_thunk_runtime=false`, summer4's default on jaxlib
+  0.4.32-0.6.x) is the large win: 2.7x on the Euler solve, 5.7x on its gradient, 2.2x and 3.5x
+  for Tsit5. Fusion adds 5-10% on top.
+- Under the thunk runtime, fusion makes the Euler gradient 2.3x faster but compact graphs
+  (fused `terms`, `foi`, `plain`) solve forward about 1.4-1.7x *slower* than the 36-term graph.
+  The cause is XLA:CPU's concurrency-optimised thunk scheduler: with
+  `--xla_cpu_enable_concurrency_optimized_scheduler=false` (jaxlib 0.11.1) the fused form wins
+  everywhere (Euler 1.52 vs 1.67 ms, grad 3.16 vs 9.28 ms; Tsit5 0.62 vs 0.65 ms, grad 2.46 vs
+  2.85 ms) and `foi` drops from 3.58 to 1.61 ms. summer4 sets that flag on jaxlib 0.7.0-0.12.x,
+  where the legacy runtime no longer exists (checked to be accepted on 0.7.0, 0.8.0, 0.11.1 and
+  0.12.1; XLA aborts on unknown flags, so later versions are left alone until checked).
+
+jaxlib 0.11.1, `terms` form (thunk runtime only):
+
+| Configuration | Euler solve (ms) | Euler grad (ms) | Tsit5 solve (ms) | Tsit5 grad (ms) |
+| --- | ---: | ---: | ---: | ---: |
+| before: default scheduler, term by term | 3.56 | 12.01 | 0.64 | 3.11 |
+| default scheduler, fused | 2.74 | 6.21 | 1.14 | 4.23 |
+| scheduler off, term by term | 1.67 | 9.28 | 0.65 | 2.85 |
+| **after: scheduler off, fused (defaults)** | **1.52** | **3.16** | **0.62** | **2.46** |
+
+- Fused vs term by term agree to 2.9e-16 (vector field), 2.2e-15 (final prevalence) and
+  1.3e-14 (gradient), relative, on both runtimes and jaxlib 0.6.2 / 0.11.1.

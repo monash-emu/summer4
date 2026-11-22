@@ -13,6 +13,27 @@ Narrative release notes for the documentation site live in
 
 ### Added
 
+- **Fused weighted reductions** (`perf/fuse-weighted-reduce`). `FlowModel.compile` rewrites a
+  rate (or `Multiply`/`Overwrite` value) that is a weighted sum of two or more scalar `Reduce`
+  terms, `sum_k c_k * Reduce(where=sel_k)` with constant or parameter-only `c_k`, into one
+  gather and dot product with a per-compartment weight vector built once per run
+  (`summer4.flows.fuse_reduce`). Nested sums, subtraction, `c * Reduce`, `Reduce * c` and
+  `/ c` are covered; grouped `Reduce(group_by=...)` and state-dependent factors are left as
+  written. On a 36-cell grid the vector field drops from 407 to 84 jaxpr equations and the
+  reverse-mode gradient through 2000 Euler steps is 2.3x faster on the thunk runtime. Results
+  agree to rounding (vector field 3e-16, gradients 1e-14 relative). `compile(fuse_reductions=False)`
+  keeps the term-by-term form.
+- **XLA's older CPU runtime on jaxlib 0.4.32-0.6.x.** On import summer4 sets
+  `--xla_cpu_use_thunk_runtime=false` where that runtime exists, unless `XLA_FLAGS` already names
+  the flag or `SUMMER4_CPU_RUNTIME=thunk`. On the weighted-`Reduce` benchmark, solves and gradients on the CPU are 2-6x faster.
+  `runtime_info()` reports `cpu_runtime` and `cpu_runtime_source`; guide page *What summer4 sets
+  up for you*, section 5.
+- **XLA:CPU's concurrency-optimised scheduler off on jaxlib 0.7.0-0.12.x.** Where only the thunk
+  runtime exists, summer4 sets `--xla_cpu_enable_concurrency_optimized_scheduler=false` on
+  import (same opt-outs). On the weighted-`Reduce` benchmark (jaxlib 0.11.1) solves are 1.8x
+  and Euler gradients 2x faster. The flag is set only on versions checked to accept it, since
+  XLA aborts on unknown flags. `runtime_info().cpu_concurrency_scheduler` reports it.
+
 - **Kiribati port gaps** (`feat/kiribati-gaps`, roadmap step 52, `CX51`-`CX56`, `CX58`).
   - `Lookup(table, index)` takes any array-valued rate expression as its table, such as a stack
     computed from the parameters: `Lookup(field_refs(defer(f)(Params()), S).stack, floor(Time() -
