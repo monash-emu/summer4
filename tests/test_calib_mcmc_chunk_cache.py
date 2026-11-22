@@ -141,4 +141,7 @@ def test_uncached_cases_keep_numpyro_mapping() -> None:
     assert _cacheable_chain_method(_mcmc("vectorized")) == "vectorized"
     assert _cacheable_chain_method(_mcmc("sequential")) is None
     assert _cacheable_chain_method(_mcmc("vectorized", num_chains=1)) is None
-    assert _cacheable_chain_method(_mcmc("vectorized", progress_bar=True)) is None
+    # numpyro turns the progress bar off by itself on some machines (CI), so set it here.
+    progress = _mcmc("vectorized")
+    progress.progress_bar = True
+    assert _cacheable_chain_method(progress) is None
