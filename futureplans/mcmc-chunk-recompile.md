@@ -1,5 +1,15 @@
 # Every `sample_until` chunk recompiles numpyro's sampling loop
 
+**Resolved (2026-11-23, branch `perf/mcmc-chunk-cache`).** `MCMCRun` now runs each chunk with a
+callable `chain_method` (`_ChainMapCache` in `src/summer4/epi/calibration/workflow/mcmc.py`) that
+keeps one `jax.pmap` (for `"parallel"`) or `jax.jit(jax.vmap(...))` (for `"vectorized"`) per
+sampling setup. Only the first two chunks compile, or only the first after `warmup_until`. Draws
+are identical to numpyro's own mapping. On the test-suite SIR posterior (4 chains, 25 draws per
+chunk), later chunks dropped from 0.50 s to 0.003 s (vectorized) and from 0.38 s to 0.002 s
+(parallel). It does not cover single-chain runs, `"sequential"`, ensemble kernels or
+`progress_bar=True` (numpyro's mapping, one compile per chunk), nor `warmup_until`'s rounds
+(inherent). The original note follows.
+
 **Where:** `MCMCRun.extend` / `MCMCRun._sample` in
 `src/summer4/epi/calibration/workflow/mcmc.py`, which call
 `numpyro.infer.MCMC.run` once per chunk.

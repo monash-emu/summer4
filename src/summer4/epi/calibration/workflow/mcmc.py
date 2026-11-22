@@ -214,6 +214,97 @@ def resolve_chain_method(chain_method: str, num_chains: int) -> str:
     return "vectorized"
 
 
+class _ChainMapCache:
+    """A numpyro ``chain_method`` callable that compiles once per sampling setup.
+
+    numpyro's ``MCMC.run`` builds a fresh per-chain function each call and maps it over the
+    chains with ``jax.pmap`` (``"parallel"``) or calls it batched (``"vectorized"``), so every
+    call misses JAX's compile cache and recompiles (``futureplans/mcmc-chunk-recompile.md``).
+    numpyro also accepts a callable ``chain_method``, which it hands the per-chain function.
+    This one keeps a ``jax.pmap`` (for ``"parallel"``) or ``jax.jit(jax.vmap(...))`` (for
+    ``"vectorized"``) of the first function it sees for each setup and returns it again for
+    later chunks. Draws are the same as with the method it stands in for.
+
+    The setup key reads numpyro internals (the per-chain ``functools.partial`` and
+    ``MCMC._collection_params``); when they are not as expected, or the model has
+    arguments, the function is mapped uncached, which is numpyro's own behaviour.
+    """
+
+    def __init__(self, method: str, sampler: Any) -> None:
+        import copy
+
+        self.method = method
+        self._fns: dict[Any, Callable[[Any], Any]] = {}
+        # numpyro's per-MCMC cache of sample/postprocess functions and the kernel's own
+        # initialised step function both depend on whether chains arrive one at a time
+        # (this callable) or batched (``"vectorized"``), so calls made through this
+        # callable use their own copies and the caller's objects are left as they were.
+        self.numpyro_cache: dict[Any, Any] = {}
+        self.sampler = copy.copy(sampler)
+        if hasattr(self.sampler, "_sample_fn"):
+            self.sampler._sample_fn = None  # re-initialised per chain on first use
+
+    def _map(self, fn: Callable[[Any], Any]) -> Callable[[Any], Any]:
+        import jax
+
+        mapped: Callable[[Any], Any] = (
+            jax.pmap(fn) if self.method == "parallel" else jax.jit(jax.vmap(fn))
+        )
+        return mapped
+
+    def __call__(self, fn: Callable[[Any], Any]) -> Callable[[Any], Any]:
+        key = _chain_fn_key(fn)
+        if key is None:
+            return self._map(fn)
+        cached = self._fns.get(key)
+        if cached is None:
+            cached = self._fns[key] = self._map(fn)
+        return cached
+
+
+def _chain_fn_key(fn: Any) -> Any:
+    """What a traced per-chain numpyro function depends on, or ``None`` if unknown."""
+    import functools
+
+    if not isinstance(fn, functools.partial):
+        return None
+    mcmc = getattr(fn.func, "__self__", None)
+    keywords = fn.keywords or {}
+    params = getattr(mcmc, "_collection_params", None)
+    if mcmc is None or not isinstance(params, dict) or fn.args:
+        return None
+    if keywords.get("args") or keywords.get("kwargs"):
+        return None
+    try:
+        key = (
+            fn.func,
+            tuple(keywords["collect_fields"]),
+            tuple(keywords["remove_sites"]),
+            tuple(sorted(params.items())),
+            mcmc.num_warmup,
+            mcmc.num_samples,
+            mcmc.thinning,
+        )
+        hash(key)
+    except (KeyError, TypeError, AttributeError):
+        return None
+    return key
+
+
+def _cacheable_chain_method(mcmc: Any) -> str | None:
+    """The method :class:`_ChainMapCache` can stand in for on ``mcmc``, or ``None``."""
+    method = getattr(mcmc, "chain_method", None)
+    if method not in ("parallel", "vectorized") or int(getattr(mcmc, "num_chains", 1)) < 2:
+        return None
+    if getattr(mcmc, "progress_bar", False):
+        return None  # numpyro disables the progress bar for callable chain methods
+    if getattr(mcmc.sampler, "is_ensemble_kernel", False):
+        return None  # ensemble kernels move all walkers together, not one chain at a time
+    if not isinstance(getattr(mcmc, "_cache", None), dict):
+        return None
+    return str(method)
+
+
 class MCMCRun:
     """A resumable chunked MCMC run: the numpyro ``MCMC`` plus its per-chunk record.
 
@@ -240,6 +331,7 @@ class MCMCRun:
         self._site_rows: dict[str, SiteDiagnostics] = {}
         self._seconds = 0.0
         self._divergences = _records_divergences(mcmc)
+        self._chain_cache: _ChainMapCache | None = None
 
     @property
     def chunks(self) -> int:
@@ -321,10 +413,31 @@ class MCMCRun:
             if self._decide(stop, warn=warn):
                 return self
 
+    def _run_cached(self, rng_key: Any, **kwargs: Any) -> None:
+        """``mcmc.run``, mapping the chains through a cache so later chunks need no compile.
+
+        The caller's ``chain_method``, kernel and numpyro's own function cache are put back
+        afterwards, so the ``MCMC`` object behaves as before outside this run.
+        """
+        mcmc = self.mcmc
+        method = _cacheable_chain_method(mcmc)
+        if method is None:
+            mcmc.run(rng_key, **kwargs)
+            return
+        cache = self._chain_cache
+        if cache is None or cache.method != method:
+            cache = self._chain_cache = _ChainMapCache(method, mcmc.sampler)
+        saved = mcmc.chain_method, mcmc._cache, mcmc.sampler
+        mcmc.chain_method, mcmc._cache, mcmc.sampler = cache, cache.numpyro_cache, cache.sampler
+        try:
+            mcmc.run(rng_key, **kwargs)
+        finally:
+            mcmc.chain_method, mcmc._cache, mcmc.sampler = saved
+
     def _sample(self, rng_key: Any, *, init_params: Any) -> None:
         fields = (("diverging",) if self._divergences else ()) + self.extra_fields
         start = time.perf_counter()
-        self.mcmc.run(rng_key, init_params=init_params, extra_fields=fields)
+        self._run_cached(rng_key, init_params=init_params, extra_fields=fields)
         chunk = self.mcmc.get_samples(group_by_chain=True)
         if not self.sites:
             self.sites = tuple(chunk)
@@ -390,6 +503,13 @@ def sample_until(
     up (``mcmc.post_warmup_state`` is set, for example by :func:`warmup_until`),
     sampling continues from that state with no further warmup, and
     ``init_params`` must be ``None``.
+
+    With ``chain_method="parallel"`` or ``"vectorized"`` and more than one chain, the
+    chains are mapped through a cached ``jax.pmap`` or ``jax.jit(jax.vmap(...))`` in place
+    of numpyro's own mapping, so only the first two chunks compile (the second because
+    numpyro's settings change after warmup); the draws are the same. ``mcmc.chain_method``
+    is restored after every chunk. Ensemble kernels, ``progress_bar=True``,
+    ``"sequential"`` and single-chain runs use numpyro's mapping, which compiles each chunk.
 
     ``extra_fields`` names numpyro per-draw statistics to keep in
     :attr:`MCMCRun.extra`, for example ``("num_steps", "accept_prob",
