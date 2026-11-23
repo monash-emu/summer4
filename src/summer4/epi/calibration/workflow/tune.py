@@ -52,8 +52,10 @@ PILOT_WARMUP_RULE = WarmupRule(max_divergence_frac=None)
 """The pilots' default warm-up check: :class:`WarmupRule` without its divergence criterion.
 
 numpyro restarts step-size adaptation at 10x the step size at the end of every
-adaptation window, so a few divergent warm-up transitions are expected even on
-a Gaussian; each pilot counts the divergences that matter, those after warm-up.
+adaptation window. :func:`warmup_until` leaves the draw after each restart out
+of its statistics, but the step size still swings while it re-adapts, so a few
+more divergent warm-up transitions are expected; each pilot counts the
+divergences that matter, those after warm-up.
 """
 
 
@@ -355,7 +357,7 @@ def _pilot_row(
     accept = np.asarray(run.extra["accept_prob"])
     draws = int(num_steps.size)
     grad_evals = int(num_steps.sum())
-    # Chunk 1 also compiles the kernel's step; time chunk 2 only.
+    # Chunk 1 compiles the sampling loop; time chunk 2 only.
     chunk_seconds = float(progress["seconds"].iloc[1] - progress["seconds"].iloc[0])
     draws_per_second = num_chains * pilot_samples / chunk_seconds
     ess = float(last["ess_bulk_element_min"])
@@ -448,11 +450,11 @@ def pilot(
         run = sample_until(warm.mcmc, <stop after 2 chunks>, seed=seed, warn=False,
                            extra_fields=("num_steps", "accept_prob"))
 
-    Speed is timed on the second chunk, which skips compiling the kernel's step
-    but, like every ``sample_until`` chunk, still recompiles numpyro's outer
-    loop (``futureplans/mcmc-chunk-recompile.md``, about 0.4 s on CPU): for a
-    cheap model ``ess_per_second`` understates a long run's speed, which is
-    one reason :meth:`NutsTuning.table` ranks by gradients by default. ESS and
+    Speed is timed on the second chunk, which needs no compile when the chains
+    run ``"parallel"`` or ``"vectorized"`` (``sample_until`` caches the mapped
+    sampling loop). With ``"sequential"`` chains it still includes a compile of
+    numpyro's outer loop, so for a cheap model ``ess_per_second`` understates a
+    long run's speed; :meth:`NutsTuning.table` ranks by gradients by default. ESS and
     R-hat (worst element of any site) use both chunks. ``warmup_check``
     defaults to :data:`PILOT_WARMUP_RULE`. ``grad_seconds`` (from
     :func:`time_gradient`) adds ``predicted_ess_per_second``: the rate if every

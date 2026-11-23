@@ -1634,6 +1634,7 @@ class FlowModel:
         prepare_fn: PrepareFn | None = None,
         hoist: bool = True,
         fuse_compartment_updates: bool = True,
+        fuse_reductions: bool = True,
         init: InitialPopulation | None = None,
         strict_pairing: bool = True,
     ) -> CompiledModel:
@@ -1645,6 +1646,14 @@ class FlowModel:
         Source-state gathers stay per-flow: concatenating them and slicing
         adds ``slice``→``pad`` cost under ``grad`` (see
         ``futureplans/vf-gather-and-mul-followups.md``).
+
+        ``fuse_reductions`` (default True) rewrites each rate (and ``Multiply`` /
+        ``Overwrite`` value) that is a weighted sum of two or more scalar
+        ``Reduce(where=...)`` terms, ``sum_k c_k * Reduce(where=sel_k)`` with
+        constant or parameter-only ``c_k``, into one gather and dot product with a
+        per-compartment weight vector built once per run
+        (:mod:`summer4.flows.fuse_reduce`). Results agree to floating-point
+        rounding. Set False to keep the term-by-term form (A/B and debugging).
 
         To compute several values from the parameters, time and state at once
         (what a ``derived_fn`` did before step 41), read them through
@@ -1664,6 +1673,11 @@ class FlowModel:
             [actualize(flow, self.pmap, strict_pairing=strict_pairing) for flow in self.flows]
         )
         flows = {flow.name: flow for flow in actualized}
+        if fuse_reductions:
+            from summer4.flows.fuse_reduce import fuse_flows
+
+            flows = fuse_flows(flows, self.pmap)
+            actualized = [flows[flow.name] for flow in actualized]
         order = tuple(flow.name for flow in actualized)
         edge_maps = {flow.name: flow.edge_map for flow in actualized}
         capture_meta: dict[str, tuple[Property, ...]] = {}

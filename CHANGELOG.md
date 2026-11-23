@@ -13,6 +13,27 @@ Narrative release notes for the documentation site live in
 
 ### Added
 
+- **Fused weighted reductions** (`perf/fuse-weighted-reduce`). `FlowModel.compile` rewrites a
+  rate (or `Multiply`/`Overwrite` value) that is a weighted sum of two or more scalar `Reduce`
+  terms, `sum_k c_k * Reduce(where=sel_k)` with constant or parameter-only `c_k`, into one
+  gather and dot product with a per-compartment weight vector built once per run
+  (`summer4.flows.fuse_reduce`). Nested sums, subtraction, `c * Reduce`, `Reduce * c` and
+  `/ c` are covered; grouped `Reduce(group_by=...)` and state-dependent factors are left as
+  written. On a 36-cell grid the vector field drops from 407 to 84 jaxpr equations and the
+  reverse-mode gradient through 2000 Euler steps is 2.3x faster on the thunk runtime. Results
+  agree to rounding (vector field 3e-16, gradients 1e-14 relative). `compile(fuse_reductions=False)`
+  keeps the term-by-term form.
+- **XLA's older CPU runtime on jaxlib 0.4.32-0.6.x.** On import summer4 sets
+  `--xla_cpu_use_thunk_runtime=false` where that runtime exists, unless `XLA_FLAGS` already names
+  the flag or `SUMMER4_CPU_RUNTIME=thunk`. On the weighted-`Reduce` benchmark, solves and gradients on the CPU are 2-6x faster.
+  `runtime_info()` reports `cpu_runtime` and `cpu_runtime_source`; guide page *What summer4 sets
+  up for you*, section 5.
+- **XLA:CPU's concurrency-optimised scheduler off on jaxlib 0.7.0-0.12.x.** Where only the thunk
+  runtime exists, summer4 sets `--xla_cpu_enable_concurrency_optimized_scheduler=false` on
+  import (same opt-outs). On the weighted-`Reduce` benchmark (jaxlib 0.11.1) solves are 1.8x
+  and Euler gradients 2x faster. The flag is set only on versions checked to accept it, since
+  XLA aborts on unknown flags. `runtime_info().cpu_concurrency_scheduler` reports it.
+
 - **Kiribati port gaps** (`feat/kiribati-gaps`, roadmap step 52, `CX51`-`CX56`, `CX58`).
   - `Lookup(table, index)` takes any array-valued rate expression as its table, such as a stack
     computed from the parameters: `Lookup(field_refs(defer(f)(Params()), S).stack, floor(Time() -
@@ -84,6 +105,28 @@ Narrative release notes for the documentation site live in
 
 ### Fixed
 
+- `Candidates.save` and `Candidates.load` agree on file names for any path. A path without
+  `.npz` (`save("cands")`) wrote `cands.npz` and `cands.json`, which `load` could not find under
+  either name. `save` now writes `cands.npz` plus `cands.npz.json`, `load` takes the name given
+  to `save` or the `.npz` name, and batches saved the old way still load.
+- **`sample_until` no longer recompiles on every chunk.** numpyro's `MCMC.run` recompiled its
+  sampling loop on each call, for `chain_method="parallel"` (a fresh `jax.pmap` per call) and
+  `"vectorized"` alike, so every chunk paid a full XLA compile. `MCMCRun` now maps the chains
+  through a cached `jax.pmap` / `jax.jit(jax.vmap(...))`: only the first two chunks compile (the
+  first only, after `warmup_until`), and draws are identical. On the SIR test posterior later
+  chunks went from 0.50 s to 0.003 s (vectorized) and 0.38 s to 0.002 s (parallel); NUTS tuning
+  pilots now time a chunk without a compile in it. `mcmc.chain_method` is restored after each
+  chunk. Single-chain, `"sequential"`, ensemble-kernel and `progress_bar=True` runs are
+  unchanged (`futureplans/mcmc-chunk-recompile.md`, now resolved).
+- **`warmup_until` no longer fails short warmups on numpyro's step-size restarts.** At the end
+  of each adaptation window numpyro installs the new mass matrix and restarts its step-size search
+  from ten times a fresh guess, so the next draw diverges in every chain, even on a standard
+  normal. The window boundaries always put at least one such draw in the half of the round that
+  `WarmupRule` checks: on its own one in 75 draws for `num_warmup=150`, over the 1% divergence
+  limit, so warmups of 300 or less failed whatever the posterior. The draw after each restart is
+  now left out of the round's acceptance, divergence and tree-depth statistics
+  (`warmup_until(skip_after_reset=1)`; `0` checks every draw), and the new progress column
+  `reset_divergences` counts what was left out.
 - A `GroupedOutput` of an explicit `Capture(name, inner)` keeps the inner expression's property
   map, so `.select()` works on it (it returned a raw array; `CX55`).
 - A `jax.numpy` function called on a grouped (`GroupedRate`) argument inside `defer` raises a

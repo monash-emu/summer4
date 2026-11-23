@@ -1,10 +1,10 @@
 # What summer4 sets up for you
 
-When you `import summer4`, it makes four choices on your behalf so that models are accurate
+When you `import summer4`, it makes five choices on your behalf so that models are accurate
 and fast without any set-up. This page says what each choice is, how to check it, and how to
 change it. If you never read this page, nothing here needs your attention.
 
-You can see all four at once:
+You can see them all at once:
 
 ```python
 import summer4
@@ -13,8 +13,9 @@ summer4.runtime_info()
 ```
 
 `runtime_info()` reports whether 64-bit numbers are on (`x64`), how many CPU devices summer4
-asked for and why (`host_devices_requested`, `host_devices_source`), and the solver that
-`run()` uses when you do not name one (`default_solver`). It does not start JAX, so it is
+asked for and why (`host_devices_requested`, `host_devices_source`), the solver that
+`run()` uses when you do not name one (`default_solver`), and which of XLA's CPU runtimes runs
+the compiled model (`cpu_runtime`, `cpu_runtime_source`). It does not start JAX, so it is
 cheap to call. `runtime_info().devices()` lists the devices JAX can use; calling it starts JAX.
 
 Environment variables must be set **before Python starts** (or at least before the first
@@ -122,6 +123,42 @@ MCMC(kernel, num_warmup=500, num_samples=500, num_chains=4,
 
 Draws for a given seed can differ between the two methods. Both sample the same posterior, so
 compare distributions and summaries, not individual draws. Ensemble kernels stay vectorized.
+
+## 5. XLA's CPU runtime settings
+
+**What happens.** JAX compiles a model through XLA. From jaxlib 0.4.32, XLA's CPU backend runs
+compiled code on a newer runtime, which is much slower for the small operations inside a
+solver's time-stepping loop (reported upstream in jax-ml/jax issues 26145, 29772 and 40150).
+XLA kept the older runtime behind a flag up to jaxlib 0.6. On those versions summer4 switches
+it back on when imported. On the 41-compartment benchmark in `benchmarks/weighted_reduce.py`
+(jaxlib 0.6.2, 12-core mini) runs became 3 to 4 times faster: a 2000-step Euler run took
+0.9 ms instead of 3.4 ms, and its gradient 1.6 ms instead of 3.8 ms; the adaptive default took
+0.32 ms instead of 1.17 ms.
+
+From jaxlib 0.7 the older runtime is gone (on 0.7.0 and 0.7.1 its flag would make every run
+fail, and later versions ignore it). There summer4 instead turns off the newer runtime's
+*concurrency-optimised scheduler*, which reorders each step's small operations to run them in
+parallel and costs more than it gains on a solver step. On the same benchmark (jaxlib 0.11.1)
+this made the Euler run 1.8 times faster (1.5 ms instead of 2.7 ms), its gradient 2 times
+faster, and the adaptive default 1.8 times faster. summer4 sets this flag only on the jaxlib
+versions checked to accept it, 0.7.0 up to 0.12.x: XLA stops the program on a flag it does not
+know, so newer versions are left alone until they are checked.
+
+**Check.** `summer4.runtime_info().cpu_runtime` is `"legacy"` or `"thunk"`, and
+`cpu_runtime_source` says why: `"default"`, `"SUMMER4_CPU_RUNTIME"`, `"XLA_FLAGS"` (you chose),
+`"jaxlib"` (this jaxlib has only one runtime) or `"too-late"`. `cpu_concurrency_scheduler` is
+`False` when the scheduler is off, `True` when it is on, and `None` with the older runtime.
+
+**Change.**
+
+- `SUMMER4_CPU_RUNTIME=thunk` (also `0`, `off`, `false`, `no`) keeps XLA's own defaults: the
+  newer runtime, with its concurrency-optimised scheduler.
+- Setting `XLA_FLAGS=--xla_cpu_use_thunk_runtime=...` or
+  `XLA_FLAGS=--xla_cpu_enable_concurrency_optimized_scheduler=...` yourself also works, and
+  summer4 will not touch it.
+
+As with the devices in section 2, JAX reads this when it starts: import summer4 before using
+JAX, or the choice comes too late and summer4 warns. It affects the CPU only.
 
 ## Using a GPU
 

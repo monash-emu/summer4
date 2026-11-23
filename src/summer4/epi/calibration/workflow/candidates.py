@@ -25,6 +25,14 @@ class StageRecord:
     seconds: float
 
 
+def _archive_paths(path: str | Path) -> tuple[Path, Path]:
+    """The ``.npz`` file :meth:`Candidates.save` writes for ``path``, and its JSON sidecar."""
+    path = Path(path)
+    if path.suffix != ".npz":
+        path = path.with_name(path.name + ".npz")
+    return path, path.with_name(path.name + ".json")
+
+
 @dataclass(frozen=True, slots=True)
 class Candidates:
     """Batch of parameter points in unconstrained and constrained form.
@@ -142,8 +150,13 @@ class Candidates:
         return pd.DataFrame(data)
 
     def save(self, path: str | Path) -> None:
-        """Write ``.npz`` arrays plus a JSON sidecar for sites and history."""
-        path = Path(path)
+        """Write ``.npz`` arrays plus a JSON sidecar for sites and history.
+
+        The arrays go to ``path`` if it ends in ``.npz``, otherwise to ``path`` with ``.npz``
+        added (as :func:`numpy.savez_compressed` does). The sidecar is that file's name plus
+        ``.json``: ``save("cands")`` writes ``cands.npz`` and ``cands.npz.json``.
+        """
+        path, meta_path = _archive_paths(path)
         arrays: dict[str, Any] = {}
         for name in self.sites:
             arrays[f"z/{name}"] = np.asarray(self.z[name])
@@ -162,16 +175,22 @@ class Candidates:
             "has_log_density": self.log_density is not None,
             "has_ok": self.ok is not None,
         }
-        path.with_suffix(path.suffix + ".json").write_text(
+        meta_path.write_text(
             json.dumps(meta, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
 
     @classmethod
     def load(cls, path: str | Path) -> Candidates:
-        """Reload a batch written by :meth:`save`."""
-        path = Path(path)
-        meta_path = path.with_suffix(path.suffix + ".json")
+        """Reload a batch written by :meth:`save`.
+
+        ``path`` may be the name given to :meth:`save` or the ``.npz`` file it wrote. Batches
+        that older versions saved under a name without ``.npz`` (sidecar ``cands.json`` next to
+        ``cands.npz``) also load.
+        """
+        path, meta_path = _archive_paths(path)
+        if not meta_path.exists() and path.with_suffix(".json").exists():
+            meta_path = path.with_suffix(".json")
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
         sites = tuple(meta["sites"])
         with np.load(path) as data:
