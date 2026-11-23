@@ -3,7 +3,9 @@
 numpyro's ``MCMC.run`` recompiles on every call for ``chain_method="parallel"`` and
 ``"vectorized"``; ``MCMCRun`` maps the chains through a cached transform instead
 (``futureplans/mcmc-chunk-recompile.md``). These tests count XLA compiles with
-``jax.monitoring`` and check that the draws match numpyro's own mapping exactly.
+``jax.monitoring`` and check that the draws match numpyro's own mapping (exactly for
+``parallel``; to round-off for ``vectorized``, whose batched program XLA may fuse
+slightly differently from numpyro's ``fori_collect``).
 """
 
 from __future__ import annotations
@@ -92,7 +94,13 @@ def test_later_chunks_do_not_compile(method: str) -> None:
 @pytest.mark.parametrize("method", METHODS)
 def test_draws_match_numpyro_mapping(method: str) -> None:
     run = wf.sample_until(_mcmc(method), _Chunks(4), seed=3, warn=False)
-    np.testing.assert_array_equal(np.asarray(run.samples["x"]), _plain_chunks(method, 4, 3))
+    actual = np.asarray(run.samples["x"])
+    expected = _plain_chunks(method, 4, 3)
+    if method == "parallel":
+        np.testing.assert_array_equal(actual, expected)
+    else:
+        # Same chains, but CI's CPUs showed ~1e-11 relative round-off differences.
+        np.testing.assert_allclose(actual, expected, rtol=1e-9, atol=1e-12)
 
 
 @pytest.mark.parametrize("method", METHODS)
