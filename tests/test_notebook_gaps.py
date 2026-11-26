@@ -146,17 +146,17 @@ def test_binary_numpy_ufunc_on_an_output_ref_matches_the_direct_call() -> None:
     np.testing.assert_allclose(np.asarray(named["floored"].values), np.maximum(2.0, values))
 
 
-def test_binary_numpy_ufunc_on_property_data_keeps_the_map() -> None:
-    """26-lazy-idiom-bridges: ``np.minimum(named["incidence"], CAP)`` on solved values."""
-    state = Property("state", ("S", "I", "R"))
-    pmap = PropertyMap.from_property(state)
-    raw = np.array([1.0, 4.0, 9.0])
-    data = PropertyData.wrap(pmap, raw)
-    capped = np.minimum(data, 3.0)
-    assert isinstance(capped, PropertyData)
-    np.testing.assert_allclose(np.asarray(capped.data), np.minimum(raw, 3.0))
-    floored = np.maximum(2.0, data)
-    np.testing.assert_allclose(np.asarray(floored.data), np.maximum(2.0, raw))
+def test_binary_numpy_ufunc_on_an_evaluated_output_returns_an_output() -> None:
+    """26-lazy-idiom-bridges: ``np.minimum(named["incidence"], CAP)`` on an evaluated output."""
+    values = np.array([1.0, 4.0, 9.0, 2.0])
+    axis = TimeAxis(values=np.arange(4, dtype=np.float64), epoch=None, kind="explicit")
+    incidence = Output(times=axis, values=values, dims=("time",))
+    capped = np.minimum(incidence, 3.0)
+    assert isinstance(capped, Output) and capped.dims == ("time",)
+    np.testing.assert_allclose(np.asarray(capped.values), np.minimum(values, 3.0))
+    floored = np.maximum(2.0, incidence)
+    assert isinstance(floored, Output)
+    np.testing.assert_allclose(np.asarray(floored.values), np.maximum(2.0, values))
 
 
 def test_candidates_to_frame_has_one_row_per_candidate() -> None:
