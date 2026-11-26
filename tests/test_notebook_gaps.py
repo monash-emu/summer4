@@ -146,6 +146,19 @@ def test_binary_numpy_ufunc_on_an_output_ref_matches_the_direct_call() -> None:
     np.testing.assert_allclose(np.asarray(named["floored"].values), np.maximum(2.0, values))
 
 
+def test_binary_numpy_ufunc_on_property_data_keeps_the_map() -> None:
+    """26-lazy-idiom-bridges: ``np.minimum(named["incidence"], CAP)`` on solved values."""
+    state = Property("state", ("S", "I", "R"))
+    pmap = PropertyMap.from_property(state)
+    raw = np.array([1.0, 4.0, 9.0])
+    data = PropertyData.wrap(pmap, raw)
+    capped = np.minimum(data, 3.0)
+    assert isinstance(capped, PropertyData)
+    np.testing.assert_allclose(np.asarray(capped.data), np.minimum(raw, 3.0))
+    floored = np.maximum(2.0, data)
+    np.testing.assert_allclose(np.asarray(floored.data), np.maximum(2.0, raw))
+
+
 def test_candidates_to_frame_has_one_row_per_candidate() -> None:
     """19-calibration-design, 22-calibration-seeded-mcmc: ``design.to_frame()``."""
     cands = wf.Candidates(
