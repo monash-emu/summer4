@@ -77,6 +77,39 @@ def test_laplace_metric_clips_a_flat_direction() -> None:
     assert np.max(np.linalg.eigvalsh(metric.covariance)) == pytest.approx(25.0)
 
 
+def test_laplace_metric_auto_uses_the_exact_hessian_where_it_can() -> None:
+    post, init = _gaussian()
+    assert wf.laplace_metric(post, init).hessian == "exact"
+    assert wf.laplace_metric(post, init, hessian="exact").hessian == "exact"
+
+
+@pytest.mark.parametrize("vmap_fails", [False, True])
+def test_laplace_metric_fd_recovers_the_gaussian(
+    vmap_fails: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    post, init = _gaussian()
+    post.prior_names()  # initialise outside the patch
+    if vmap_fails:
+
+        def no_vmap(*args: Any, **kwargs: Any) -> Any:
+            raise NotImplementedError("no batching rule")
+
+        monkeypatch.setattr(jax, "vmap", no_vmap)
+    point = {"a": np.array([0.3, -1.5]), "b": np.array(2.0)}  # steps scale with |x_i| > 1
+    metric = wf.laplace_metric(post, point, hessian="fd")
+    assert metric.hessian == "fd"
+    assert metric.element_names == ("a[0]", "a[1]", "b")
+    np.testing.assert_allclose(metric.covariance, _exact_covariance(), rtol=1e-6, atol=1e-9)
+
+
+def test_laplace_metric_rejects_an_unknown_method_or_step() -> None:
+    post, init = _gaussian()
+    with pytest.raises(ValueError, match="hessian must be one of"):
+        wf.laplace_metric(post, init, hessian="forward")
+    with pytest.raises(ValueError, match="fd_step must be positive"):
+        wf.laplace_metric(post, init, hessian="fd", fd_step=0.0)
+
+
 @pytest.mark.parametrize("dense", [True, False])
 def test_numpyro_uses_the_laplace_metric(dense: bool) -> None:
     from numpyro.infer import MCMC

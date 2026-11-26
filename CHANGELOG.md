@@ -13,6 +13,16 @@ Narrative release notes for the documentation site live in
 
 ### Added
 
+- **Finite-difference Hessian for `wf.laplace_metric`** (`feat/laplace-fd-hessian`).
+  `laplace_metric(..., hessian="auto")` now works on posteriors solved with summer4's
+  `default_solver()`, whose diffrax adjoint does not support the forward mode `jax.hessian`
+  needs. `"auto"` (the default) tries the exact Hessian and falls back to central differences of
+  the reverse-mode gradient (`"fd"`, 2n gradients in one `vmap`, step
+  `fd_step * max(1, |x_i|)`, `fd_step=1e-4`); on an SIR posterior its covariance agrees with
+  the `DirectAdjoint` exact one to about 2e-7 relative. `hessian="exact"` raises a `ValueError`
+  that names both fixes (`"fd"`, or `adjoint=diffrax.DirectAdjoint()`) instead of JAX's
+  `TypeError`. `LaplaceMetric.hessian` records the method used. `NutsTuning` and `tune_nuts`
+  use `"auto"`; pass `metric=wf.laplace_metric(post, init, hessian=...)` to choose. Notebook 43.
 - **Fused weighted reductions** (`perf/fuse-weighted-reduce`). `FlowModel.compile` rewrites a
   rate (or `Multiply`/`Overwrite` value) that is a weighted sum of two or more scalar `Reduce`
   terms, `sum_k c_k * Reduce(where=sel_k)` with constant or parameter-only `c_k`, into one
