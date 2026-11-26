@@ -142,6 +142,10 @@ Narrative release notes for the documentation site live in
 - A `jax.numpy` function called on a grouped (`GroupedRate`) argument inside `defer` raises a
   `TypeError` naming the argument and the fix, instead of JAX's "not a valid JAX type"; `defer`
   documents that NumPy functions keep the grouping (`CX52`).
+- Notebook 29's final run, and the gate test behind it, raise `target_accept_prob` to 0.9 and
+  allow 2% divergent draws (`fix/nuts-gate-divergences`). The recommended setting diverges on
+  about 0.5-0.9% of draws, so against a 1% limit the seeded gate failed on some CI runners and
+  not others; across 10 seeded runs on Intel and AMD runners it now converges every time.
 
 ## [0.3.0a5] — 2026-11-17
 
