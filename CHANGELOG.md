@@ -11,6 +11,17 @@ Narrative release notes for the documentation site live in
 
 ## [Unreleased]
 
+## [0.3.0a6] — 2026-11-27
+
+Tag: [`v0.3.0a6`](https://github.com/monash-emu/summer4/releases/tag/v0.3.0a6)
+
+Save any expression, `field_refs` and summer2-style output requests (PR #83, roadmap steps 40,
+41 and 51), Kiribati port gaps (PR #84, step 52), numpyro 0.18, and faster solves and calibration
+with fixes (PRs #85-#88, merged in PR #89), and a finite-difference Hessian fallback for
+`laplace_metric` (PR #90), a steadier NUTS tuning gate (PR #93), and notebooks moved from
+per-PR CI to the nightly run (PR #92). Removes `derived_fn`, `SaveFn` and `ComputedValue`;
+see *Removed*.
+
 ### Added
 
 - **Finite-difference Hessian for `wf.laplace_metric`** (`feat/laplace-fd-hessian`).
@@ -112,6 +123,11 @@ Narrative release notes for the documentation site live in
   deprecation warnings on import are gone. JAX stays on 0.6.
 - Notebooks 17 and 22 mute only the warning each one triggers on purpose (an out-of-support
   `log_prob` grid; an MCMC run stopped at its budget), with a comment saying why.
+
+- The example notebooks no longer run on every pull request. `pixi run test` skips them
+  (marker `notebook`), the new `pixi run test-notebooks` task runs them nightly with a time
+  budget per notebook, and `tests/test_notebook_gaps.py` covers the code that only notebooks
+  reached (PR #92).
 
 ### Fixed
 
