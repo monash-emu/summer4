@@ -57,12 +57,14 @@ jobs:
       - run: pixi run check-branch -- --base origin/${{ github.base_ref || 'main' }}
 
   # The `latest` (current JAX) environment runs nightly instead: see nightly.yml.
+  # Example notebooks don't run per PR; nightly.yml runs them on main.
   test:
     name: Test (default)
     if: >-
       github.event_name == 'pull_request' ||
       (github.event_name == 'workflow_dispatch' && inputs.suite == 'full')
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: prefix-dev/setup-pixi@v0.10.1

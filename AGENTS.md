@@ -204,7 +204,7 @@ A branch that adds or changes **features** (new public API, new modelling capabi
 
 1. **The implementation** on a feature branch, not `main`.
 2. **Tests** in `tests/` that cover the new behaviour (unit and/or property tests; no placeholder `assert True`).
-3. **Example documentation as a notebook** in `examples/notebooks/`. Notebooks are runnable smoke tests: `pixi run test` executes every `*.ipynb` there.
+3. **Example documentation as a notebook** in `examples/notebooks/`. Notebooks are runnable smoke tests: `pixi run test-notebooks` executes every `*.ipynb` there (nightly CI, not per PR), so a notebook must not be the only test of a code path.
 
 Notebook rules:
 
