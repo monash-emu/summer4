@@ -40,6 +40,8 @@ note into `plans/<slug>.plan.md` when it becomes scheduled work.
   map on `BayesianModel` (Kiribati W9 and W11, `CX62`).
 - [`sa-multichain-init.md`](sa-multichain-init.md) — `bm.sample("sa", num_chains>1)`
   fails in numpyro's vectorised SA init.
+- [`flow-selector-fan-out.md`](flow-selector-fan-out.md) — a property named on only one
+  side of a flow's selectors silently fans out to every matching compartment.
 - [`per-model-dtype.md`](per-model-dtype.md) — the number width is process-wide
   (`jax_enable_x64`); a per-model `compile(dtype=)` and a separate likelihood width.
 - [`trace-plot-backend-coupling.md`](trace-plot-backend-coupling.md) —
