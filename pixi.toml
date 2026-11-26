@@ -92,9 +92,9 @@ docs = ["docs"]
 setup = { cmd = "python scripts/setup_hooks.py", description = "Install git hooks (Black format, cleared notebooks, plan copy)" }
 register-kernel = { cmd = "python -m ipykernel install --user --name summer4 --display-name 'Python (summer4)'", description = "Register the default env as a Jupyter kernel for VS Code/Cursor" }
 check-branch = { cmd = "python scripts/check_feature_branch.py", description = "Require tests, a notebook, and a plan on feature branches that change src/" }
-test = { cmd = "pytest tests/ benchmarks/test_bench_tb_scale.py -v -m 'not (notebook and slow)'", description = "Run unit, property, smoke-notebook, and TB-scale bench tests (slow notebooks: test-notebooks)" }
-test-notebooks = { cmd = "pytest tests/test_notebooks.py -v -m 'notebook and slow' --durations=10", description = "Execute the slow example notebooks (the smoke ones run in test and test-quick)" }
-test-quick = { cmd = "pytest tests/ benchmarks/test_bench_tb_scale.py -v -m 'not slow'", description = "Run fast tests, smoke notebooks included (skip slow notebooks and TB-scale benches)" }
+test = { cmd = "pytest tests/ benchmarks/test_bench_tb_scale.py -v -m 'not notebook'", description = "Run unit, property, and TB-scale bench tests (notebooks: test-notebooks)" }
+test-notebooks = { cmd = "pytest tests/test_notebooks.py -v -m notebook --durations=10", description = "Execute every example notebook (nightly CI only)" }
+test-quick = { cmd = "pytest tests/ benchmarks/test_bench_tb_scale.py -v -m 'not slow'", description = "Run fast tests (skip notebooks and TB-scale benches)" }
 test-all = { cmd = "pixi run --environment default test && pixi run --environment default test-notebooks && pixi run --environment latest test && pixi run --environment latest test-notebooks", description = "Run tests in every JAX environment" }
 lint = { cmd = "ruff check src tests benchmarks scripts && mypy src/summer4", description = "Lint and type-check" }
 format = { cmd = "black src tests benchmarks scripts", description = "Format Python with Black (line length 100)" }

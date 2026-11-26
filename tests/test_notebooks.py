@@ -1,10 +1,10 @@
 """Execute example notebooks as smoke tests.
 
-Every notebook is marked ``notebook``. A few fast, broad ones (``SMOKE_NOTEBOOKS``)
-run with the quick suite on every push; the rest are also marked ``slow`` and run
-through ``pixi run test-notebooks`` (the CI "Notebooks" job and the nightly
-workflow), not in ``pixi run test``. Each notebook has a time budget so a hang
-fails that notebook instead of holding the CI job.
+Every notebook run is marked ``notebook`` and ``slow``. They run through
+``pixi run test-notebooks`` (locally and in the nightly workflow), not in
+``pixi run test`` or per-PR CI. What only a notebook used to reach is tested in
+``tests/test_notebook_gaps.py``. Each notebook has a time budget so a hang fails
+that notebook instead of holding the job.
 """
 
 from __future__ import annotations
@@ -22,16 +22,6 @@ from types import FrameType
 import pytest
 
 NOTEBOOK_DIR = Path(__file__).resolve().parents[1] / "examples" / "notebooks"
-
-# Fast notebooks that touch the core path (taxonomy, build, run, results,
-# calibration). They run in ``test-quick`` on every push, Windows included.
-SMOKE_NOTEBOOKS = frozenset(
-    {
-        "01-taxonomy.ipynb",
-        "04-running-and-results.ipynb",
-        "18-calibration.ipynb",
-    }
-)
 
 # Seconds per notebook. The default covers every notebook that takes under
 # about a minute on a GitHub ubuntu runner; the rest get roughly twice their
@@ -58,13 +48,8 @@ def _notebook_paths() -> list[Path]:
 
 
 def _notebook_params() -> list[object]:
-    params: list[object] = []
-    for path in _notebook_paths():
-        marks = [pytest.mark.notebook]
-        if path.name not in SMOKE_NOTEBOOKS:
-            marks.append(pytest.mark.slow)
-        params.append(pytest.param(path, id=path.name, marks=marks))
-    return params
+    marks = [pytest.mark.notebook, pytest.mark.slow]
+    return [pytest.param(path, id=path.name, marks=marks) for path in _notebook_paths()]
 
 
 def notebook_timeout(name: str) -> float:
@@ -122,9 +107,8 @@ def test_example_notebooks_exist() -> None:
     assert _notebook_paths(), "examples/notebooks/ must contain at least one .ipynb"
 
 
-def test_smoke_and_timeout_names_are_notebooks() -> None:
+def test_timeout_names_are_notebooks() -> None:
     names = {path.name for path in _notebook_paths()}
-    assert names >= SMOKE_NOTEBOOKS, sorted(SMOKE_NOTEBOOKS - names)
     assert set(TIMEOUT_S) <= names, sorted(set(TIMEOUT_S) - names)
 
 

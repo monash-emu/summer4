@@ -1,7 +1,7 @@
 name: Nightly
 
 # Forward-compatibility tests against current JAX (the `latest` pixi
-# environment), and every slow example notebook in both environments. These used
+# environment), and every example notebook in both environments. These used
 # to run on every pull request; they now run once a night on main, and on
 # demand. GitHub runs scheduled workflows only from the default branch.
 
