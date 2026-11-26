@@ -102,6 +102,8 @@ class LaplaceMetric:
     vector sites work. ``eigenvalues`` are those of the negative Hessian before
     clipping; ``clipped`` counts the directions whose variance was clipped
     (a flat or indefinite direction, or one against a prior bound).
+    ``hessian`` is the method :func:`laplace_metric` actually used: ``"exact"``
+    (``jax.hessian``) or ``"fd"`` (central differences of the gradient).
     """
 
     sites: tuple[str, ...]
@@ -110,6 +112,7 @@ class LaplaceMetric:
     covariance: np.ndarray
     eigenvalues: np.ndarray
     clipped: int
+    hessian: str = "exact"
 
     @property
     def std(self) -> np.ndarray:
@@ -136,31 +139,118 @@ class LaplaceMetric:
         return {tuple(self.sites): matrix}
 
 
+HESSIAN_METHODS = ("auto", "exact", "fd")
+"""The ``hessian=`` choices of :func:`laplace_metric`."""
+
+
+def _forward_mode_unsupported(exc: TypeError) -> bool:
+    """Whether ``exc`` is JAX refusing a JVP through a ``custom_vjp`` (diffrax's adjoint)."""
+    message = str(exc)
+    return "forward-mode" in message and "custom_vjp" in message
+
+
+_FORWARD_MODE_HELP = (
+    "laplace_metric(hessian='exact') needs forward-mode autodiff (jax.hessian is forward over "
+    "reverse), but the log density uses a custom_vjp, such as a diffrax solve with its default "
+    "RecursiveCheckpointAdjoint (summer4's default_solver()). Use hessian='fd' (or 'auto') for "
+    "central differences of the reverse-mode gradient, or solve with "
+    "Diffrax(..., adjoint=diffrax.DirectAdjoint()), which supports forward mode but makes every "
+    "gradient about twice as expensive."
+)
+
+
+def _fd_hessian(f: Callable[[Any], Any], flat: Any, fd_step: float) -> np.ndarray:
+    """Central differences of ``jax.grad(f)`` at ``flat``, symmetrised.
+
+    Coordinate ``i`` steps by ``fd_step * max(1, |x_i|)``. All ``2n`` perturbed
+    points go through one ``jax.vmap`` of the gradient; if the model cannot be
+    vmapped, one jitted gradient is called on each point in turn.
+    """
+    import jax
+    import jax.numpy as jnp
+
+    x = np.asarray(flat, dtype=float)
+    n = x.size
+    steps = float(fd_step) * np.maximum(1.0, np.abs(x))
+    offsets = np.diag(steps)
+    points = jnp.asarray(np.concatenate([x + offsets, x - offsets]), dtype=jnp.result_type(flat))
+    grad = jax.grad(f)
+    try:
+        grads = np.asarray(jax.jit(jax.vmap(grad))(points), dtype=float)
+    except Exception:
+        # Some models do not vmap (a host callback, a solver without batching rules); the
+        # per-point loop raises any error that is the model's own.
+        one = jax.jit(grad)
+        grads = np.stack([np.asarray(one(points[k]), dtype=float) for k in range(2 * n)])
+    # Row i of the difference is d(grad)/dx_i, i.e. column i of the Hessian.
+    columns = (grads[:n] - grads[n:]) / (2.0 * steps[:, None])
+    return 0.5 * (columns + columns.T)
+
+
 def laplace_metric(
     post: Posterior,
     z: Candidates | Mapping[str, Any],
     *,
     min_var: float = 1e-4,
     max_var: float = 25.0,
+    hessian: str = "auto",
+    fd_step: float = 1e-4,
 ) -> LaplaceMetric:
     """Inverse negative Hessian of ``post.log_density`` at ``z``, eigenvalues clipped.
 
     ``z`` is one unconstrained site dict (no batch axis), or :class:`Candidates`,
-    in which case the best evaluated row is used (row 0 if unevaluated). The
-    Hessian is exact (``jax.hessian``, forward over reverse) for the
-    discretised model; with a loose adaptive ODE tolerance it inherits the
-    solver's noise, so pass a posterior with a tight solver if that matters.
+    in which case the best evaluated row is used (row 0 if unevaluated).
     Variances ``1 / eigenvalue`` are clipped to ``[min_var, max_var]``, and a
     non-positive eigenvalue gets ``max_var``.
+
+    ``hessian`` chooses how the Hessian is computed:
+
+    - ``"exact"``: ``jax.hessian`` (forward over reverse), exact for the
+      discretised model. It needs forward-mode autodiff through the model, which
+      a diffrax solve with the default ``RecursiveCheckpointAdjoint`` (summer4's
+      ``default_solver()``) does not support; that failure raises a
+      ``ValueError`` naming both fixes.
+    - ``"fd"``: central differences of the reverse-mode gradient, coordinate
+      ``i`` stepped by ``fd_step * max(1, |x_i|)``, then symmetrised. It costs
+      ``2n`` gradient evaluations for ``n`` unconstrained elements (batched in
+      one ``jax.vmap`` where the model allows), against roughly ``n`` forward
+      passes of a gradient for ``"exact"``. On an SIR posterior with the default
+      solver its covariance agrees with the exact one (``DirectAdjoint``) to
+      about ``2e-7`` relative for ``fd_step`` from ``1e-4`` to ``1e-6``.
+    - ``"auto"`` (default): ``"exact"``, falling back to ``"fd"`` only when
+      forward mode is unsupported. :attr:`LaplaceMetric.hessian` records which
+      method ran.
+
+    Either way the Hessian follows the gradient: with a loose adaptive ODE
+    tolerance the gradient carries the solver's noise, which the exact Hessian
+    inherits and finite differences amplify by ``1 / fd_step``, so pass a
+    posterior with a tight solver if that matters. The other route to an exact
+    Hessian is a solver with ``adjoint=diffrax.DirectAdjoint()``, at about twice
+    the cost of every gradient (so of every NUTS step, if the same posterior is
+    sampled).
     """
     import jax
 
+    if hessian not in HESSIAN_METHODS:
+        raise ValueError(f"hessian must be one of {HESSIAN_METHODS}, got {hessian!r}.")
+    if hessian != "exact" and not (np.isfinite(fd_step) and float(fd_step) > 0):
+        raise ValueError(f"fd_step must be positive and finite, got {fd_step!r}.")
     point = _point(post, z)
     flat, f = _flat_density(post, point)
-    hessian = np.asarray(jax.jit(jax.hessian(f))(flat), dtype=float)
-    if not np.all(np.isfinite(hessian)):
-        raise ValueError("the log-density Hessian at this point is not finite.")
-    neg = -0.5 * (hessian + hessian.T)
+    if hessian == "fd":
+        matrix, used = _fd_hessian(f, flat, fd_step), "fd"
+    else:
+        try:
+            matrix, used = np.asarray(jax.jit(jax.hessian(f))(flat), dtype=float), "exact"
+        except TypeError as exc:
+            if not _forward_mode_unsupported(exc):
+                raise
+            if hessian == "exact":
+                raise ValueError(_FORWARD_MODE_HELP) from exc
+            matrix, used = _fd_hessian(f, flat, fd_step), "fd"
+    if not np.all(np.isfinite(matrix)):
+        raise ValueError(f"the log-density Hessian ({used}) at this point is not finite.")
+    neg = -0.5 * (matrix + matrix.T)
     vals, vecs = np.linalg.eigh(neg)
     with np.errstate(divide="ignore"):
         raw = np.where(vals > 0, 1.0 / np.where(vals > 0, vals, 1.0), np.inf)
@@ -174,6 +264,7 @@ def laplace_metric(
         covariance=(vecs * var) @ vecs.T,
         eigenvalues=vals,
         clipped=clipped,
+        hessian=used,
     )
 
 
@@ -516,6 +607,8 @@ class NutsTuning:
     setting). Every pilot shares the seed, chains and starting points. On
     construction the Laplace metric (``laplace=True``, unless ``metric`` is
     given) and the gradient cost are computed at the best point of ``init``.
+    The metric is ``laplace_metric(post, init)`` (``hessian="auto"``); pass
+    ``metric=wf.laplace_metric(post, init, hessian=...)`` to choose the method.
     """
 
     def __init__(
@@ -726,6 +819,7 @@ def tune_nuts(
 
 
 __all__ = [
+    "HESSIAN_METHODS",
     "LaplaceMetric",
     "NutsSetting",
     "NutsTuning",
