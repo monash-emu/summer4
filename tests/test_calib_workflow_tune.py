@@ -395,9 +395,15 @@ def test_gate_tuning_runs_two_stages_and_recommends_a_usable_setting(
 
 @pytest.mark.slow
 def test_gate_recommended_run_converges_on_every_element(gate: gate_settings.GateRun) -> None:
-    assert gate.warm.converged
-    assert gate.run.converged and gate.run.reason == "diagnostics"
+    assert gate.warm.converged, gate.warm.reason
+    progress = gate.run.progress[
+        ["samples", "divergence_frac", "rhat_element_max", "ess_bulk_element_min"]
+    ]
+    assert (
+        gate.run.converged and gate.run.reason == "diagnostics"
+    ), f"stopped on {gate.run.reason!r}:\n{progress.to_string()}"
     last = gate.run.progress.iloc[-1]
+    assert last["divergence_frac"] <= gate_settings.RUN_MAX_DIVERGENCE
     assert last["rhat_element_max"] <= 1.01
     assert last["ess_bulk_element_min"] >= gate_settings.TARGET_ESS
     assert gate.run.extra["num_steps"].shape == gate.run.diverging.shape
