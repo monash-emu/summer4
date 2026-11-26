@@ -84,6 +84,7 @@ testpaths = ["tests"]
 pythonpath = ["src", "."]
 markers = [
     "slow: long-running tests",
+    "notebook: executes an example notebook (tests/test_notebooks.py)",
 ]
 
 [tool.coverage.run]

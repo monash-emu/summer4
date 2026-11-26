@@ -57,12 +57,14 @@ jobs:
       - run: pixi run check-branch -- --base origin/${{ github.base_ref || 'main' }}
 
   # The `latest` (current JAX) environment runs nightly instead: see nightly.yml.
+  # Slow example notebooks run in the parallel "Notebooks" job below, not here.
   test:
     name: Test (default)
     if: >-
       github.event_name == 'pull_request' ||
       (github.event_name == 'workflow_dispatch' && inputs.suite == 'full')
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: prefix-dev/setup-pixi@v0.10.1
@@ -72,6 +74,50 @@ jobs:
           cache: true
           locked: true
       - run: pixi run --environment default test
+
+  # Executes the slow example notebooks, in parallel with "Test (default)". On a
+  # pull request it runs only when the PR touches code or files a notebook can
+  # depend on; a docs- or plans-only PR skips it. The smoke notebooks run in
+  # every test suite regardless, and nightly.yml runs all of them on main.
+  # Each notebook has its own time budget (tests/test_notebooks.py).
+  notebooks:
+    name: Notebooks
+    if: >-
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'workflow_dispatch' && inputs.suite == 'full')
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Decide whether notebooks need to run
+        id: gate
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_EVENT_NAME}" != "pull_request" ]; then
+            echo "run=true" >> "${GITHUB_OUTPUT}"; exit 0
+          fi
+          changed="$(git diff --name-only "origin/${BASE_REF}...HEAD")"
+          echo "${changed}"
+          pattern='^(src/|examples/notebooks/|tests/test_notebooks\.py$|tests/gate_|tests/helpers/|pixi\.(toml|lock)$|pyproject\.toml$|\.github/workflows/ci\.yml$)'
+          if grep -qE "${pattern}" <<< "${changed}"; then
+            echo "run=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "No notebook-relevant changes; skipping slow notebooks."
+            echo "run=false" >> "${GITHUB_OUTPUT}"
+          fi
+      - if: steps.gate.outputs.run == 'true'
+        uses: prefix-dev/setup-pixi@v0.10.1
+        with:
+          pixi-version: v0.80.0
+          environments: default
+          cache: true
+          locked: true
+      - if: steps.gate.outputs.run == 'true'
+        run: pixi run --environment default test-notebooks
 
   # Native Windows (x86_64, CPU). Runs on every push so a branch can be checked on
   # Windows without a Windows machine. Quick suite only: slow notebook and
