@@ -1,5 +1,31 @@
 # Release notes
 
+## 0.3.0a6: output requests, saved expressions and faster calibration
+
+`OutputSet` takes summer2-style requests: `compartments`, `flow`, `aggregate`,
+`cumulative_integral`, `cumsum` and `function` are each one assignment, and `by=` adds one output
+per stratum. Intermediates can be marked `keep=False`, and `CompiledModel.run(..., outputs=out)`
+solves for what the outputs need and returns them evaluated. Any rate expression that reads time,
+state or flows can now be saved during the solve (`outputs[name] = expr`), and
+`field_refs(defer(f)(Params(), y=StateArray(), t=Time()), Schema)` computes several values in one
+function that runs once per step.
+
+This release also closes the remaining Kiribati port gaps: array-valued `Lookup` tables built from
+parameters, rate expressions in `TraitChain`, `naming=` templates, averted burden with
+`differences(..., sign=-1)`, and `wf.Optax(optax.lbfgs())`.
+
+It is faster. Weighted sums of `Reduce` terms compile to one dot product, and summer4 picks
+faster XLA:CPU settings on import (2-6x on the CPU benchmark; `runtime_info()` reports them).
+`sample_until` no longer recompiles every chunk, and `warmup_until` no longer fails short warmups
+on numpyro's step-size restarts. `wf.laplace_metric`, which NUTS tuning uses, now works with the
+default solver: it falls back to a finite-difference Hessian when the exact one is unavailable.
+The NUTS tuning notebook's final run now uses `target_accept_prob=0.9`, so it converges on every
+CI machine. numpyro is now 0.18.
+
+**Upgrading:** `derived_fn`, `derived_refs`, `SaveFn` and `ComputedValue` are gone. Use
+`field_refs(...)` and assign expressions to the `OutputSet` instead; the changelog lists each
+replacement.
+
 ## 0.3.0a5: Windows support
 
 summer4 now installs and runs on Windows (x86_64, CPU). Until now `pixi install` stopped at once
